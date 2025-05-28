@@ -1,0 +1,18 @@
+2025-05-28 15:17:12,983 - __main__ - INFO - ============================================================
+2025-05-28 15:17:12,983 - __main__ - INFO - EU CLIMATE RISK ASSESSMENT SYSTEM
+2025-05-28 15:17:12,983 - __main__ - INFO - ============================================================
+2025-05-28 15:17:12,983 - __main__ - INFO - Project initialized with data directory: data
+2025-05-28 15:17:12,985 - __main__ - INFO - 
+========================================
+2025-05-28 15:17:12,985 - __main__ - INFO - HAZARD LAYER ANALYSIS
+2025-05-28 15:17:12,985 - __main__ - INFO - ========================================
+2025-05-28 15:17:12,985 - __main__ - ERROR - Error during analysis: DEM file not found: data\ClippedCopernicusHeightProfile.tif
+2025-05-28 15:17:19,906 - __main__ - INFO - ============================================================
+2025-05-28 15:17:19,906 - __main__ - INFO - EU CLIMATE RISK ASSESSMENT SYSTEM
+2025-05-28 15:17:19,906 - __main__ - INFO - ============================================================
+2025-05-28 15:17:19,906 - __main__ - INFO - Project initialized with data directory: data
+2025-05-28 15:17:19,906 - __main__ - INFO - 
+========================================
+2025-05-28 15:17:19,908 - __main__ - INFO - HAZARD LAYER ANALYSIS
+2025-05-28 15:17:19,908 - __main__ - INFO - ========================================
+2025-05-28 15:17:19,908 - __main__ - ERROR - Error during analysis: DEM file not found: data\ClippedCopernicusHeightProfile.tif
