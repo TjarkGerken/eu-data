@@ -125,7 +125,7 @@ def main():
     
     # Initialize Hugging Face API
     api = HfApi(token=api_token)
-    logger.error(f"Token: {str(api_token)}")
+    logger.debug(f"Token: {str(api_token[:4])}... (masked)")
     repo_id = config['huggingface_repo']
     
     # Get directories to upload
