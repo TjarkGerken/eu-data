@@ -42,6 +42,7 @@ This system implements a robust and reproducible data processing pipeline that s
 
 1. **Clone or download the project**
 2. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
@@ -73,11 +74,11 @@ The **Hazard Layer** is the foundation of our risk assessment system, processing
 
 ### Sea Level Rise Scenarios
 
-| Scenario     | Rise (m) | Description                    | Risk Level |
-|-------------|----------|--------------------------------|------------|
-| Conservative| 1.0      | Conservative sea level rise    | Low        |
-| Moderate    | 2.0      | Moderate sea level rise        | Medium     |
-| Severe      | 3.0      | Severe sea level rise          | High       |
+| Scenario     | Rise (m) | Description                 | Risk Level |
+| ------------ | -------- | --------------------------- | ---------- |
+| Conservative | 1.0      | Conservative sea level rise | Low        |
+| Moderate     | 2.0      | Moderate sea level rise     | Medium     |
+| Severe       | 3.0      | Severe sea level rise       | High       |
 
 ### Customizing Scenarios
 
@@ -103,17 +104,21 @@ flood_extents = hazard_layer.process_scenarios(custom_scenarios)
 The system generates several output files in the `output/` directory:
 
 ### Geospatial Data
+
 - `flood_extent_conservative.tif` - Conservative scenario flood extent (GeoTIFF)
-- `flood_extent_moderate.tif` - Moderate scenario flood extent (GeoTIFF) 
+- `flood_extent_moderate.tif` - Moderate scenario flood extent (GeoTIFF)
 - `flood_extent_severe.tif` - Severe scenario flood extent (GeoTIFF)
 
 ### Visualizations
+
 - `hazard_layer_assessment.png` - Comprehensive hazard assessment visualization
 
 ### Statistics
+
 - `hazard_assessment_summary.csv` - Summary statistics for all scenarios
 
 ### Log Files
+
 - `risk_assessment.log` - Detailed processing log
 
 ## 🔧 Configuration
@@ -136,6 +141,7 @@ class ProjectConfig:
 ### Coordinate Reference System
 
 The system uses **EPSG:3035** (ETRS89-extended / LAEA Europe) as the standard projection, ensuring:
+
 - Accurate area calculations across Europe
 - Minimal distortion for the study region
 - Compatibility with EU statistical frameworks
@@ -145,16 +151,19 @@ The system uses **EPSG:3035** (ETRS89-extended / LAEA Europe) as the standard pr
 ### Primary Data Sources
 
 1. **Digital Elevation Model (DEM)**
+
    - Source: Copernicus Land Monitoring Service
    - File: `ClippedCopernicusHeightProfile.tif`
    - Resolution: 30m (typical)
    - Coverage: European study area
 
 2. **Administrative Boundaries** (Available)
+
    - NUTS Level 0-3 boundaries for Netherlands
    - Relevant area shapefiles
 
 3. **Population Data** (Available for future implementation)
+
    - GHS Population data (`ClippedGHS_POP_3ss.tif`)
 
 4. **Built Environment Data** (Available for future implementation)
@@ -165,19 +174,21 @@ The system uses **EPSG:3035** (ETRS89-extended / LAEA Europe) as the standard pr
 The system produces comprehensive visualizations including:
 
 1. **Original DEM Display** - Terrain visualization with elevation coloring
-2. **Flood Extent Maps** - Binary maps showing flooded vs. safe areas for each scenario  
+2. **Flood Extent Maps** - Binary maps showing flooded vs. safe areas for each scenario
 3. **Risk Progression Chart** - Bar chart comparing flooded areas across scenarios
 4. **Elevation Histogram** - Distribution of elevations with flood thresholds marked
 
 ## 🚧 Future Development
 
 ### Exposition Layer (Planned)
+
 - Population density exposure analysis
-- Economic activity mapping  
+- Economic activity mapping
 - Infrastructure exposure assessment
 - Building density integration
 
 ### Risk Assessment Integration (Planned)
+
 - Multi-criteria risk calculation
 - Vulnerability assessment
 - Risk aggregation and normalization
@@ -186,12 +197,14 @@ The system produces comprehensive visualizations including:
 ## 📋 System Requirements
 
 ### Minimum Requirements
+
 - Python 3.8+
 - 8GB RAM (for processing large raster datasets)
 - 2GB free disk space
 - GDAL libraries
 
-### Recommended Requirements  
+### Recommended Requirements
+
 - Python 3.10+
 - 16GB RAM
 - SSD storage
@@ -216,4 +229,111 @@ For questions or technical support, please refer to the project documentation or
 
 ---
 
-**EU Geolytics Team** | Version 1.0.0 | 2024 
+**EU Geolytics Team** | Version 1.0.0 | 2025
+
+# Data Management
+
+## Configuration
+
+The project uses a combination of environment variables and YAML configuration to manage data handling settings. Configuration can be set in two ways:
+
+1. **Environment Variables** (Recommended for sensitive data)
+
+   ```bash
+   # Create a .env file in the code directory
+   cp .env.template .env
+   # Edit the .env file with your settings
+   ```
+
+   Available environment variables:
+
+   - `HF_API_TOKEN`: Your Hugging Face API token (required for upload)
+   - `HF_REPO`: Hugging Face repository name (default: "TjarkGerken/eu-data")
+   - `AUTO_DOWNLOAD`: Enable/disable automatic downloads (default: true)
+   - `ENABLE_UPLOAD`: Enable/disable data upload (default: false)
+
+2. **YAML Configuration** (`code/config/data_config.yaml`)
+   ```yaml
+   data:
+     huggingface_repo: "TjarkGerken/eu-data"
+     auto_download: true
+     data_paths:
+       local_data_dir: "code/data"
+       local_output_dir: "code/output"
+   ```
+
+Environment variables take precedence over YAML configuration. This ensures sensitive data like API tokens can be kept secure and not committed to version control.
+
+## Data Download
+
+There are two ways to get the required data:
+
+### 1. Automatic Download (Recommended)
+
+The data will be automatically downloaded when running the project if auto-download is enabled. To enable this:
+
+1. Ensure either:
+   - `AUTO_DOWNLOAD=true` in your `.env` file, or
+   - `auto_download: true` in `code/config/data_config.yaml`
+2. The data will be downloaded automatically when needed
+
+### 2. Manual Download
+
+If automatic download is disabled or fails:
+
+1. Visit https://huggingface.co/datasets/TjarkGerken/eu-data
+2. Download the following directories:
+   - `code/data`
+   - `code/output`
+3. Place them in their respective locations in your project directory
+
+## Uploading Data
+
+To upload data to the Hugging Face repository:
+
+1. Get your Hugging Face API token from https://huggingface.co/settings/tokens
+
+2. Set up your environment:
+
+   ```bash
+   # In your .env file
+   HF_API_TOKEN="your_api_token_here"
+   ```
+
+3. Upload the data using one of these methods:
+
+   a. Using the upload script:
+
+   ```bash
+   # Navigate to the code directory
+   cd code
+
+   # Run the upload script
+   ./scripts/upload_data.py
+   ```
+
+   b. Using Python:
+
+   ```python
+   from utils.data_loading import upload_data
+
+   # Upload both data and output directories
+   success = upload_data()
+   ```
+
+   The script will:
+
+   - Validate your API token and configuration
+   - Upload the contents of `code/data` and `code/output` directories
+   - Provide detailed logging of the upload process
+   - Exit with a non-zero status if any uploads fail
+
+## Directory Structure
+
+The project expects the following data directory structure:
+
+```
+code/
+├── data/          # Input data directory
+└── output/        # Output data directory
+```

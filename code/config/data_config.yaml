@@ -1,0 +1,37 @@
+data:
+  huggingface_repo: "TjarkGerken/eu-data"
+  auto_download: true # Set to false to disable automatic downloads
+  data_paths:
+    local_data_dir: "code/data"
+    local_output_dir: "code/output"
+  file_paths:
+    dem_file: "ClippedCopernicusHeightProfile.tif"
+    ghs_built_file: "GHS_BUILT_C/GHS_BUILT_C.vrt"
+    ghs_built_s_file: "ClippedGHS_Built-S_3ss.tif"
+    population_file: "ClippedGHS_POP_3ss.tif"
+    nuts_files:
+      l0: "NUTS-L0-NL.shp"
+      l1: "NUTS-L1-NL.shp"
+      l2: "NUTS-L2-NL.shp"
+      l3: "NUTS-L3-NL.shp"
+    relevant_area_file: "RelevantArea.shp"
+    river_segments_file: "ClippedRiverSegments.shp"
+    river_nodes_file: "ClippedRiverNodes.shp"
+  processing:
+    resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
+    smoothing_sigma: 1.0
+    target_crs: "IGNF:ETRS89LAEA"
+  risk_assessment:
+    n_risk_classes: 5
+    weights:
+      hazard: 0.4
+      exposition: 0.4
+      economic: 0.2
+  building:
+    base_floor_height: 3.0
+    max_floors: 10
+  visualization:
+    figure_size: [15, 10]
+    dpi: 300
+  upload:
+    enabled: false # Set to true to enable data upload to Hugging Face
