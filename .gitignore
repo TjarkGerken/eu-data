@@ -6,6 +6,6 @@
 **.log
 **/__pycache__/
 **/__pycache__/**
-/code/data
-/code/output
-/code/temp_download
+/**/data
+/**/output
+/**/temp_download
