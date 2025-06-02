@@ -5,8 +5,13 @@ import geopandas as gpd
 from scipy import ndimage
 from typing import Optional, Tuple
 import numpy as np
-from code.main import ProjectConfig
-from code.utils import setup_logging
+from rasterio.enums import Resampling
+from pathlib import Path
+import logging
+
+from eu_climate.config.config import ProjectConfig
+from eu_climate.utils.utils import setup_logging, suppress_warnings
+
 
 # Set up logging for the exposition layer
 logger = setup_logging(__name__)

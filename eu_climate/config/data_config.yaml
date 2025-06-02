@@ -2,8 +2,8 @@ data:
   huggingface_repo: "TjarkGerken/eu-data"
   auto_download: true # Set to false to disable automatic downloads
   data_paths:
-    local_data_dir: "code/data"
-    local_output_dir: "code/output"
+    local_data_dir: "eu_climate/data"
+    local_output_dir: "eu_climate/output"
   file_paths:
     dem_file: "ClippedCopernicusHeightProfile.tif"
     ghs_built_file: "GHS_BUILT_C/GHS_BUILT_C.vrt"

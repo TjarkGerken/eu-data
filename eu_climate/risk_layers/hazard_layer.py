@@ -1,4 +1,5 @@
 from typing import Dict, List, Optional, Tuple
+from matplotlib import pyplot as plt
 import numpy as np
 import rasterio
 import rasterio.features
@@ -6,8 +7,13 @@ import rasterio.warp
 import geopandas as gpd
 from scipy import ndimage
 from dataclasses import dataclass
-from code.main import ProjectConfig
-from code.utils import setup_logging
+
+import pandas as pd
+import matplotlib.colors as mcolors
+
+from eu_climate.config.config import ProjectConfig
+from eu_climate.utils.utils import setup_logging
+
 
 
 # Set up logging for the hazard layer

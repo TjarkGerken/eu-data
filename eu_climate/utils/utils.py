@@ -1,5 +1,6 @@
 # Setup logging
 import logging
+import os
 import warnings
 import rasterio
 import sys
@@ -14,6 +15,8 @@ def setup_logging(name=__name__):
     Returns:
         logging.Logger: Configured logger instance
     """
+    if not os.path.exists('debug'):
+        os.makedirs('debug')
     # Configure the root logger only once
     if not logging.getLogger().handlers:
         logging.basicConfig(
@@ -21,7 +24,7 @@ def setup_logging(name=__name__):
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.StreamHandler(sys.stdout),
-                logging.FileHandler('risk_assessment.log')
+                logging.FileHandler('debug/risk_assessment.log')
             ]
         )
     

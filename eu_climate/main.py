@@ -19,10 +19,11 @@ Version: 1.0.0
 """
 
 import os
-from code.layers.exposition_layer import ExpositionLayer
-from code.layers.hazard_layer import HazardLayer
-from utils import setup_logging, suppress_warnings
-from utils.data_loading import get_config
+from eu_climate.risk_layers.exposition_layer import ExpositionLayer
+from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
+from eu_climate.config.config import ProjectConfig
+from eu_climate.utils.utils import setup_logging, suppress_warnings
+from eu_climate.utils.data_loading import get_config
 import numpy as np
 import rasterio
 import rasterio.mask
@@ -44,160 +45,6 @@ class RiskLayer(Enum):
     HAZARD = "hazard"
     EXPOSITION = "exposition"  
     RISK = "risk"
-
-class ProjectConfig:
-    """Configuration class for the risk assessment project."""
-    
-    def __init__(self):
-        """Initialize configuration from YAML."""
-        self.workspace_root = Path(os.path.dirname(os.path.abspath(__file__)))
-        self._config = get_config()
-        
-        # Initialize paths
-        self.data_dir = Path(self._config['data_paths']['local_data_dir'])
-        self.output_dir = Path(self._config['data_paths']['local_output_dir'])
-        
-        # Create output directory
-        self.output_dir.mkdir(exist_ok=True)
-        
-        # Log initialization
-        logger.info(f"Project initialized with data directory: {self.data_dir}")
-        logger.info(f"Output directory: {self.output_dir}")
-        logger.info(f"Workspace root: {self.workspace_root}")
-        
-        # Validate configuration
-        self._validate_config()
-    
-    def _validate_config(self) -> None:
-        """Validate configuration values."""
-        # Validate risk assessment weights
-        weights = self._config['risk_assessment']['weights']
-        total_weight = weights['hazard'] + weights['exposition'] + weights['economic']
-        if not np.isclose(total_weight, 1.0):
-            raise ValueError(f"Risk assessment weights must sum to 1.0 (got {total_weight})")
-    
-    def _get_data_path(self, filename: str) -> Path:
-        """Get the full path to a data file."""
-        return self.data_dir / filename
-    
-    @property
-    def dem_path(self) -> Path:
-        """Get the full path to the DEM file."""
-        return self._get_data_path(self._config['file_paths']['dem_file'])
-    
-    @property
-    def ghs_built_path(self) -> Path:
-        """Get the full path to the GHS Built C file."""
-        return self._get_data_path(self._config['file_paths']['ghs_built_file'])
-    
-    @property
-    def ghs_built_s_path(self) -> Path:
-        """Get the full path to the GHS Built S file."""
-        return self._get_data_path(self._config['file_paths']['ghs_built_s_file'])
-    
-    @property
-    def population_path(self) -> Path:
-        """Get the full path to the population density file."""
-        return self._get_data_path(self._config['file_paths']['population_file'])
-    
-    @property
-    def river_segments_path(self) -> Path:
-        """Get the full path to the river segments file."""
-        return self._get_data_path(self._config['file_paths']['river_segments_file'])
-    
-    @property
-    def river_nodes_path(self) -> Path:
-        """Get the full path to the river nodes file."""
-        return self._get_data_path(self._config['file_paths']['river_nodes_file'])
-    
-    @property
-    def nuts_paths(self) -> Dict[str, Path]:
-        """Get paths to all NUTS level files."""
-        return {
-            level.upper(): self._get_data_path(path)
-            for level, path in self._config['file_paths']['nuts_files'].items()
-        }
-    
-    @property
-    def relevant_area_path(self) -> Path:
-        """Get the full path to the relevant area file."""
-        return self._get_data_path(self._config['file_paths']['relevant_area_file'])
-    
-    @property
-    def resampling_method(self) -> Resampling:
-        """Get the resampling method."""
-        return self._config['processing']['resampling_method']
-    
-    @property
-    def smoothing_sigma(self) -> float:
-        """Get the smoothing sigma value."""
-        return self._config['processing']['smoothing_sigma']
-    
-    @property
-    def target_crs(self) -> str:
-        """Get the target CRS."""
-        return self._config['processing']['target_crs']
-    
-    @property
-    def n_risk_classes(self) -> int:
-        """Get the number of risk classes."""
-        return self._config['risk_assessment']['n_risk_classes']
-    
-    @property
-    def hazard_weight(self) -> float:
-        """Get the hazard weight."""
-        return self._config['risk_assessment']['weights']['hazard']
-    
-    @property
-    def exposition_weight(self) -> float:
-        """Get the exposition weight."""
-        return self._config['risk_assessment']['weights']['exposition']
-    
-    @property
-    def economic_weight(self) -> float:
-        """Get the economic weight."""
-        return self._config['risk_assessment']['weights']['economic']
-    
-    @property
-    def base_floor_height(self) -> float:
-        """Get the base floor height."""
-        return self._config['building']['base_floor_height']
-    
-    @property
-    def max_floors(self) -> int:
-        """Get the maximum number of floors."""
-        return self._config['building']['max_floors']
-    
-    @property
-    def figure_size(self) -> Tuple[int, int]:
-        """Get the figure size."""
-        return tuple(self._config['visualization']['figure_size'])
-    
-    @property
-    def dpi(self) -> int:
-        """Get the DPI value."""
-        return self._config['visualization']['dpi']
-    
-    def validate_files(self) -> None:
-        """Validate that all required input files exist."""
-        required_files = [
-            (self.dem_path, "DEM"),
-            (self.ghs_built_path, "GHS Built C"),
-            (self.ghs_built_s_path, "GHS Built S"),
-            (self.population_path, "Population Density"),
-            (self.river_segments_path, "River Segments"),
-            (self.river_nodes_path, "River Nodes"),
-            *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
-            (self.relevant_area_path, "Relevant Area")
-        ]
-        
-        missing_files = []
-        for file_path, file_desc in required_files:
-            if not file_path.exists():
-                missing_files.append(f"{file_desc} file not found: {file_path}")
-                
-        if missing_files:
-            raise FileNotFoundError("\n".join(missing_files))
 
 class RiskAssessment:
     """

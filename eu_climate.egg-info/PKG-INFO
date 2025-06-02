@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: eu_climate
+Version: 1.0.0
+Requires-Dist: numpy
+Requires-Dist: rasterio
+Requires-Dist: matplotlib
+Requires-Dist: scikit-learn
+Dynamic: requires-dist

@@ -29,8 +29,13 @@ def validate_env_vars() -> None:
             logger.warning(f"- {var}")
         logger.warning("Some functionality may be limited.")
 
-def load_yaml_config() -> Dict[str, Any]:
-    """Load configuration from YAML file."""
+def get_config() -> dict:
+    """
+    Load configuration from YAML file.
+    
+    Returns:
+        dict: Configuration dictionary
+    """
     # Try multiple possible config locations
     possible_paths = [
         Path("code/config/data_config.yaml"),
@@ -49,53 +54,6 @@ def load_yaml_config() -> Dict[str, Any]:
     raise FileNotFoundError(
         "Configuration file not found! Ensure code/config/data_config.yaml exists."
     )
-
-def get_config() -> Dict[str, Any]:
-    """Get the complete configuration, with environment variables taking precedence."""
-    # Load and validate environment variables
-    validate_env_vars()
-    
-    # Load base configuration
-    config = load_yaml_config()
-    
-    # Override with environment variables
-    config['upload'] = {
-        'enabled': os.getenv('ENABLE_UPLOAD', 'false').lower() == 'true',
-        'api_token': os.getenv('HF_API_TOKEN', '')
-    }
-    
-    # Adjust paths based on current working directory
-    cwd = Path.cwd()
-    if cwd.name == 'code':
-        # We're in the code directory, remove 'code/' prefix from paths
-        data_paths = config['data_paths']
-        data_paths['local_data_dir'] = data_paths['local_data_dir'].replace('code/', '')
-        data_paths['local_output_dir'] = data_paths['local_output_dir'].replace('code/', '')
-    
-    # Convert string values to appropriate types
-    if 'processing' in config:
-        if 'resampling_method' in config['processing']:
-            method_map = {
-                'nearest': Resampling.nearest,
-                'bilinear': Resampling.bilinear,
-                'cubic': Resampling.cubic,
-                'cubic_spline': Resampling.cubic_spline,
-                'lanczos': Resampling.lanczos,
-                'average': Resampling.average,
-                'mode': Resampling.mode,
-                'gauss': Resampling.gauss,
-                'max': Resampling.max,
-                'min': Resampling.min,
-                'med': Resampling.med,
-                'q1': Resampling.q1,
-                'q3': Resampling.q3
-            }
-            method = config['processing']['resampling_method'].lower()
-            if method not in method_map:
-                raise ValueError(f"Invalid resampling method: {method}. Valid values: {', '.join(method_map.keys())}")
-            config['processing']['resampling_method'] = method_map[method]
-    
-    return config
 
 def check_data_availability() -> bool:
     """Check if required data directories exist and contain files."""
