@@ -1,3 +1,3 @@
 """
-EU Climate Risk Assessment Utilspackage.
+EU Climate Risk Assessment Utils package.
 """ 
