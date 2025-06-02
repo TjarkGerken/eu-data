@@ -1,4 +1,0 @@
-numpy
-rasterio
-matplotlib
-scikit-learn

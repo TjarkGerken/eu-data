@@ -7,10 +7,8 @@ import rasterio.warp
 import geopandas as gpd
 from scipy import ndimage
 from dataclasses import dataclass
-
 import pandas as pd
 import matplotlib.colors as mcolors
-
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 
@@ -85,50 +83,73 @@ class HazardLayer:
         """
         logger.info("Loading DEM data...")
         
+        # First load NUTS-L0 to get the target bounds
+        nuts_l0_path = self.config.data_dir / "NUTS-L0-NL.shp"
+        if nuts_l0_path.exists():
+            nuts_l0 = gpd.read_file(nuts_l0_path)
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            if nuts_l0.crs != target_crs:
+                nuts_l0 = nuts_l0.to_crs(target_crs)
+            bounds = nuts_l0.total_bounds
+            logger.info(f"Using NUTS-L0 bounds for DEM alignment: {bounds}")
+            logger.info(f"NUTS-L0 CRS: {nuts_l0.crs}")
+        else:
+            logger.warning("NUTS-L0 boundaries not found, using original DEM bounds")
+            bounds = None
+        
         with rasterio.open(self.dem_path) as src:
+            logger.info(f"Original DEM CRS: {src.crs}")
+            logger.info(f"Original DEM transform: {src.transform}")
+            logger.info(f"Original DEM shape: {src.shape}")
             dem_data = src.read(1)
             transform = src.transform
             src_crs = src.crs
             
-            # Transform DEM to ETRS89 Lambert Azimuthal Equal Area if needed
-            target_crs = rasterio.crs.CRS.from_string(
-                'PROJCS["ETRS89_Lambert_Azimutal_Equal_Area",'
-                'GEOGCS["GCS_ETRS89_geographiques_dms",'
-                'DATUM["D_ETRS_1989",'
-                'SPHEROID["GRS_1980",6378137.0,298.257222101]],'
-                'PRIMEM["Greenwich",0.0],'
-                'UNIT["Degree",0.0174532925199433]],'
-                'PROJECTION["Lambert_Azimuthal_Equal_Area"],'
-                'PARAMETER["False_Easting",4321000.0],'
-                'PARAMETER["False_Northing",3210000.0],'
-                'PARAMETER["Central_Meridian",10.0],'
-                'PARAMETER["Latitude_Of_Origin",52.0],'
-                'UNIT["Meter",1.0]]'
-            )
+            # Transform DEM to target CRS if needed
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
             
-            if src_crs != target_crs:
-                logger.info(f"Transforming DEM from {src_crs} to ETRS89 Lambert Azimuthal Equal Area")
-                # Calculate output dimensions and transform
-                transform, width, height = rasterio.warp.calculate_default_transform(
-                    src_crs, target_crs, src.width, src.height, *src.bounds
-                )
+            if src.crs != target_crs:
+                logger.info(f"Transforming DEM from {src.crs} to {target_crs}")
                 
-                # Initialize output array
-                dem_transformed = np.zeros((height, width), dtype=dem_data.dtype)
+                # If we have NUTS bounds, use them to calculate the destination transform
+                if bounds is not None:
+                    # Use a fixed resolution of 30 meters (typical for DEM data)
+                    res_x = 30.0
+                    res_y = 30.0
+                    
+                    # Calculate the dimensions needed to cover the NUTS bounds
+                    width = int((bounds[2] - bounds[0]) / res_x)
+                    height = int((bounds[3] - bounds[1]) / res_y)
+                    
+                    logger.info(f"Calculated dimensions for reprojection: {width}x{height} pixels")
+                    logger.info(f"Resolution: {res_x}x{res_y} meters")
+                    
+                    # Create a new transform that aligns with the NUTS bounds
+                    dst_transform = rasterio.Affine(
+                        res_x, 0.0, bounds[0],
+                        0.0, -res_y, bounds[3]
+                    )
+                    logger.info(f"Destination transform: {dst_transform}")
+                    
+                    # Create destination array with the calculated dimensions
+                    destination = np.zeros((height, width), dtype=dem_data.dtype)
+                else:
+                    destination = np.zeros_like(dem_data)
+                    dst_transform = None
                 
-                # Perform the reprojection
-                rasterio.warp.reproject(
+                dem_data, transform = rasterio.warp.reproject(
                     source=dem_data,
-                    destination=dem_transformed,
+                    destination=destination,
                     src_transform=src.transform,
-                    src_crs=src_crs,
-                    dst_transform=transform,
+                    src_crs=src.crs,
+                    dst_transform=dst_transform,
                     dst_crs=target_crs,
                     resampling=self.config.resampling_method
                 )
-                
-                dem_data = dem_transformed
-                logger.info("DEM transformed to ETRS89 Lambert Azimuthal Equal Area")
+                logger.info(f"Reprojected DEM shape: {dem_data.shape}")
+                logger.info(f"Reprojected DEM transform: {transform}")
+            else:
+                transform = src.transform
             
             # Handle nodata values
             nodata = src.nodata
@@ -154,6 +175,30 @@ class HazardLayer:
             logger.info(f"  Mean elevation: {np.mean(valid_data):.2f}m")
             logger.info(f"  Coverage: {len(valid_data) / dem_data.size * 100:.1f}%")
             
+            # Calculate and log the actual bounds of the DEM
+            # Get the corners of the DEM in pixel coordinates
+            corners = [
+                (0, 0),  # top-left
+                (dem_data.shape[1], 0),  # top-right
+                (dem_data.shape[1], dem_data.shape[0]),  # bottom-right
+                (0, dem_data.shape[0])  # bottom-left
+            ]
+            
+            # Transform corners to geographic coordinates
+            dem_bounds = []
+            for x, y in corners:
+                x_geo, y_geo = transform * (x, y)
+                dem_bounds.extend([float(x_geo), float(y_geo)])
+            
+            # Extract min/max coordinates
+            dem_bounds = [
+                min(dem_bounds[::2]),  # left
+                max(dem_bounds[::2]),  # right
+                min(dem_bounds[1::2]),  # bottom
+                max(dem_bounds[1::2])   # top
+            ]
+            logger.info(f"DEM bounds: {dem_bounds}")
+            
             return dem_data, transform, target_crs
     
     def load_river_data(self) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
@@ -161,21 +206,8 @@ class HazardLayer:
         logger.info("Loading river network data...")
         
         try:
-            # Define the target CRS (ETRS89 Lambert Azimuthal Equal Area)
-            target_crs = rasterio.crs.CRS.from_string(
-                'PROJCS["ETRS89_Lambert_Azimutal_Equal_Area",'
-                'GEOGCS["GCS_ETRS89_geographiques_dms",'
-                'DATUM["D_ETRS_1989",'
-                'SPHEROID["GRS_1980",6378137.0,298.257222101]],'
-                'PRIMEM["Greenwich",0.0],'
-                'UNIT["Degree",0.0174532925199433]],'
-                'PROJECTION["Lambert_Azimuthal_Equal_Area"],'
-                'PARAMETER["False_Easting",4321000.0],'
-                'PARAMETER["False_Northing",3210000.0],'
-                'PARAMETER["Central_Meridian",10.0],'
-                'PARAMETER["Latitude_Of_Origin",52.0],'
-                'UNIT["Meter",1.0]]'
-            )
+            # Get target CRS from config
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
             
             # Load river segments with explicit CRS
             river_network = gpd.read_file(self.river_segments_path)
@@ -184,25 +216,18 @@ class HazardLayer:
             # Set CRS if not already set
             if river_network.crs is None:
                 river_network.set_crs(target_crs, inplace=True)
-                logger.info("Set river network CRS to ETRS89 Lambert Azimuthal Equal Area")
+                logger.info(f"Set river network CRS to {target_crs}")
             if river_nodes.crs is None:
                 river_nodes.set_crs(target_crs, inplace=True)
-                logger.info("Set river nodes CRS to ETRS89 Lambert Azimuthal Equal Area")
+                logger.info(f"Set river nodes CRS to {target_crs}")
             
-            # Get DEM CRS
-            with rasterio.open(self.dem_path) as src:
-                dem_crs = src.crs
-                dem_bounds = src.bounds
-                logger.info(f"DEM CRS: {dem_crs}")
-                logger.info(f"DEM bounds: [{dem_bounds.left:.2f}, {dem_bounds.right:.2f}] x [{dem_bounds.bottom:.2f}, {dem_bounds.top:.2f}]")
-            
-            # Transform to DEM CRS if different
+            # Transform to target CRS if different
             if river_network.crs != target_crs:
                 river_network = river_network.to_crs(target_crs)
-                logger.info("Transformed river network to ETRS89 Lambert Azimuthal Equal Area")
+                logger.info(f"Transformed river network to {target_crs}")
             if river_nodes.crs != target_crs:
                 river_nodes = river_nodes.to_crs(target_crs)
-                logger.info("Transformed river nodes to ETRS89 Lambert Azimuthal Equal Area")
+                logger.info(f"Transformed river nodes to {target_crs}")
             
             self.river_network = river_network
             self.river_nodes = river_nodes
@@ -358,80 +383,177 @@ class HazardLayer:
         
         # Set terrain colormap to focus on relevant elevation range
         dem_cmap.set_bad('lightgray')  # Color for NaN values
-        norm = mcolors.Normalize(vmin=-25, vmax=50)
+        norm = mcolors.Normalize(vmin=-10, vmax=10)
         
         scenarios = list(flood_extents.keys())
-        
-        # Get spatial extent and transform for proper overlay
         dem_data = flood_extents[scenarios[0]]['dem_data']
         transform = flood_extents[scenarios[0]]['transform']
         crs = flood_extents[scenarios[0]]['crs']
+        # Calculate extent in the target CRS using the transform and shape of the reprojected DEM
+        height, width = dem_data.shape
         
-        # Calculate extent for matplotlib in the correct CRS
-        with rasterio.open(self.dem_path) as src:
-            bounds = src.bounds
-            extent = [bounds.left, bounds.right, bounds.bottom, bounds.top]
+        # Calculate DEM bounds for comparison
+        corners = [
+            (0, 0),  # top-left
+            (width, 0),  # top-right
+            (width, height),  # bottom-right
+            (0, height)  # bottom-left
+        ]
+        
+        # Transform corners to geographic coordinates
+        dem_bounds_coords = []
+        for x, y in corners:
+            x_geo, y_geo = transform * (x, y)
+            dem_bounds_coords.extend([float(x_geo), float(y_geo)])
+        
+        # Extract min/max coordinates
+        dem_bounds = [
+            min(dem_bounds_coords[::2]),  # left
+            max(dem_bounds_coords[::2]),  # right
+            min(dem_bounds_coords[1::2]),  # bottom
+            max(dem_bounds_coords[1::2])   # top
+        ]
+        logger.info(f"DEM bounds in visualization: {dem_bounds}")
+        
+        # Load NUTS-L0 boundaries to determine the visualization extent
+        nuts_l0_path = self.config.data_dir / "NUTS-L0-NL.shp"
+        if nuts_l0_path.exists():
+            nuts_l0 = gpd.read_file(nuts_l0_path)
+            if nuts_l0.crs != crs:
+                nuts_l0 = nuts_l0.to_crs(crs)
+            
+            # Get the bounds of the NUTS-L0 area
+            bounds = nuts_l0.total_bounds
+            # Add a small buffer (1%) to the bounds
+            buffer_x = (bounds[2] - bounds[0]) * 0.01
+            buffer_y = (bounds[3] - bounds[1]) * 0.01
+            extent = [
+                float(bounds[0] - buffer_x),
+                float(bounds[2] + buffer_x),
+                float(bounds[1] - buffer_y),
+                float(bounds[3] + buffer_y)
+            ]
+            logger.info(f"Using NUTS-L0 bounds for visualization extent: {extent}")
+            
+            # Check if DEM bounds cover the NUTS bounds
+            if (dem_bounds[0] > bounds[0] or dem_bounds[1] < bounds[2] or 
+                dem_bounds[2] > bounds[1] or dem_bounds[3] < bounds[3]):
+                logger.warning("DEM does not fully cover NUTS bounds!")
+                logger.warning(f"DEM: {dem_bounds}")
+                logger.warning(f"NUTS: {bounds}")
+        else:
+            # Fallback to DEM bounds with buffer if NUTS-L0 not available
+            buffer_x = (dem_bounds[1] - dem_bounds[0]) * 0.05
+            buffer_y = (dem_bounds[3] - dem_bounds[2]) * 0.05
+            extent = [
+                float(dem_bounds[0] + buffer_x),
+                float(dem_bounds[1] - buffer_x),
+                float(dem_bounds[2] + buffer_y),
+                float(dem_bounds[3] - buffer_y)
+            ]
+            logger.warning("NUTS-L0 boundaries not found, falling back to DEM bounds with buffer")
         
         # Load river data if not already loaded
         if self.river_network is None:
             self.load_river_data()
         
-        # Ensure river network is in the correct CRS
+        # Ensure river network is in the correct CRS and clip to extent
         if self.river_network is not None:
             if self.river_network.crs is None:
-                self.river_network.set_crs("IGNF:ETRS89LAEA", inplace=True)
+                self.river_network.set_crs(crs, inplace=True)
+                logger.info(f"Set river network CRS to {crs}")
             if self.river_nodes.crs is None:
-                self.river_nodes.set_crs("IGNF:ETRS89LAEA", inplace=True)
+                self.river_nodes.set_crs(crs, inplace=True)
+                logger.info(f"Set river nodes CRS to {crs}")
             
-            # Transform to DEM's CRS if different
+            # Transform to target CRS if different
             if self.river_network.crs != crs:
                 self.river_network = self.river_network.to_crs(crs)
+                logger.info(f"Transformed river network to {crs}")
             if self.river_nodes.crs != crs:
                 self.river_nodes = self.river_nodes.to_crs(crs)
+                logger.info(f"Transformed river nodes to {crs}")
+            
+            # Clip river network to the visualization extent
+            from shapely.geometry import box
+            extent_box = box(extent[0], extent[2], extent[1], extent[3])
+            self.river_network = self.river_network[self.river_network.intersects(extent_box)]
+            self.river_nodes = self.river_nodes[self.river_nodes.intersects(extent_box)]
+            
+            # Log river network bounds after clipping
+            river_bounds = self.river_network.total_bounds
+            logger.info(f"River network bounds after clipping: {river_bounds}")
+        
+        # Log DEM bounds
+        logger.info(f"DEM extent (target CRS): left={extent[0]}, right={extent[1]}, bottom={extent[2]}, top={extent[3]}")
+        # Log river network bounds
+        if self.river_network is not None:
+            river_bounds = self.river_network.total_bounds
+            logger.info(f"River network bounds: {river_bounds}")
+        # Log NUTS bounds
+        if nuts_gdf is not None:
+            nuts_bounds = nuts_gdf.total_bounds
+            logger.info(f"NUTS bounds: {nuts_bounds}")
+
+        # Debug plot: Only overlays (NUTS and rivers)
+        fig_debug, ax_debug = plt.subplots(figsize=(8, 8))
+        if nuts_gdf is not None:
+            nuts_gdf.plot(ax=ax_debug, facecolor='none', edgecolor='black', linewidth=0.5, alpha=1.0, zorder=10)
+        if self.river_network is not None:
+            self.river_network.plot(ax=ax_debug, color='black', linewidth=0.1, alpha=1.0, zorder=11)
+        ax_debug.set_title('DEBUG: NUTS and River Network Overlays Only')
+        logger.info(f"DEBUG: Axis limits before autoscale: {ax_debug.get_xlim()}, {ax_debug.get_ylim()}")
+        ax_debug.set_xlim(extent[0], extent[1])
+        ax_debug.set_ylim(extent[2], extent[3])
+        ax_debug.autoscale(False)
+        logger.info(f"DEBUG: Axis limits after autoscale: {ax_debug.get_xlim()}, {ax_debug.get_ylim()}")
+        plt.savefig(self.config.output_dir / "debug_overlays_only.png", dpi=150, bbox_inches='tight')
+        plt.close(fig_debug)
         
         # Panel 1: Original DEM with rivers
         ax1 = fig.add_subplot(gs[0, 0])
-        im1 = ax1.imshow(dem_data, cmap=dem_cmap, norm=norm, aspect='equal', extent=extent)
-        self._add_nuts_overlay(ax1, nuts_gdf, crs)
+        # Use the same DEM bounds for visualization
+        im1 = ax1.imshow(dem_data, cmap=dem_cmap, norm=norm, aspect='equal', extent=dem_bounds)
+        # Make NUTS overlay more visible
+        if nuts_gdf is not None:
+            nuts_gdf.plot(ax=ax1, facecolor='none', edgecolor='black', linewidth=0.5, alpha=1.0, zorder=10)
+        # Make river overlay more visible
         if self.river_network is not None:
-            self.river_network.plot(ax=ax1, color='blue', linewidth=0.8, alpha=0.7, zorder=5)
-            self.river_nodes.plot(ax=ax1, color='darkblue', markersize=1, alpha=0.5, zorder=6)
+            self.river_network.plot(ax=ax1, color='black', linewidth=0.1, alpha=1.0, zorder=11)
+            # self.river_nodes.plot(ax=ax1, color='black', markersize=3, alpha=1.0, zorder=12)
         ax1.set_title('Original DEM with River Network\n(Copernicus Height Profile, Clipped -25m to 50m)', 
                      fontsize=12, fontweight='bold')
         ax1.set_xlabel('X Coordinate (m)')
         ax1.set_ylabel('Y Coordinate (m)')
         plt.colorbar(im1, ax=ax1, label='Elevation (m)', shrink=0.8)
-        
-        # Set the extent to match the DEM bounds
-        ax1.set_xlim(bounds.left, bounds.right)
-        ax1.set_ylim(bounds.bottom, bounds.top)
+        # Set the extent to match the DEM bounds with buffer
+        ax1.set_xlim(extent[0], extent[1])
+        ax1.set_ylim(extent[2], extent[3])
+        ax1.autoscale(False)
         
         # Panels 2-4: Flood extent for each scenario with rivers
         for i, scenario_name in enumerate(scenarios):
             ax = fig.add_subplot(gs[0, i+1]) if i < 2 else fig.add_subplot(gs[1, i-2])
-            
             flood_data = flood_extents[scenario_name]
             flood_mask = flood_data['flood_mask']
             scenario = flood_data['scenario']
-            
             # Show flood extent
             im = ax.imshow(flood_mask, cmap=flood_cmap, aspect='equal', extent=extent)
-            self._add_nuts_overlay(ax, nuts_gdf, crs)
-            
-            # Add river network
+            # Make NUTS overlay more visible
+            if nuts_gdf is not None:
+                nuts_gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=0.5, alpha=1.0, zorder=10)
+            # Make river overlay more visible
             if self.river_network is not None:
-                self.river_network.plot(ax=ax, color='blue', linewidth=0.8, alpha=0.7, zorder=5)
-                self.river_nodes.plot(ax=ax, color='darkblue', markersize=1, alpha=0.5, zorder=6)
-            
+                self.river_network.plot(ax=ax, color='black', linewidth=0.1, alpha=1.0, zorder=11)
+                # self.river_nodes.plot(ax=ax, color='black', markersize=3, alpha=1.0, zorder=12)
             ax.set_title(f'{scenario.name} Scenario with River Network\n({scenario.rise_meters}m SLR)', 
                         fontsize=12, fontweight='bold')
             ax.set_xlabel('X Coordinate (m)')
             ax.set_ylabel('Y Coordinate (m)')
-            
-            # Set the extent to match the DEM bounds
-            ax.set_xlim(bounds.left, bounds.right)
-            ax.set_ylim(bounds.bottom, bounds.top)
-            
+            # Set the extent to match the DEM bounds with buffer
+            ax.set_xlim(extent[0], extent[1])
+            ax.set_ylim(extent[2], extent[3])
+            ax.autoscale(False)
             # Add colorbar
             cbar = plt.colorbar(im, ax=ax, shrink=0.8)
             cbar.set_ticks([0.25, 0.75])
@@ -515,6 +637,9 @@ class HazardLayer:
             GeoDataFrame with NUTS boundaries
         """
         try:
+            # Get target CRS from config
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            
             # Try to load NUTS boundaries, starting with the most detailed level
             nuts_files = [
                 "NUTS-L3-NL.shp",  # Most detailed (municipalities/counties)
@@ -532,6 +657,11 @@ class HazardLayer:
                     # Log information about the loaded boundaries
                     logger.info(f"  Loaded {len(nuts_gdf)} administrative units")
                     logger.info(f"  Original CRS: {nuts_gdf.crs}")
+                    
+                    # Transform to target CRS if different
+                    if nuts_gdf.crs != target_crs:
+                        nuts_gdf = nuts_gdf.to_crs(target_crs)
+                        logger.info(f"  Transformed to target CRS: {target_crs}")
                     
                     return nuts_gdf
             
@@ -555,9 +685,13 @@ class HazardLayer:
             return
             
         try:
-            # Reproject NUTS boundaries to match the DEM CRS
-            if nuts_gdf.crs != target_crs:
-                nuts_reproj = nuts_gdf.to_crs(target_crs)
+            # Get target CRS from config
+            config_target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            
+            # Ensure NUTS boundaries are in the target CRS
+            if nuts_gdf.crs != config_target_crs:
+                nuts_reproj = nuts_gdf.to_crs(config_target_crs)
+                logger.info(f"Reprojected NUTS boundaries from {nuts_gdf.crs} to {config_target_crs}")
             else:
                 nuts_reproj = nuts_gdf
             

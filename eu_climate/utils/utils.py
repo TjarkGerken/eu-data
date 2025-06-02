@@ -15,8 +15,10 @@ def setup_logging(name=__name__):
     Returns:
         logging.Logger: Configured logger instance
     """
-    if not os.path.exists('debug'):
-        os.makedirs('debug')
+    debug_dir = "eu_climate/debug"
+    if not os.path.exists(debug_dir):
+        os.makedirs(debug_dir)
+        
     # Configure the root logger only once
     if not logging.getLogger().handlers:
         logging.basicConfig(
@@ -24,12 +26,13 @@ def setup_logging(name=__name__):
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.StreamHandler(sys.stdout),
-                logging.FileHandler('debug/risk_assessment.log')
+                logging.FileHandler(f'{debug_dir}/risk_assessment.log')
             ]
-        )
+        )   
     
     # Get logger for the specific module
     logger = logging.getLogger(name)
+    logger.info("Logger initialized with name: %s, %s", name, dir)
     return logger
 
 

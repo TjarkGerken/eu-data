@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict
 import numpy as np
 from rasterio.enums import Resampling
 from eu_climate.utils.utils import setup_logging

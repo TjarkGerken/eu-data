@@ -16,9 +16,26 @@ REQUIRED_ENV_VARS = {
 
 def validate_env_vars() -> None:
     """Validate that all required environment variables are set."""
-    load_dotenv()
-    missing_vars = []
+    # Try multiple possible .env locations
+    possible_env_paths = [
+        Path("code/config/.env"),
+        Path("config/.env"),
+        Path(__file__).parent.parent / "config" / ".env",
+        Path(".env")  # Fallback to root directory
+    ]
     
+    env_loaded = False
+    for env_path in possible_env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            env_loaded = True
+            logger.info(f"Loaded environment variables from {env_path}")
+            break
+    
+    if not env_loaded:
+        logger.warning("No .env file found in any of the expected locations")
+    
+    missing_vars = []
     for var, description in REQUIRED_ENV_VARS.items():
         if not os.getenv(var):
             missing_vars.append(f"{var} ({description})")

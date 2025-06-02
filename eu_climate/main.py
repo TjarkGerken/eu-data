@@ -81,6 +81,10 @@ class RiskAssessment:
         # Load and process hazard data
         logger.info("Preparing hazard data...")
         dem_data, transform, crs = self.hazard_layer.load_and_prepare_dem()
+        dem_shape = dem_data.shape
+        
+        # Set reference grid for exposition layer
+        self.exposition_layer.set_reference_grid(transform, crs, dem_shape)
         
         # Load and process exposition data
         logger.info("Preparing exposition data...")

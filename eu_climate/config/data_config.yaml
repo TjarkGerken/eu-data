@@ -20,7 +20,7 @@ data:
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
     smoothing_sigma: 1.0
-    target_crs: "IGNF:ETRS89LAEA"
+    target_crs: "EPSG:3035"
   risk_assessment:
     n_risk_classes: 5
     weights:

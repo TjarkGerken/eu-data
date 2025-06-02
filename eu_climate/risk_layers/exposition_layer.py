@@ -55,25 +55,24 @@ class ExpositionLayer:
         
         logger.info(f"Initialized Exposition Layer")
         
-    def _resample_to_match(self, data: np.ndarray, src_transform: rasterio.Affine,
-                          src_crs: rasterio.crs.CRS) -> np.ndarray:
+    def set_reference_grid(self, reference_transform, reference_crs, reference_shape):
         """
-        Resample data to match the reference (GHS Built C) resolution and projection.
-        
-        Args:
-            data: Source data array
-            src_transform: Source data transform
-            src_crs: Source data CRS
-            
-        Returns:
-            Resampled data array matching reference dimensions
+        Set the reference grid (transform, CRS, shape) for all rasters in the exposition layer.
+        This should be called with the DEM's transform, CRS, and shape before loading other rasters.
         """
-        # Create destination profile
-        dst_shape = self.ghs_built_data.shape
-        dst_transform = self.transform
-        dst_crs = self.crs
-        
-        # Calculate resampling parameters
+        self.reference_transform = reference_transform
+        self.reference_crs = reference_crs
+        self.reference_shape = reference_shape
+        self.transform = reference_transform
+        self.crs = reference_crs
+
+    def _resample_to_reference(self, data: np.ndarray, src_transform: rasterio.Affine, src_crs: rasterio.crs.CRS) -> np.ndarray:
+        """
+        Resample data to match the reference grid (DEM's transform, CRS, shape).
+        """
+        dst_shape = self.reference_shape
+        dst_transform = self.reference_transform
+        dst_crs = self.reference_crs
         reproject_params = {
             'src_transform': src_transform,
             'src_crs': src_crs,
@@ -81,70 +80,44 @@ class ExpositionLayer:
             'dst_crs': dst_crs,
             'resampling': self.config.resampling_method
         }
-        
-        # Perform resampling
         resampled_data, _ = rasterio.warp.reproject(
             source=data,
             destination=np.zeros(dst_shape, dtype=data.dtype),
             **reproject_params
         )
-        
         return resampled_data
-    
+
     def load_building_data(self) -> Tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS]:
         """
-        Load and prepare building data from both GHS Built C and Built S.
-        
-        Returns:
-            Tuple containing the combined building data array, transform, and CRS information.
+        Load and prepare building data from both GHS Built C and Built S, resampled to the reference grid.
         """
         logger.info("Loading building data...")
-        
-        try:
-            # Load GHS Built C (comprehensive building characteristics)
-            with rasterio.open(self.ghs_built_path) as src:
-                self.ghs_built_data = src.read(1)
-                self.transform = src.transform
-                self.crs = src.crs
-                
-                # Handle nodata values
-                nodata = src.nodata
-                if nodata is not None:
-                    self.ghs_built_data = np.where(self.ghs_built_data == nodata, np.nan, self.ghs_built_data)
-        except Exception as e:
-            logger.warning(f"Could not load GHS Built C data: {str(e)}")
-            logger.warning("Proceeding with default building density values")
-            self.ghs_built_data = np.ones((1000, 1000))  # Default size
-            
-        try:
-            # Load GHS Built S (building structure information)
-            with rasterio.open(self.ghs_built_s_path) as src:
-                self.ghs_built_s_data = src.read(1)
-                
-                # Ensure same projection and resolution
-                if (src.crs != self.crs or 
-                    src.transform != self.transform or 
-                    self.ghs_built_s_data.shape != self.ghs_built_data.shape):
-                    logger.info("Resampling GHS Built S data to match GHS Built C...")
-                    self.ghs_built_s_data = self._resample_to_match(
-                        self.ghs_built_s_data,
-                        src.transform,
-                        src.crs
-                    )
-                
-                # Handle nodata values
-                nodata = src.nodata
-                if nodata is not None:
-                    self.ghs_built_s_data = np.where(self.ghs_built_s_data == nodata, np.nan, self.ghs_built_s_data)
-        except Exception as e:
-            logger.warning(f"Could not load GHS Built S data: {str(e)}")
-            logger.warning("Proceeding without building structure information")
-            self.ghs_built_s_data = np.ones_like(self.ghs_built_data)
-        
-        # Log statistics
+        # Load GHS Built C
+        with rasterio.open(self.ghs_built_path) as src:
+            data = src.read(1)
+            src_transform = src.transform
+            src_crs = src.crs
+            nodata = src.nodata
+            if nodata is not None:
+                data = np.where(data == nodata, np.nan, data)
+            if (src_crs != self.reference_crs or src_transform != self.reference_transform or data.shape != self.reference_shape):
+                logger.info("Resampling GHS Built C to reference grid...")
+                data = self._resample_to_reference(data, src_transform, src_crs)
+            self.ghs_built_data = data
+        # Load GHS Built S
+        with rasterio.open(self.ghs_built_s_path) as src:
+            data = src.read(1)
+            src_transform = src.transform
+            src_crs = src.crs
+            nodata = src.nodata
+            if nodata is not None:
+                data = np.where(data == nodata, np.nan, data)
+            if (src_crs != self.reference_crs or src_transform != self.reference_transform or data.shape != self.reference_shape):
+                logger.info("Resampling GHS Built S to reference grid...")
+                data = self._resample_to_reference(data, src_transform, src_crs)
+            self.ghs_built_s_data = data
         self._log_building_statistics()
-        
-        return self.ghs_built_data, self.transform, self.crs
+        return self.ghs_built_data, self.reference_transform, self.reference_crs
     
     def _log_building_statistics(self) -> None:
         """Log statistics about building data."""
@@ -350,3 +323,20 @@ class ExpositionLayer:
             dst.write(building_volume, 1)
             
         logger.info(f"Exported exposition results to {self.config.output_dir}")
+
+    def load_population_data(self):
+        """
+        Load and prepare population data, resampled to the reference grid.
+        """
+        logger.info("Loading population data...")
+        with rasterio.open(self.population_path) as src:
+            data = src.read(1)
+            src_transform = src.transform
+            src_crs = src.crs
+            nodata = src.nodata
+            if nodata is not None:
+                data = np.where(data == nodata, np.nan, data)
+            if (src_crs != self.reference_crs or src_transform != self.reference_transform or data.shape != self.reference_shape):
+                logger.info("Resampling population data to reference grid...")
+                data = self._resample_to_reference(data, src_transform, src_crs)
+            self.population_data = data
