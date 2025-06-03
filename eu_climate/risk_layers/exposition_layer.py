@@ -8,6 +8,8 @@ import numpy as np
 from rasterio.enums import Resampling
 from pathlib import Path
 import logging
+import matplotlib.pyplot as plt
+import os
 
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
@@ -23,16 +25,16 @@ class ExpositionLayer:
     =============================
     
     Processes and analyzes exposure factors including:
-    - Building density and volume (GHS Built C)
+    - Building Morphological Settlement Zone (MSZ) Delineation (GHS Built C) 
+        - https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
+        - Range: 0-25 | Explanation https://human-settlement.emergency.copernicus.eu/documents/GHSL_Data_Package_2023.pdf?t=1727170839
+        - 2018, 10m Res, Cord System Mollweide, ESRI54009
     - Population density (GHS POP)
-    - Economic indicators (NUTS data)
-    - Building structure (GHS Built S)
-    
-    Features:
-    - Multi-source building data integration
-    - Downsampling of aggregated data
-    - Spatial normalization
-    - Integration of multiple exposure factors
+        - https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
+        - 2025, 100m Res, Cord System WGS84, EPSG:4326 
+    - Building volume (GHS Built V) 
+        - https://human-settlement.emergency.copernicus.eu/download.php?ds=builtV
+        - 2025, 100m Res, Cord System Mollweide, ESRI54009
     """
     
     def __init__(self, config: ProjectConfig):
@@ -40,303 +42,315 @@ class ExpositionLayer:
         self.config = config
         
         # Data paths
-        self.ghs_built_path = self.config.ghs_built_path
-        self.ghs_built_s_path = self.config.ghs_built_s_path
+        self.ghs_built_c_path = self.config.ghs_built_c_path
+        self.ghs_built_v_path = self.config.ghs_built_v_path
         self.population_path = self.config.population_path
         self.nuts_paths = self.config.nuts_paths
-        
-        # Data holders
-        self.ghs_built_data = None
-        self.ghs_built_s_data = None
-        self.population_data = None
         self.transform = None
         self.crs = None
         self.nuts_data = {}
         
         logger.info(f"Initialized Exposition Layer")
         
-    def set_reference_grid(self, reference_transform, reference_crs, reference_shape):
-        """
-        Set the reference grid (transform, CRS, shape) for all rasters in the exposition layer.
-        This should be called with the DEM's transform, CRS, and shape before loading other rasters.
-        """
-        self.reference_transform = reference_transform
-        self.reference_crs = reference_crs
-        self.reference_shape = reference_shape
-        self.transform = reference_transform
-        self.crs = reference_crs
 
-    def _resample_to_reference(self, data: np.ndarray, src_transform: rasterio.Affine, src_crs: rasterio.crs.CRS) -> np.ndarray:
-        """
-        Resample data to match the reference grid (DEM's transform, CRS, shape).
-        """
-        dst_shape = self.reference_shape
-        dst_transform = self.reference_transform
-        dst_crs = self.reference_crs
-        reproject_params = {
-            'src_transform': src_transform,
-            'src_crs': src_crs,
-            'dst_transform': dst_transform,
-            'dst_crs': dst_crs,
-            'resampling': self.config.resampling_method
-        }
-        resampled_data, _ = rasterio.warp.reproject(
-            source=data,
-            destination=np.zeros(dst_shape, dtype=data.dtype),
-            **reproject_params
-        )
-        return resampled_data
 
-    def load_building_data(self) -> Tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS]:
-        """
-        Load and prepare building data from both GHS Built C and Built S, resampled to the reference grid.
-        """
-        logger.info("Loading building data...")
-        # Load GHS Built C
-        with rasterio.open(self.ghs_built_path) as src:
+    def load_ghs_built_c(self):
+        """Load the GHS Built C data.Transform to the target CRS from the config file."""""
+        # The GHS BUILT C uses the 
+        return self.ghs_built_c_path
+    
+    def load_ghs_built_v(self):
+        """Load the GHS Built V data. Transform to the target CRS from the config file."""
+        return self.ghs_built_v_path
+    
+    def load_population(self):
+        """Load the population data.Transform to the target CRS from the config file."""
+        return self.population_path
+    
+    def normalize_data(self):
+        """Normalize the data to a unified scale of 0-1."""
+        pass
+    
+    def load_and_preprocess_raster(self, path: str) -> Tuple[np.ndarray, dict]:
+        """Load and preprocess a single raster to target resolution and CRS."""
+        logger.info(f"Loading raster: {path}")
+        with rasterio.open(path) as src:
+            # Log original CRS and bounds for debugging
+            logger.info(f"Original CRS: {src.crs}, Bounds: {src.bounds}")
+            
             data = src.read(1)
-            src_transform = src.transform
-            src_crs = src.crs
-            nodata = src.nodata
-            if nodata is not None:
-                data = np.where(data == nodata, np.nan, data)
-            if (src_crs != self.reference_crs or src_transform != self.reference_transform or data.shape != self.reference_shape):
-                logger.info("Resampling GHS Built C to reference grid...")
-                data = self._resample_to_reference(data, src_transform, src_crs)
-            self.ghs_built_data = data
-        # Load GHS Built S
-        with rasterio.open(self.ghs_built_s_path) as src:
-            data = src.read(1)
-            src_transform = src.transform
-            src_crs = src.crs
-            nodata = src.nodata
-            if nodata is not None:
-                data = np.where(data == nodata, np.nan, data)
-            if (src_crs != self.reference_crs or src_transform != self.reference_transform or data.shape != self.reference_shape):
-                logger.info("Resampling GHS Built S to reference grid...")
-                data = self._resample_to_reference(data, src_transform, src_crs)
-            self.ghs_built_s_data = data
-        self._log_building_statistics()
-        return self.ghs_built_data, self.reference_transform, self.reference_crs
-    
-    def _log_building_statistics(self) -> None:
-        """Log statistics about building data."""
-        for name, data in [("GHS Built C", self.ghs_built_data),
-                         ("GHS Built S", self.ghs_built_s_data)]:
-            valid_data = data[~np.isnan(data)]
-            logger.info(f"{name} Statistics:")
-            logger.info(f"  Shape: {data.shape}")
-            logger.info(f"  Min value: {np.min(valid_data):.2f}")
-            logger.info(f"  Max value: {np.max(valid_data):.2f}")
-            logger.info(f"  Mean value: {np.mean(valid_data):.2f}")
-            logger.info(f"  Coverage: {len(valid_data) / data.size * 100:.1f}%")
-    
-    def calculate_building_volume(self) -> np.ndarray:
-        """
-        Calculate building volume using both GHS Built C and Built S data.
-        
-        Returns:
-            Array of estimated building volumes in cubic meters.
-        """
-        if self.ghs_built_data is None or self.ghs_built_s_data is None:
-            raise ValueError("Building data must be loaded first")
-        
-        # Use building structure data to estimate height
-        structure_factor = np.clip(self.ghs_built_s_data / np.nanmax(self.ghs_built_s_data), 0, 1)
-        
-        # Calculate building height based on both density and structure
-        base_height = self.config.base_floor_height
-        max_floors = self.config.max_floors
-        
-        # Normalize built-up density
-        normalized_density = (self.ghs_built_data - np.nanmin(self.ghs_built_data)) / (
-            np.nanmax(self.ghs_built_data) - np.nanmin(self.ghs_built_data)
-        )
-        
-        # Combine density and structure information for height estimation
-        height_factor = 0.7 * normalized_density + 0.3 * structure_factor
-        avg_floors = 1 + (height_factor * (max_floors - 1))
-        
-        # Calculate building height and volume
-        building_height = avg_floors * base_height
-        building_volume = self.ghs_built_data * building_height
-        
-        logger.info(f"Building volume calculation completed")
-        logger.info(f"  Average building height: {np.nanmean(building_height):.2f}m")
-        logger.info(f"  Max building height: {np.nanmax(building_height):.2f}m")
-        logger.info(f"  Structure factor influence applied")
-        
-        return building_volume
-    
-    def load_nuts_data(self, level: str = 'L3') -> gpd.GeoDataFrame:
-        """Load NUTS administrative boundaries and socio-economic data."""
-        if level not in self.nuts_paths:
-            raise ValueError(f"Invalid NUTS level: {level}")
+            logger.info(f"Loaded raster shape: {data.shape}, dtype: {data.dtype}")
             
-        if level not in self.nuts_data:
-            logger.info(f"Loading NUTS {level} data...")
-            nuts_gdf = gpd.read_file(self.nuts_paths[level])
+            # Calculate target transform and shape for 30x30m grid
+            target_crs = self.config.target_crs  # EPSG:3035
+            res = 30  # 30x30m
             
-            # Ensure proper projection
-            if nuts_gdf.crs != self.config.target_crs:
-                nuts_gdf = nuts_gdf.to_crs(self.config.target_crs)
+            # Get the bounds in the target CRS
+            left, bottom, right, top = rasterio.warp.transform_bounds(
+                src.crs, target_crs, *src.bounds
+            )
             
-            self.nuts_data[level] = nuts_gdf
-            logger.info(f"Loaded {len(nuts_gdf)} NUTS {level} regions")
-        
-        return self.nuts_data[level]
-    
-    def calculate_exposure_index(self, building_weight: float = 0.4,
-                               population_weight: float = 0.4,
-                               volume_weight: float = 0.2) -> np.ndarray:
-        """
-        Calculate combined exposure index from all factors.
-        
-        Args:
-            building_weight: Weight for building density
-            population_weight: Weight for population density
-            volume_weight: Weight for building volume
+            # For population data (EPSG:4326), handle transformation differently
+            if src.crs == 'EPSG:4326':
+                # First transform the bounds to Mollweide to match other layers
+                mollweide_bounds = rasterio.warp.transform_bounds(
+                    src.crs, 'ESRI:54009', *src.bounds
+                )
+                
+                # Calculate the transform in Mollweide
+                mollweide_transform, mollweide_width, mollweide_height = rasterio.warp.calculate_default_transform(
+                    src.crs, 'ESRI:54009', src.width, src.height, *src.bounds
+                )
+                
+                # Create intermediate array
+                intermediate = np.empty((mollweide_height, mollweide_width), dtype=np.float32)
+                
+                # Transform to Mollweide
+                rasterio.warp.reproject(
+                    source=data,
+                    destination=intermediate,
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=mollweide_transform,
+                    dst_crs='ESRI:54009',
+                    resampling=self.config.resampling_method
+                )
+                
+                # Now transform the Mollweide bounds to EPSG:3035
+                left, bottom, right, top = rasterio.warp.transform_bounds(
+                    'ESRI:54009', target_crs, *mollweide_bounds
+                )
+                
+                # Calculate the final transform
+                dst_transform = rasterio.transform.from_origin(
+                    left, top, res, res
+                )
+                
+                # Calculate dimensions
+                width = int(np.ceil((right - left) / res))
+                height = int(np.ceil((top - bottom) / res))
+                
+                # Create final destination array
+                destination = np.empty((height, width), dtype=np.float32)
+                
+                # Transform from Mollweide to EPSG:3035
+                rasterio.warp.reproject(
+                    source=intermediate,
+                    destination=destination,
+                    src_transform=mollweide_transform,
+                    src_crs='ESRI:54009',
+                    dst_transform=dst_transform,
+                    dst_crs=target_crs,
+                    resampling=self.config.resampling_method
+                )
+                
+                data = destination
+                logger.info(f"Population data transformed - Mollweide bounds: {mollweide_bounds}")
+                logger.info(f"Population data transformed - Final bounds: {left}, {bottom}, {right}, {top}")
+            else:
+                # For other data (already in Mollweide or similar)
+                # Calculate the transform that aligns with the target grid
+                dst_transform = rasterio.transform.from_origin(
+                    left, top, res, res
+                )
+                
+                # Calculate dimensions based on bounds and resolution
+                width = int(np.ceil((right - left) / res))
+                height = int(np.ceil((top - bottom) / res))
+                
+                # Create destination array
+                destination = np.empty((height, width), dtype=np.float32)
+                
+                # Perform the reprojection with consistent grid alignment
+                rasterio.warp.reproject(
+                    source=data,
+                    destination=destination,
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=dst_transform,
+                    dst_crs=target_crs,
+                    resampling=self.config.resampling_method
+                )
+                
+                data = destination
             
-        Returns:
-            Combined exposure index array
-        """
-        if any(x is None for x in [self.ghs_built_data, self.population_data]):
-            raise ValueError("Both building and population data must be loaded")
+            logger.info(f"Reprojected+resampled raster shape: {data.shape}, dtype: {data.dtype}")
+            logger.info(f"New bounds: {rasterio.transform.array_bounds(height, width, dst_transform)}")
             
-        # Ensure weights sum to 1
-        total_weight = building_weight + population_weight + volume_weight
-        if not np.isclose(total_weight, 1.0):
-            raise ValueError("Weights must sum to 1")
-        
-        # Calculate building volume using enhanced method
-        building_volume = self.calculate_building_volume()
-        
-        # Normalize all factors to 0-1 range
-        norm_building = (self.ghs_built_data - np.nanmin(self.ghs_built_data)) / (
-            np.nanmax(self.ghs_built_data) - np.nanmin(self.ghs_built_data)
-        )
-        
-        norm_population = (self.population_data - np.nanmin(self.population_data)) / (
-            np.nanmax(self.population_data) - np.nanmin(self.population_data)
-        )
-        
-        norm_volume = (building_volume - np.nanmin(building_volume)) / (
-            np.nanmax(building_volume) - np.nanmin(building_volume)
-        )
-        
-        # Combine factors with weights
-        exposure_index = (
-            building_weight * norm_building +
-            population_weight * norm_population +
-            volume_weight * norm_volume
-        )
-        
-        # Apply spatial smoothing to reduce noise
-        exposure_index = ndimage.gaussian_filter(
-            np.nan_to_num(exposure_index, nan=0),
-            sigma=self.config.smoothing_sigma
-        )
-        
-        logger.info("Exposure index calculation completed")
-        logger.info(f"  Mean exposure: {np.nanmean(exposure_index):.3f}")
-        logger.info(f"  Max exposure: {np.nanmax(exposure_index):.3f}")
-        
-        return exposure_index
-    
-    def process_economic_exposure(self, nuts_data: Optional[gpd.GeoDataFrame] = None) -> np.ndarray:
-        """
-        Process economic exposure using NUTS regional data.
-        
-        Args:
-            nuts_data: Optional GeoDataFrame with NUTS regions and economic indicators
+            if data.size == 0:
+                raise ValueError(f"Loaded raster from {path} is empty after preprocessing!")
+                
+            meta = src.meta.copy()
+            meta.update({
+                'crs': target_crs,
+                'transform': dst_transform,
+                'height': data.shape[0],
+                'width': data.shape[1],
+                'dtype': 'float32'
+            })
             
-        Returns:
-            Economic exposure index array
-        """
-        if nuts_data is None:
-            nuts_data = gpd.read_file(self.nuts_paths['L3'])
-        
-        # Ensure NUTS data is in the same CRS
-        if nuts_data.crs != self.crs:
-            nuts_data = nuts_data.to_crs(self.crs)
-        
-        # Create empty raster with same dimensions as other layers
-        economic_exposure = np.zeros_like(self.ghs_built_data)
-        
-        # Rasterize economic indicators
-        # This is a simplified version - could be enhanced with more sophisticated
-        # economic indicators and weighting
-        shapes = ((geom, value) for geom, value in zip(nuts_data.geometry, nuts_data.gdp_per_capita))
-        economic_exposure = rasterio.features.rasterize(
-            shapes=shapes,
-            out_shape=self.ghs_built_data.shape,
-            transform=self.transform,
-            dtype=np.float32
-        )
-        
-        # Normalize economic exposure
-        economic_exposure = (economic_exposure - np.nanmin(economic_exposure)) / (
-            np.nanmax(economic_exposure) - np.nanmin(economic_exposure)
-        )
-        
-        return economic_exposure
-    
-    def export_results(self, output_prefix: str = "exposition") -> None:
-        """Export exposition layer results to GeoTIFF files."""
-        if self.ghs_built_data is None:
-            raise ValueError("No data to export")
-            
-        # Calculate indices
-        exposure_index = self.calculate_exposure_index()
-        building_volume = self.calculate_building_volume()
-        
-        # Prepare export paths
-        exposure_path = self.config.output_dir / f"{output_prefix}_index.tif"
-        volume_path = self.config.output_dir / f"{output_prefix}_building_volume.tif"
-        
-        # Export exposure index
-        with rasterio.open(
-            exposure_path,
-            'w',
-            driver='GTiff',
-            height=exposure_index.shape[0],
-            width=exposure_index.shape[1],
-            count=1,
-            dtype=exposure_index.dtype,
-            crs=self.crs,
-            transform=self.transform
-        ) as dst:
-            dst.write(exposure_index, 1)
-            
-        # Export building volume
-        with rasterio.open(
-            volume_path,
-            'w',
-            driver='GTiff',
-            height=building_volume.shape[0],
-            width=building_volume.shape[1],
-            count=1,
-            dtype=building_volume.dtype,
-            crs=self.crs,
-            transform=self.transform
-        ) as dst:
-            dst.write(building_volume, 1)
-            
-        logger.info(f"Exported exposition results to {self.config.output_dir}")
+        return data, meta
 
-    def load_population_data(self):
-        """
-        Load and prepare population data, resampled to the reference grid.
-        """
-        logger.info("Loading population data...")
-        with rasterio.open(self.population_path) as src:
-            data = src.read(1)
-            src_transform = src.transform
-            src_crs = src.crs
-            nodata = src.nodata
-            if nodata is not None:
-                data = np.where(data == nodata, np.nan, data)
-            if (src_crs != self.reference_crs or src_transform != self.reference_transform or data.shape != self.reference_shape):
-                logger.info("Resampling population data to reference grid...")
-                data = self._resample_to_reference(data, src_transform, src_crs)
-            self.population_data = data
+    def normalize_ghs_built_c(self, data: np.ndarray) -> np.ndarray:
+        """Normalize GHS Built-C using config-driven class weights."""
+        class_weights = self.config.ghs_built_c_class_weights
+        max_class = int(np.nanmax(data))
+        lookup = np.zeros(max_class + 1)
+        for k, v in class_weights.items():
+            lookup[int(k)] = v
+        normalized = lookup[data.astype(int)]
+        logger.info(f"GHS Built-C normalization - Min: {np.nanmin(normalized)}, Max: {np.nanmax(normalized)}, Mean: {np.nanmean(normalized)}")
+        return normalized
+
+    def normalize_raster(self, data: np.ndarray) -> np.ndarray:
+        """Normalize a raster to 0-1 based on min/max values, ignoring NaNs."""
+        valid = ~np.isnan(data)
+        min_val = np.nanmin(data)
+        max_val = np.nanmax(data)
+        logger.info(f"Raster normalization - Original Min: {min_val}, Max: {max_val}, Mean: {np.nanmean(data)}")
+        norm = np.zeros_like(data, dtype=np.float32)
+        if max_val > min_val:
+            norm[valid] = (data[valid] - min_val) / (max_val - min_val)
+        logger.info(f"Raster normalization - Normalized Min: {np.nanmin(norm)}, Max: {np.nanmax(norm)}, Mean: {np.nanmean(norm)}")
+        return norm
+
+    def calculate_exposition(self) -> Tuple[np.ndarray, dict]:
+        """Calculate the final exposition layer using weighted combination."""
+        # Load and preprocess rasters
+        ghs_built_c, meta = self.load_and_preprocess_raster(self.ghs_built_c_path)
+        logger.info(f"GHS Built-C after preprocessing - Min: {np.nanmin(ghs_built_c)}, Max: {np.nanmax(ghs_built_c)}, Mean: {np.nanmean(ghs_built_c)}")
+        
+        # Use the first layer's transform as reference for all other layers
+        reference_transform = meta['transform']
+        reference_crs = meta['crs']
+        reference_shape = ghs_built_c.shape
+        
+        # Load other layers with the same transform
+        ghs_built_v, _ = self.load_and_preprocess_raster(self.ghs_built_v_path)
+        logger.info(f"GHS Built-V after preprocessing - Min: {np.nanmin(ghs_built_v)}, Max: {np.nanmax(ghs_built_v)}, Mean: {np.nanmean(ghs_built_v)}")
+        
+        # Load population data last to ensure proper alignment
+        population, _ = self.load_and_preprocess_raster(self.population_path)
+        logger.info(f"Population after preprocessing - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
+        
+        # Ensure all layers have the same shape and transform
+        if ghs_built_v.shape != reference_shape or ghs_built_v.dtype != np.float32:
+            ghs_built_v = rasterio.warp.reproject(
+                source=ghs_built_v,
+                destination=np.empty(reference_shape, dtype=np.float32),
+                src_transform=meta['transform'],
+                src_crs=reference_crs,
+                dst_transform=reference_transform,
+                dst_crs=reference_crs,
+                resampling=self.config.resampling_method
+            )[0]
+            logger.info(f"GHS Built-V after reprojection - Min: {np.nanmin(ghs_built_v)}, Max: {np.nanmax(ghs_built_v)}, Mean: {np.nanmean(ghs_built_v)}")
+            
+        if population.shape != reference_shape or population.dtype != np.float32:
+            population = rasterio.warp.reproject(
+                source=population,
+                destination=np.empty(reference_shape, dtype=np.float32),
+                src_transform=meta['transform'],
+                src_crs=reference_crs,
+                dst_transform=reference_transform,
+                dst_crs=reference_crs,
+                resampling=self.config.resampling_method
+            )[0]
+            logger.info(f"Population after reprojection - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
+        
+        # Check for valid data
+        if np.all(ghs_built_c == 0) or np.all(ghs_built_v == 0) or np.all(population == 0):
+            logger.error("One or more input layers contain only zeros!")
+            raise ValueError("Invalid input data: one or more layers contain only zeros")
+        
+        # Normalize
+        norm_built_c = self.normalize_ghs_built_c(ghs_built_c)
+        norm_built_v = self.normalize_raster(ghs_built_v)
+        norm_population = self.normalize_raster(population)
+        
+        # Check normalized data
+        if np.all(norm_built_c == 0) or np.all(norm_built_v == 0) or np.all(norm_population == 0):
+            logger.error("One or more normalized layers contain only zeros!")
+            raise ValueError("Invalid normalized data: one or more layers contain only zeros")
+        
+        # Weighted sum
+        w = self.config.exposition_weights
+        exposition = (
+            w['ghs_built_c_weight'] * norm_built_c +
+            w['ghs_built_v_weight'] * norm_built_v +
+            w['population_weight'] * norm_population
+        )
+        logger.info(f"Final exposition - Min: {np.nanmin(exposition)}, Max: {np.nanmax(exposition)}, Mean: {np.nanmean(exposition)}")
+        
+        # Check final exposition
+        if np.all(exposition == 0):
+            logger.error("Final exposition layer contains only zeros!")
+            raise ValueError("Invalid exposition layer: contains only zeros")
+        
+        # Optional smoothing
+        if self.config.smoothing_sigma > 0:
+            exposition = ndimage.gaussian_filter(exposition, sigma=self.config.smoothing_sigma)
+            logger.info(f"Exposition after smoothing - Min: {np.nanmin(exposition)}, Max: {np.nanmax(exposition)}, Mean: {np.nanmean(exposition)}")
+            
+            # Check smoothed exposition
+            if np.all(exposition == 0):
+                logger.error("Smoothed exposition layer contains only zeros!")
+                raise ValueError("Invalid smoothed exposition layer: contains only zeros")
+            
+        return exposition, meta
+
+    def save_exposition_layer(self, data: np.ndarray, meta: dict, out_path: str):
+        """Save the final exposition layer as GeoTIFF."""
+        if os.path.exists(out_path):
+            logger.info(f"Removing existing file at {out_path} before writing new output.")
+            os.remove(out_path)
+        vrt_path = os.path.splitext(out_path)[0] + '.vrt'
+        if os.path.exists(vrt_path):
+            logger.info(f"Removing existing VRT file at {vrt_path} before writing new output.")
+            os.remove(vrt_path)
+            
+        # Ensure data is in valid range and not all zeros
+        if np.all(data == 0):
+            logger.warning("All values in the exposition layer are zero!")
+            return
+            
+        data = np.clip(data, 0, 1)
+        logger.info(f"Data before saving - Min: {np.nanmin(data)}, Max: {np.nanmax(data)}, Mean: {np.nanmean(data)}")
+        
+        meta.update({
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'count': 1,
+            'nodata': None  # Ensure no nodata value is set
+        })
+        
+        with rasterio.open(out_path, 'w', **meta) as dst:
+            dst.write(data.astype(np.float32), 1)
+            logger.info(f"Successfully wrote data to {out_path}")
+
+    def visualize_exposition(self, exposition: np.ndarray, title: str = "Exposition Layer"):
+        """Visualize the exposition index for each cell."""
+        plt.figure(figsize=(10, 8))
+        im = plt.imshow(exposition, cmap='viridis')
+        plt.colorbar(im, label='Exposition Index')
+        plt.title(title)
+        plt.axis('off')
+        plt.show()
+
+    def export_exposition(self, data: np.ndarray, meta: dict, out_path: str):
+        """Export the exposition index for each cell to a specified GeoTIFF path."""
+        meta.update({'dtype': 'float32', 'count': 1})
+        with rasterio.open(out_path, 'w', **meta) as dst:
+            dst.write(data.astype(np.float32), 1)
+        logger.info(f"Exposition layer exported to {out_path}")
+
+    def run_exposition(self, visualize: bool = False, export_path: str = None):
+        """Main execution flow for the exposition layer."""
+        exposition, meta = self.calculate_exposition()
+        out_path = export_path or str(Path(self.config.local_output_dir) / 'exposition_layer.tif')
+        self.save_exposition_layer(exposition, meta, out_path)
+        logger.info(f"Exposition layer saved to {out_path}")
+        if visualize:
+            self.visualize_exposition(exposition)
+        if export_path:
+            self.export_exposition(exposition, meta, export_path)

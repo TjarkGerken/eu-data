@@ -244,11 +244,12 @@ class RiskAssessment:
 
 
     def run_exposition(self, config:ProjectConfig) -> None:
-                # Future layers (placeholders)
-        logger.info("\n" + "="*40)
+        # Future layers (placeholders)
+        logger.info("="*40)
         logger.info("EXPOSITION LAYER ANALYSIS")
         logger.info("="*40)
         exposition_layer = ExpositionLayer(config)
+        exposition_layer.run_exposition(visualize=True, export_path=str(config.output_dir / 'exposition_layer.tif'))
 
     def run_risk_assessment(self, config: ProjectConfig) -> None:
         """
@@ -318,8 +319,8 @@ def main():
     logger.info(f"Project initialized with data directory: {config.data_dir}")
     
     try:
-        RiskAssessment.run_hazard_layer_analysis(config)
-        
+        # RiskAssessment.run_hazard_layer_analysis(config)
+        RiskAssessment(config).run_exposition(config)
         
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
