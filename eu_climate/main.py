@@ -242,47 +242,24 @@ class RiskAssessment:
                 
         logger.info(f"Exported risk assessment results to {self.config.output_dir}")
 
-def main():
-    """
-    Main execution function for the EU Climate Risk Assessment System.
-    """
-    suppress_warnings()
-    logger.info("=" * 60)
-    logger.info("EU CLIMATE RISK ASSESSMENT SYSTEM")
-    logger.info("=" * 60)
-    
-    # Initialize project configuration
-    config = ProjectConfig()
-    logger.info(f"Project initialized with data directory: {config.data_dir}")
-    
-    try:
-        # Initialize and run Hazard Layer analysis
-        logger.info("\n" + "="*40)
-        logger.info("HAZARD LAYER ANALYSIS")
-        logger.info("="*40)
-        
-        hazard_layer = HazardLayer(config)
-        
-        # Process default scenarios (1m, 2m, 3m sea level rise)
-        flood_extents = hazard_layer.process_scenarios()
-        
-        # Create visualizations
-        hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
-        
-        # Export results
-        hazard_layer.export_results(flood_extents)
-        
-        # Future layers (placeholders)
+
+    def run_exposition(self, config:ProjectConfig) -> None:
+                # Future layers (placeholders)
         logger.info("\n" + "="*40)
         logger.info("EXPOSITION LAYER ANALYSIS")
         logger.info("="*40)
         exposition_layer = ExpositionLayer(config)
-        
+
+    def run_risk_assessment(self, config: ProjectConfig) -> None:
+        """
+        Run the complete risk assessment process.
+        This includes preparing data, calculating risk indices,
+        visualizing results, and exporting to files.
+        """
         logger.info("\n" + "="*40)
         logger.info("RISK ASSESSMENT INTEGRATION")
         logger.info("="*40)
         risk_assessment = RiskAssessment(config)
-        
         # Prepare data for risk assessment
         risk_assessment.prepare_data()
         
@@ -299,6 +276,50 @@ def main():
         logger.info("ANALYSIS COMPLETE")
         logger.info("="*60)
         logger.info(f"Results saved to: {config.output_dir}")
+
+        
+    @staticmethod
+    def run_hazard_layer_analysis(config: ProjectConfig) -> None:
+        """
+        Run the Hazard Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+        """
+        logger.info("\n" + "="*40)
+        logger.info("HAZARD LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        hazard_layer = HazardLayer(config)
+        
+        # Process default scenarios (1m, 2m, 3m sea level rise)
+        flood_extents = hazard_layer.process_scenarios()
+        
+        # Create visualizations
+        hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
+        
+        # Export results
+        hazard_layer.export_results(flood_extents)
+
+
+
+
+def main():
+    """
+    Main execution function for the EU Climate Risk Assessment System.
+    """
+    suppress_warnings()
+    logger.info("=" * 60)
+    logger.info("EU CLIMATE RISK ASSESSMENT SYSTEM")
+    logger.info("=" * 60)
+    
+    # Initialize project configuration
+    config = ProjectConfig()
+    logger.info(f"Project initialized with data directory: {config.data_dir}")
+    
+    try:
+        RiskAssessment.run_hazard_layer_analysis(config)
+        
         
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
