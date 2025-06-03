@@ -43,6 +43,9 @@ class ProjectConfig:
         # Store risk assessment parameters
         self.n_risk_classes = self.config['risk_assessment']['n_risk_classes']
         self.risk_weights = self.config['risk_assessment']['weights']
+        self.ghs_built_c_class_weights = self.config['risk_assessment']['ghs_built_c_class_weights']
+        # Store exposition weights
+        self.exposition_weights = self.config['exposition']
         
         # Store building parameters
         self.base_floor_height = self.config['building']['base_floor_height']
@@ -103,14 +106,14 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['population_file']
     
     @property
-    def ghs_built_path(self) -> Path:
+    def ghs_built_c_path(self) -> Path:
         """Get path to GHS Built C file."""
-        return self.data_dir / self.config['file_paths']['ghs_built_file']
+        return self.data_dir / self.config['file_paths']['ghs_built_c_file']
     
     @property
-    def ghs_built_s_path(self) -> Path:
-        """Get path to GHS Built S file."""
-        return self.data_dir / self.config['file_paths']['ghs_built_s_file']
+    def ghs_built_v_path(self) -> Path:
+        """Get path to GHS Built V file."""
+        return self.data_dir / self.config['file_paths']['ghs_built_v_file']
     
     @property
     def nuts_paths(self) -> Dict[str, Path]:
@@ -139,8 +142,8 @@ class ProjectConfig:
         """Validate that all required input files exist."""
         required_files = [
             (self.dem_path, "DEM"),
-            (self.ghs_built_path, "GHS Built C"),
-            (self.ghs_built_s_path, "GHS Built S"),
+            (self.ghs_built_c_path, "GHS Built C"),
+            (self.ghs_built_v_path, "GHS Built V"),
             (self.population_path, "Population Density"),
             (self.river_segments_path, "River Segments"),
             (self.river_nodes_path, "River Nodes"),
