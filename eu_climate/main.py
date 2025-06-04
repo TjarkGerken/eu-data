@@ -319,8 +319,9 @@ def main():
     logger.info(f"Project initialized with data directory: {config.data_dir}")
     
     try:
-        # RiskAssessment.run_hazard_layer_analysis(config)
-        RiskAssessment(config).run_exposition(config)
+        RiskAssessment(config).run_hazard_layer_analysis(config)
+        # RiskAssessment(config).run_exposition(config)
+
         
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")

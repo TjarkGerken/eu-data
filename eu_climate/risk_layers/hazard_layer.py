@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.colors as mcolors
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
+from eu_climate.utils.conversion import RasterTransformer
 
 
 
@@ -57,149 +58,94 @@ class HazardLayer:
         self.river_nodes_path = self.config.river_nodes_path
         self.scenarios = SeaLevelScenario.get_default_scenarios()
         
-        # Data holders
-        self.dem_data = None
-        self.transform = None
-        self.crs = None
+        # Initialize river network attributes
         self.river_network = None
         self.river_nodes = None
+        
+        # Initialize raster transformer
+        self.transformer = RasterTransformer(
+            target_crs=self.config.target_crs,
+            target_resolution=30.0  # 30m resolution
+        )
         
         # Validate files exist
         for path in [self.dem_path, self.river_segments_path, self.river_nodes_path]:
             if not path.exists():
                 raise FileNotFoundError(f"Required file not found: {path}")
         
+        # Load river data
+        self.load_river_data()
+        
         logger.info(f"Initialized Hazard Layer with DEM and river data")
         
-    def load_and_prepare_dem(self) -> Tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS]:
+    def load_and_prepare_dem(self) -> Tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS, np.ndarray]:
         """
-        Load and prepare Digital Elevation Model (DEM) data.
-        
+        Load and prepare Digital Elevation Model (DEM) data and land mass mask.
         Returns:
             Tuple containing:
             - DEM data array
             - Affine transform
             - Coordinate Reference System
+            - Land mass mask (1=land, 0=water)
         """
         logger.info("Loading DEM data...")
+        # Load DEM as the reference grid
+        dem_data, transform, crs = self.transformer.transform_raster(
+            self.dem_path,
+            reference_bounds=None,  # Do not use shapefile bounds
+            resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+        )
+        # Load and align land mass raster to DEM grid
+        land_mass_data, land_transform, _ = self.transformer.transform_raster(
+            self.config.land_mass_path,
+            reference_bounds=None,  # Do not use shapefile bounds
+            resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+        )
+        if not self.transformer.validate_alignment(land_mass_data, land_transform, dem_data, transform):
+            land_mass_data = self.transformer.ensure_alignment(
+                land_mass_data, land_transform, transform, dem_data.shape,
+                self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+            )
+        land_mask = (land_mass_data > 0).astype(np.uint8)
         
-        # First load NUTS-L0 to get the target bounds
-        nuts_l0_path = self.config.data_dir / "NUTS-L0-NL.shp"
-        if nuts_l0_path.exists():
-            nuts_l0 = gpd.read_file(nuts_l0_path)
-            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
-            if nuts_l0.crs != target_crs:
-                nuts_l0 = nuts_l0.to_crs(target_crs)
-            bounds = nuts_l0.total_bounds
-            logger.info(f"Using NUTS-L0 bounds for DEM alignment: {bounds}")
-            logger.info(f"NUTS-L0 CRS: {nuts_l0.crs}")
-        else:
-            logger.warning("NUTS-L0 boundaries not found, using original DEM bounds")
-            bounds = None
+        # Calculate resolution in meters
+        res_x = abs(transform[0])  # Width of a pixel in meters
+        res_y = abs(transform[4])  # Height of a pixel in meters
         
-        with rasterio.open(self.dem_path) as src:
-            logger.info(f"Original DEM CRS: {src.crs}")
-            logger.info(f"Original DEM transform: {src.transform}")
-            logger.info(f"Original DEM shape: {src.shape}")
-            dem_data = src.read(1)
-            transform = src.transform
-            src_crs = src.crs
-            
-            # Transform DEM to target CRS if needed
-            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
-            
-            if src.crs != target_crs:
-                logger.info(f"Transforming DEM from {src.crs} to {target_crs}")
-                
-                # If we have NUTS bounds, use them to calculate the destination transform
-                if bounds is not None:
-                    # Use a fixed resolution of 30 meters (typical for DEM data)
-                    res_x = 30.0
-                    res_y = 30.0
-                    
-                    # Calculate the dimensions needed to cover the NUTS bounds
-                    width = int((bounds[2] - bounds[0]) / res_x)
-                    height = int((bounds[3] - bounds[1]) / res_y)
-                    
-                    logger.info(f"Calculated dimensions for reprojection: {width}x{height} pixels")
-                    logger.info(f"Resolution: {res_x}x{res_y} meters")
-                    
-                    # Create a new transform that aligns with the NUTS bounds
-                    dst_transform = rasterio.Affine(
-                        res_x, 0.0, bounds[0],
-                        0.0, -res_y, bounds[3]
-                    )
-                    logger.info(f"Destination transform: {dst_transform}")
-                    
-                    # Create destination array with the calculated dimensions
-                    destination = np.zeros((height, width), dtype=dem_data.dtype)
-                else:
-                    destination = np.zeros_like(dem_data)
-                    dst_transform = None
-                
-                dem_data, transform = rasterio.warp.reproject(
-                    source=dem_data,
-                    destination=destination,
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=dst_transform,
-                    dst_crs=target_crs,
-                    resampling=self.config.resampling_method
-                )
-                logger.info(f"Reprojected DEM shape: {dem_data.shape}")
-                logger.info(f"Reprojected DEM transform: {transform}")
-            else:
-                transform = src.transform
-            
-            # Handle nodata values
-            nodata = src.nodata
-            if nodata is not None:
-                dem_data = np.where(dem_data == nodata, np.nan, dem_data)
-            
-            # Store data for later use
-            self.dem_data = dem_data
-            self.transform = transform
-            self.crs = target_crs
-            
-            # Calculate resolution in meters (always in meters since target CRS is projected)
-            res_x = abs(transform[0])  # Width of a pixel in meters
-            res_y = abs(transform[4])  # Height of a pixel in meters
-            
-            # Log statistics
-            valid_data = dem_data[~np.isnan(dem_data)]
-            logger.info(f"DEM Statistics:")
-            logger.info(f"  Shape: {dem_data.shape}")
-            logger.info(f"  Resolution: {res_x:.2f} x {res_y:.2f} meters")
-            logger.info(f"  Min elevation: {np.min(valid_data):.2f}m")
-            logger.info(f"  Max elevation: {np.max(valid_data):.2f}m")
-            logger.info(f"  Mean elevation: {np.mean(valid_data):.2f}m")
-            logger.info(f"  Coverage: {len(valid_data) / dem_data.size * 100:.1f}%")
-            
-            # Calculate and log the actual bounds of the DEM
-            # Get the corners of the DEM in pixel coordinates
-            corners = [
-                (0, 0),  # top-left
-                (dem_data.shape[1], 0),  # top-right
-                (dem_data.shape[1], dem_data.shape[0]),  # bottom-right
-                (0, dem_data.shape[0])  # bottom-left
-            ]
-            
-            # Transform corners to geographic coordinates
-            dem_bounds = []
-            for x, y in corners:
-                x_geo, y_geo = transform * (x, y)
-                dem_bounds.extend([float(x_geo), float(y_geo)])
-            
-            # Extract min/max coordinates
-            dem_bounds = [
-                min(dem_bounds[::2]),  # left
-                max(dem_bounds[::2]),  # right
-                min(dem_bounds[1::2]),  # bottom
-                max(dem_bounds[1::2])   # top
-            ]
-            logger.info(f"DEM bounds: {dem_bounds}")
-            
-            return dem_data, transform, target_crs
+        # Log statistics
+        valid_data = dem_data[~np.isnan(dem_data)]
+        logger.info(f"DEM Statistics:")
+        logger.info(f"  Shape: {dem_data.shape}")
+        logger.info(f"  Resolution: {res_x:.2f} x {res_y:.2f} meters")
+        logger.info(f"  Min elevation: {np.min(valid_data):.2f}m")
+        logger.info(f"  Max elevation: {np.max(valid_data):.2f}m")
+        logger.info(f"  Mean elevation: {np.mean(valid_data):.2f}m")
+        logger.info(f"  Coverage: {len(valid_data) / dem_data.size * 100:.1f}%")
+        
+        # Calculate and log the actual bounds of the DEM
+        corners = [
+            (0, 0),  # top-left
+            (dem_data.shape[1], 0),  # top-right
+            (dem_data.shape[1], dem_data.shape[0]),  # bottom-right
+            (0, dem_data.shape[0])  # bottom-left
+        ]
+        
+        # Transform corners to geographic coordinates
+        dem_bounds = []
+        for x, y in corners:
+            x_geo, y_geo = transform * (x, y)
+            dem_bounds.extend([float(x_geo), float(y_geo)])
+        
+        # Extract min/max coordinates
+        dem_bounds = [
+            min(dem_bounds[::2]),  # left
+            max(dem_bounds[::2]),  # right
+            min(dem_bounds[1::2]),  # bottom
+            max(dem_bounds[1::2])   # top
+        ]
+        logger.info(f"DEM bounds: {dem_bounds}")
+        
+        return dem_data, transform, crs, land_mask
     
     def load_river_data(self) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
         """Load and prepare river network data."""
@@ -244,21 +190,37 @@ class HazardLayer:
             logger.warning("Proceeding with basic flood model without river influence")
             return None, None
     
-    def calculate_flood_extent(self, dem_data: np.ndarray, sea_level_rise: float) -> np.ndarray:
+    def calculate_flood_extent(self, dem_data: np.ndarray, sea_level_rise: float, transform: rasterio.Affine, land_mask: np.ndarray) -> np.ndarray:
         """
-        Calculate flood extent based on DEM, river network, and sea level rise scenario.
-        
+        Calculate flood extent based on DEM, river network, sea level rise scenario, and land mass mask.
         Args:
             dem_data: Digital elevation model data array
             sea_level_rise: Sea level rise in meters
-            
+            transform: Affine transform matrix for the DEM data
+            land_mask: Binary land mask (1=land, 0=water)
         Returns:
             Binary array where 1 indicates flooded areas, 0 indicates safe areas
         """
         logger.info(f"Calculating flood extent for {sea_level_rise}m sea level rise...")
+        # Load NUTS boundaries
+        nuts_gdf = self._load_nuts_boundaries()
+        if nuts_gdf is None:
+            raise ValueError("Could not load NUTS boundaries - required for flood extent calculation")
+        # Create a mask for valid land areas (non-NaN DEM values)
+        valid_land_mask = ~np.isnan(dem_data)
+        # Always rasterize NUTS to DEM grid
+        nuts_mask = rasterio.features.rasterize(
+            [(geom, 1) for geom in nuts_gdf.geometry],
+            out_shape=dem_data.shape,
+            transform=transform,
+            dtype=np.uint8
+        )
+        # Combine masks to get valid study area (now includes land mask)
+        valid_study_area = (valid_land_mask & (nuts_mask == 1) & (land_mask == 1))
         
         # Basic flood model: areas below sea level rise are considered flooded
-        flood_mask = dem_data <= sea_level_rise
+        # Only consider areas within valid study area
+        flood_mask = (dem_data <= sea_level_rise) & valid_study_area
         
         try:
             if self.river_network is None:
@@ -274,10 +236,10 @@ class HazardLayer:
             # Calculate elevation-based flood risk
             elevation_risk = np.clip((sea_level_rise - dem_data) / sea_level_rise, 0, 1)
             
-            # Combine flood risks
+            # Combine flood risks, but only within valid study area
             combined_risk = np.maximum(
                 flood_mask,
-                (elevation_risk * river_influence) > 0.5
+                ((elevation_risk * river_influence) > 0.5) & valid_study_area
             )
             
         except Exception as e:
@@ -297,14 +259,28 @@ class HazardLayer:
         binary_risk = ndimage.binary_closing(binary_risk)
         binary_risk = ndimage.binary_fill_holes(binary_risk)
         
-        # Calculate statistics
-        pixel_area_m2 = np.int64(30) * np.int64(30)  # 30m resolution
+        # Ensure we only consider areas within valid study area
+        binary_risk = binary_risk & valid_study_area
+        
+        # Calculate statistics using actual pixel areas from transform
+        # Calculate actual pixel area in square meters
+        # In EPSG:3035, the pixel size varies with latitude
+        # We use the average of the top and bottom pixel heights
+        pixel_width = abs(transform[0])  # Width of a pixel in meters
+        pixel_height_top = abs(transform[4])  # Height of a pixel at the top
+        pixel_height_bottom = abs(transform[4] + transform[5] * dem_data.shape[0])  # Height at the bottom
+        pixel_height_avg = (pixel_height_top + pixel_height_bottom) / 2
+        pixel_area_m2 = pixel_width * pixel_height_avg
+        
+        # Calculate areas only for valid study area
         flooded_pixels = np.int64(np.sum(binary_risk))
-        valid_pixels = np.int64(np.sum(~np.isnan(dem_data)))
+        valid_pixels = np.int64(np.sum(valid_study_area))
         
         flooded_area_km2 = (flooded_pixels * pixel_area_m2) / 1_000_000.0
-        flood_percentage = (flooded_pixels / valid_pixels) * 100.0 if valid_pixels > 0 else 0.0
+        total_area_km2 = (valid_pixels * pixel_area_m2) / 1_000_000.0
+        flood_percentage = (flooded_area_km2 / total_area_km2) * 100.0 if total_area_km2 > 0 else 0.0
         
+        logger.info(f"  Total study area: {total_area_km2:.2f} km²")
         logger.info(f"  Flooded area: {flooded_area_km2:.2f} km²")
         logger.info(f"  Flood percentage: {flood_percentage:.2f}%")
         
@@ -328,26 +304,19 @@ class HazardLayer:
     def process_scenarios(self, custom_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
         Process all sea level rise scenarios and generate flood extent maps.
-        
         Args:
             custom_scenarios: Optional custom scenarios, uses defaults if None
-            
         Returns:
             Dictionary mapping scenario names to flood extent arrays
         """
         scenarios = custom_scenarios or self.scenarios
-        
         logger.info(f"Processing {len(scenarios)} sea level rise scenarios...")
-        
-        # Load DEM data once
-        dem_data, transform, crs = self.load_and_prepare_dem()
-        
+        # Load DEM data and land mask once
+        dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
         flood_extents = {}
-        
         for scenario in scenarios:
             logger.info(f"Processing scenario: {scenario.name} ({scenario.rise_meters}m)")
-            
-            flood_extent = self.calculate_flood_extent(dem_data, scenario.rise_meters)
+            flood_extent = self.calculate_flood_extent(dem_data, scenario.rise_meters, transform, land_mask)
             flood_extents[scenario.name] = {
                 'flood_mask': flood_extent,
                 'scenario': scenario,
@@ -355,7 +324,6 @@ class HazardLayer:
                 'crs': crs,
                 'dem_data': dem_data
             }
-        
         logger.info("Completed processing all scenarios")
         return flood_extents
     
@@ -503,8 +471,8 @@ class HazardLayer:
             self.river_network.plot(ax=ax_debug, color='black', linewidth=0.1, alpha=1.0, zorder=11)
         ax_debug.set_title('DEBUG: NUTS and River Network Overlays Only')
         logger.info(f"DEBUG: Axis limits before autoscale: {ax_debug.get_xlim()}, {ax_debug.get_ylim()}")
-        ax_debug.set_xlim(extent[0], extent[1])
-        ax_debug.set_ylim(extent[2], extent[3])
+        ax_debug.set_xlim(dem_bounds[0], dem_bounds[1])
+        ax_debug.set_ylim(dem_bounds[2], dem_bounds[3])
         ax_debug.autoscale(False)
         logger.info(f"DEBUG: Axis limits after autoscale: {ax_debug.get_xlim()}, {ax_debug.get_ylim()}")
         plt.savefig(self.config.output_dir / "debug_overlays_only.png", dpi=150, bbox_inches='tight')
@@ -520,15 +488,14 @@ class HazardLayer:
         # Make river overlay more visible
         if self.river_network is not None:
             self.river_network.plot(ax=ax1, color='black', linewidth=0.1, alpha=1.0, zorder=11)
-            # self.river_nodes.plot(ax=ax1, color='black', markersize=3, alpha=1.0, zorder=12)
         ax1.set_title('Original DEM with River Network\n(Copernicus Height Profile, Clipped -25m to 50m)', 
                      fontsize=12, fontweight='bold')
         ax1.set_xlabel('X Coordinate (m)')
         ax1.set_ylabel('Y Coordinate (m)')
         plt.colorbar(im1, ax=ax1, label='Elevation (m)', shrink=0.8)
-        # Set the extent to match the DEM bounds with buffer
-        ax1.set_xlim(extent[0], extent[1])
-        ax1.set_ylim(extent[2], extent[3])
+        # Set the extent to match the DEM bounds
+        ax1.set_xlim(dem_bounds[0], dem_bounds[1])
+        ax1.set_ylim(dem_bounds[2], dem_bounds[3])
         ax1.autoscale(False)
         
         # Panels 2-4: Flood extent for each scenario with rivers
@@ -537,27 +504,95 @@ class HazardLayer:
             flood_data = flood_extents[scenario_name]
             flood_mask = flood_data['flood_mask']
             scenario = flood_data['scenario']
-            # Show flood extent
-            im = ax.imshow(flood_mask, cmap=flood_cmap, aspect='equal', extent=extent)
-            # Make NUTS overlay more visible
+            dem_data = flood_data['dem_data']
+            transform = flood_data['transform']
+            # Always align land mask to DEM grid
+            land_mass_data, land_transform, _ = self.transformer.transform_raster(
+                self.config.land_mass_path,
+                reference_bounds=None,
+                resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+            )
+            if not self.transformer.validate_alignment(land_mass_data, land_transform, dem_data, transform):
+                land_mass_data = self.transformer.ensure_alignment(
+                    land_mass_data, land_transform, transform, dem_data.shape,
+                    self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+                )
+            land_mask = (land_mass_data > 0).astype(np.uint8)
+            # Always rasterize NUTS to DEM grid
+            nuts_gdf = self._load_nuts_boundaries()
+            nuts_mask = rasterio.features.rasterize(
+                [(geom, 1) for geom in nuts_gdf.geometry],
+                out_shape=dem_data.shape,
+                transform=transform,
+                dtype=np.uint8
+            )
+
+            # Composite mask for visualization
+            composite = np.zeros_like(dem_data, dtype=np.uint8)
+            composite[(land_mask==0)] = 0  # water
+            composite[(land_mask==1) & (nuts_mask==0)] = 1  # land outside NUTS
+            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==0)] = 2  # safe
+            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==1)] = 3
+
+            from matplotlib.colors import ListedColormap, BoundaryNorm
+            cmap = ListedColormap(['#1f78b4', '#bdbdbd', '#33a02c', '#e31a1c'])
+            norm = BoundaryNorm([0,1,2,3,4], cmap.N)
+            # Use the same extent as the DEM for all visualizations
+            im = ax.imshow(composite, cmap=cmap, norm=norm, aspect='equal', extent=dem_bounds)
+            
+            # NUTS overlay
             if nuts_gdf is not None:
                 nuts_gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=0.5, alpha=1.0, zorder=10)
-            # Make river overlay more visible
+            
+            # River network overlay
             if self.river_network is not None:
                 self.river_network.plot(ax=ax, color='black', linewidth=0.1, alpha=1.0, zorder=11)
-                # self.river_nodes.plot(ax=ax, color='black', markersize=3, alpha=1.0, zorder=12)
+                
             ax.set_title(f'{scenario.name} Scenario with River Network\n({scenario.rise_meters}m SLR)', 
                         fontsize=12, fontweight='bold')
             ax.set_xlabel('X Coordinate (m)')
             ax.set_ylabel('Y Coordinate (m)')
-            # Set the extent to match the DEM bounds with buffer
-            ax.set_xlim(extent[0], extent[1])
-            ax.set_ylim(extent[2], extent[3])
+            # Set the extent to match the DEM bounds
+            ax.set_xlim(dem_bounds[0], dem_bounds[1])
+            ax.set_ylim(dem_bounds[2], dem_bounds[3])
             ax.autoscale(False)
-            # Add colorbar
-            cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-            cbar.set_ticks([0.25, 0.75])
-            cbar.set_ticklabels(['Safe', 'Flooded'])
+            # Add colorbar with custom ticks
+            import matplotlib.patches as mpatches
+            legend_patches = [
+                mpatches.Patch(color='#1f78b4', label='Water'),
+                mpatches.Patch(color='#bdbdbd', label='Outside of Netherlands'),
+                mpatches.Patch(color='#33a02c', label='Safe Land'),
+                mpatches.Patch(color='#e31a1c', label='Flood Risk')
+            ]
+            ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
+
+            # Save the composite mask as GeoTIFF
+            output_path = self.config.output_dir / f"composite_mask_{scenario.name.lower()}.tif"
+            with rasterio.open(
+                output_path,
+                'w',
+                driver='GTiff',
+                height=composite.shape[0],
+                width=composite.shape[1],
+                count=1,
+                dtype=composite.dtype,
+                crs=crs,
+                transform=transform,
+                nodata=None,
+                compress='lzw'
+            ) as dst:
+                dst.write(composite, 1)
+                dst.set_band_description(1, f"Composite mask for {scenario.name} scenario ({scenario.rise_meters}m SLR)")
+                # Add category descriptions as metadata
+                dst.update_tags(
+                    **{
+                        '0': 'Water',
+                        '1': 'Outside Netherlands',
+                        '2': 'Safe Land',
+                        '3': 'Flood Risk'
+                    }
+                )
+            logger.info(f"Saved composite mask for {scenario.name} scenario to: {output_path}")
         
         # Panel 5: Flood risk progression
         ax5 = fig.add_subplot(gs[1, 2])

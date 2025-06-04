@@ -13,6 +13,7 @@ import os
 
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
+from eu_climate.utils.conversion import RasterTransformer
 
 
 # Set up logging for the exposition layer
@@ -46,9 +47,12 @@ class ExpositionLayer:
         self.ghs_built_v_path = self.config.ghs_built_v_path
         self.population_path = self.config.population_path
         self.nuts_paths = self.config.nuts_paths
-        self.transform = None
-        self.crs = None
-        self.nuts_data = {}
+        
+        # Initialize raster transformer
+        self.transformer = RasterTransformer(
+            target_crs=self.config.target_crs,
+            target_resolution=30.0  # 30m resolution
+        )
         
         logger.info(f"Initialized Exposition Layer")
         
@@ -74,121 +78,27 @@ class ExpositionLayer:
     def load_and_preprocess_raster(self, path: str) -> Tuple[np.ndarray, dict]:
         """Load and preprocess a single raster to target resolution and CRS."""
         logger.info(f"Loading raster: {path}")
-        with rasterio.open(path) as src:
-            # Log original CRS and bounds for debugging
-            logger.info(f"Original CRS: {src.crs}, Bounds: {src.bounds}")
-            
-            data = src.read(1)
-            logger.info(f"Loaded raster shape: {data.shape}, dtype: {data.dtype}")
-            
-            # Calculate target transform and shape for 30x30m grid
-            target_crs = self.config.target_crs  # EPSG:3035
-            res = 30  # 30x30m
-            
-            # Get the bounds in the target CRS
-            left, bottom, right, top = rasterio.warp.transform_bounds(
-                src.crs, target_crs, *src.bounds
-            )
-            
-            # For population data (EPSG:4326), handle transformation differently
-            if src.crs == 'EPSG:4326':
-                # First transform the bounds to Mollweide to match other layers
-                mollweide_bounds = rasterio.warp.transform_bounds(
-                    src.crs, 'ESRI:54009', *src.bounds
-                )
-                
-                # Calculate the transform in Mollweide
-                mollweide_transform, mollweide_width, mollweide_height = rasterio.warp.calculate_default_transform(
-                    src.crs, 'ESRI:54009', src.width, src.height, *src.bounds
-                )
-                
-                # Create intermediate array
-                intermediate = np.empty((mollweide_height, mollweide_width), dtype=np.float32)
-                
-                # Transform to Mollweide
-                rasterio.warp.reproject(
-                    source=data,
-                    destination=intermediate,
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=mollweide_transform,
-                    dst_crs='ESRI:54009',
-                    resampling=self.config.resampling_method
-                )
-                
-                # Now transform the Mollweide bounds to EPSG:3035
-                left, bottom, right, top = rasterio.warp.transform_bounds(
-                    'ESRI:54009', target_crs, *mollweide_bounds
-                )
-                
-                # Calculate the final transform
-                dst_transform = rasterio.transform.from_origin(
-                    left, top, res, res
-                )
-                
-                # Calculate dimensions
-                width = int(np.ceil((right - left) / res))
-                height = int(np.ceil((top - bottom) / res))
-                
-                # Create final destination array
-                destination = np.empty((height, width), dtype=np.float32)
-                
-                # Transform from Mollweide to EPSG:3035
-                rasterio.warp.reproject(
-                    source=intermediate,
-                    destination=destination,
-                    src_transform=mollweide_transform,
-                    src_crs='ESRI:54009',
-                    dst_transform=dst_transform,
-                    dst_crs=target_crs,
-                    resampling=self.config.resampling_method
-                )
-                
-                data = destination
-                logger.info(f"Population data transformed - Mollweide bounds: {mollweide_bounds}")
-                logger.info(f"Population data transformed - Final bounds: {left}, {bottom}, {right}, {top}")
-            else:
-                # For other data (already in Mollweide or similar)
-                # Calculate the transform that aligns with the target grid
-                dst_transform = rasterio.transform.from_origin(
-                    left, top, res, res
-                )
-                
-                # Calculate dimensions based on bounds and resolution
-                width = int(np.ceil((right - left) / res))
-                height = int(np.ceil((top - bottom) / res))
-                
-                # Create destination array
-                destination = np.empty((height, width), dtype=np.float32)
-                
-                # Perform the reprojection with consistent grid alignment
-                rasterio.warp.reproject(
-                    source=data,
-                    destination=destination,
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=dst_transform,
-                    dst_crs=target_crs,
-                    resampling=self.config.resampling_method
-                )
-                
-                data = destination
-            
-            logger.info(f"Reprojected+resampled raster shape: {data.shape}, dtype: {data.dtype}")
-            logger.info(f"New bounds: {rasterio.transform.array_bounds(height, width, dst_transform)}")
-            
-            if data.size == 0:
-                raise ValueError(f"Loaded raster from {path} is empty after preprocessing!")
-                
-            meta = src.meta.copy()
-            meta.update({
-                'crs': target_crs,
-                'transform': dst_transform,
-                'height': data.shape[0],
-                'width': data.shape[1],
-                'dtype': 'float32'
-            })
-            
+        
+        # Get reference bounds from NUTS-L0
+        nuts_l0_path = self.config.data_dir / "NUTS-L0-NL.shp"
+        reference_bounds = self.transformer.get_reference_bounds(nuts_l0_path)
+        
+        # Transform raster
+        data, transform, crs = self.transformer.transform_raster(
+            path,
+            reference_bounds=reference_bounds,
+            resampling_method=self.config.resampling_method
+        )
+        
+        # Create metadata
+        meta = {
+            'crs': crs,
+            'transform': transform,
+            'height': data.shape[0],
+            'width': data.shape[1],
+            'dtype': 'float32'
+        }
+        
         return data, meta
 
     def normalize_ghs_built_c(self, data: np.ndarray) -> np.ndarray:
@@ -234,28 +144,24 @@ class ExpositionLayer:
         logger.info(f"Population after preprocessing - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
         
         # Ensure all layers have the same shape and transform
-        if ghs_built_v.shape != reference_shape or ghs_built_v.dtype != np.float32:
-            ghs_built_v = rasterio.warp.reproject(
-                source=ghs_built_v,
-                destination=np.empty(reference_shape, dtype=np.float32),
-                src_transform=meta['transform'],
-                src_crs=reference_crs,
-                dst_transform=reference_transform,
-                dst_crs=reference_crs,
-                resampling=self.config.resampling_method
-            )[0]
+        if not self.transformer.validate_alignment(ghs_built_v, meta['transform'], ghs_built_c, reference_transform):
+            ghs_built_v = self.transformer.ensure_alignment(
+                ghs_built_v,
+                meta['transform'],
+                reference_transform,
+                reference_shape,
+                self.config.resampling_method
+            )
             logger.info(f"GHS Built-V after reprojection - Min: {np.nanmin(ghs_built_v)}, Max: {np.nanmax(ghs_built_v)}, Mean: {np.nanmean(ghs_built_v)}")
             
-        if population.shape != reference_shape or population.dtype != np.float32:
-            population = rasterio.warp.reproject(
-                source=population,
-                destination=np.empty(reference_shape, dtype=np.float32),
-                src_transform=meta['transform'],
-                src_crs=reference_crs,
-                dst_transform=reference_transform,
-                dst_crs=reference_crs,
-                resampling=self.config.resampling_method
-            )[0]
+        if not self.transformer.validate_alignment(population, meta['transform'], ghs_built_c, reference_transform):
+            population = self.transformer.ensure_alignment(
+                population,
+                meta['transform'],
+                reference_transform,
+                reference_shape,
+                self.config.resampling_method
+            )
             logger.info(f"Population after reprojection - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
         
         # Check for valid data
