@@ -30,14 +30,20 @@ logger = logging.getLogger(__name__)
 
 def validate_upload_requirements():
     """Validate that all requirements for upload are met."""
-    # Load environment variables
-    load_dotenv()
+    # Load environment variables from config directory
+    env_path = code_dir / 'config' / '.env'
+    if not env_path.exists():
+        logger.error(f".env file not found at {env_path}")
+        logger.error("Please ensure .env file exists in the config directory.")
+        sys.exit(1)
+        
+    load_dotenv(env_path)
     
     # Check for API token
     api_token = os.getenv('HF_API_TOKEN')
     if not api_token:
         logger.error("HF_API_TOKEN environment variable is not set.")
-        logger.error("Please set it in your .env file or environment variables.")
+        logger.error("Please set it in your config/.env file or environment variables.")
         sys.exit(1)
     
     # Log token status (safely)

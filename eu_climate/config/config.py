@@ -138,6 +138,11 @@ class ProjectConfig:
         """Get path to river nodes shapefile."""
         return self.data_dir / self.config['file_paths']['river_nodes_file']
     
+    @property
+    def land_mass_path(self) -> Path:
+        """Get path to land mass raster file."""
+        return self.data_dir / self.config['file_paths']['land_mass_file']
+    
     def validate_files(self) -> None:
         """Validate that all required input files exist."""
         required_files = [
