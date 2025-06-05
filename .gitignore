@@ -1,2 +1,12 @@
-/code/data
-/code/output
+.venv/
+.vscode/
+.DS_Store
+.env
+**/.env
+**.log
+**/__pycache__/
+**/__pycache__/**
+/**/data
+/**/output
+/**/temp_download
+/.cursor/rules
