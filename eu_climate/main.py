@@ -24,6 +24,7 @@ from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.data_loading import get_config
+from eu_climate.utils.cache_utils import initialize_caching, create_cached_layers, print_cache_status
 import numpy as np
 import rasterio
 import rasterio.mask
@@ -67,14 +68,41 @@ class RiskAssessment:
     def __init__(self, config: ProjectConfig):
         """Initialize Risk Assessment with configuration."""
         self.config = config
+        
+        # Create layer instances
         self.hazard_layer = HazardLayer(config)
         self.exposition_layer = ExpositionLayer(config)
+        
+        self._apply_caching()
         
         # Results storage
         self.risk_indices = {}
         self.risk_classifications = {}
         
         logger.info("Initialized Risk Assessment System")
+        
+    def _apply_caching(self):
+        """Apply caching to layer instances if enabled."""
+        try:
+            # Create cached versions of the layers
+            cached_layers = create_cached_layers(
+                hazard_layer=self.hazard_layer,
+                exposition_layer=self.exposition_layer,
+                risk_assessment=self,
+                config=self.config
+            )
+            
+            # Replace instances with cached versions
+            if 'hazard' in cached_layers:
+                self.hazard_layer = cached_layers['hazard']
+            if 'exposition' in cached_layers:
+                self.exposition_layer = cached_layers['exposition']
+                
+            logger.info("Caching applied to risk assessment layers")
+            
+        except Exception as e:
+            logger.warning(f"Could not apply caching: {e}")
+            logger.info("Continuing without caching...")
         
     def prepare_data(self) -> None:
         """Prepare all necessary data from both layers."""
@@ -291,7 +319,16 @@ class RiskAssessment:
         logger.info("HAZARD LAYER ANALYSIS")
         logger.info("="*40)
         
+        # Create hazard layer instance
         hazard_layer = HazardLayer(config)
+        
+        # Apply caching if enabled
+        try:
+            cached_layers = create_cached_layers(hazard_layer=hazard_layer, config=config)
+            if 'hazard' in cached_layers:
+                hazard_layer = cached_layers['hazard']
+        except Exception as e:
+            logger.warning(f"Could not apply caching to hazard layer: {e}")
         
         # Process default scenarios (1m, 2m, 3m sea level rise)
         flood_extents = hazard_layer.process_scenarios()
@@ -318,10 +355,23 @@ def main():
     config = ProjectConfig()
     logger.info(f"Project initialized with data directory: {config.data_dir}")
     
+    # Initialize caching system
     try:
-        RiskAssessment(config).run_hazard_layer_analysis(config)
-        # RiskAssessment(config).run_exposition(config)
-
+        cache_integrator = initialize_caching(config)
+        logger.info("Caching system initialized")
+    except Exception as e:
+        logger.warning(f"Could not initialize caching: {e}")
+        logger.info("Continuing without caching...")
+    
+    try:
+        # RiskAssessment(config).run_hazard_layer_analysis(config)
+        RiskAssessment(config).run_exposition(config)
+        
+        # Print cache statistics if caching is enabled
+        try:
+            print_cache_status(config)
+        except Exception as e:
+            logger.debug(f"Could not print cache statistics: {e}")
         
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
