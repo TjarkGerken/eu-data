@@ -102,36 +102,7 @@ def download_data() -> bool:
         logger.error(f"Error downloading data: {str(e)}")
         return False
 
-def upload_data() -> bool:
-    """Upload data to Hugging Face if enabled."""
-    config = get_config()
-    
-    if not config.config['upload']['enabled']:
-        logger.info("Data upload is disabled.")
-        return False
-    
-    if not config.config['upload']['api_token']:
-        logger.error("Hugging Face API token is required for upload.")
-        return False
-    
-    try:
-        api = HfApi(token=config.config['upload']['api_token'])
-        
-        # Upload each directory
-        for dir_path in [config.data_dir, config.output_dir]:
-            if dir_path.exists():
-                upload_folder(
-                    folder_path=str(dir_path),
-                    repo_id=config.config['huggingface_repo'],
-                    repo_type="dataset",
-                    path_in_repo=dir_path.name
-                )
-        logger.info("Data upload completed successfully")
-        return True
-    
-    except Exception as e:
-        logger.error(f"Error uploading data: {str(e)}")
-        return False
+
 
 def check_data_availability() -> bool:
     """Check if required data directories and key files exist."""
@@ -157,6 +128,53 @@ def check_data_availability() -> bool:
     
     logger.info("Required data files found locally")
     return True
+
+def upload_data() -> bool:
+    """Upload all contents from the huggingface folder to Hugging Face repository."""
+    # First, ensure environment variables are loaded
+    validate_env_vars()
+    
+    config = get_config()
+    
+    # Check if upload is enabled
+    if not config.config.get('upload', {}).get('enabled', False):
+        logger.info("Data upload is disabled in configuration.")
+        return False
+    
+    # Get API token from environment variables only
+    api_token = os.getenv('HF_API_TOKEN')
+    if not api_token:
+        logger.error("Hugging Face API token is required for upload. Set HF_API_TOKEN environment variable.")
+        return False
+    
+    if not config.huggingface_folder.exists():
+        logger.error(f"Hugging Face folder not found: {config.huggingface_folder}")
+        return False
+    
+    try:
+        logger.info(f"Starting upload of {config.huggingface_folder} to {config.config['huggingface_repo']}")
+        api = HfApi(token=api_token)
+        
+        # Upload the entire huggingface folder contents
+        # We iterate through subdirectories to upload them separately
+        for item in config.huggingface_folder.iterdir():
+            if item.is_dir() and not item.name.startswith('.') and item.name != 'temp_download':
+                logger.info(f"Uploading directory: {item.name}")
+                upload_folder(
+                    folder_path=str(item),
+                    repo_id=config.config['huggingface_repo'],
+                    repo_type="dataset",
+                    path_in_repo=item.name,
+                    token=api_token
+                )
+                logger.info(f"Successfully uploaded {item.name}")
+        
+        logger.info("All data upload completed successfully")
+        return True
+    
+    except Exception as e:
+        logger.error(f"Error uploading data: {str(e)}")
+        return False
 
 def ensure_data_availability() -> bool:
     """Main function to ensure data is available."""
