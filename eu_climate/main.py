@@ -19,11 +19,12 @@ Version: 1.0.0
 """
 
 import os
+import sys
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
-from eu_climate.utils.data_loading import get_config
+from eu_climate.utils.data_loading import get_config, validate_env_vars
 from eu_climate.utils.cache_utils import initialize_caching, create_cached_layers, print_cache_status
 import numpy as np
 import rasterio
@@ -37,6 +38,10 @@ from typing import Tuple, List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
 from sklearn.preprocessing import MinMaxScaler
+import subprocess
+from datetime import datetime
+from huggingface_hub import HfApi
+from dotenv import load_dotenv
 
 # Set up logging for the main module
 logger = setup_logging(__name__)
@@ -103,7 +108,90 @@ class RiskAssessment:
         except Exception as e:
             logger.warning(f"Could not apply caching: {e}")
             logger.info("Continuing without caching...")
+
+    def _check_data_integrity(self) -> None:
+        """Check data integrity and sync with remote repository if needed."""
+        logger.info("Checking data integrity...")
         
+        try:
+            # Load config settings
+            repo_id = self.config.config['huggingface_repo']
+            auto_download = self.config.config.get('auto_download', True)
+            
+            # Check local data files
+            try:
+                self.config.validate_files()
+                logger.info("Local data validation passed")
+            except FileNotFoundError as e:
+                logger.warning(f"Missing data files: {e}")
+                if auto_download:
+                    logger.info("Downloading missing data...")
+                    from eu_climate.utils.data_loading import download_data
+                    download_data()
+                    self.config.validate_files()  # Re-validate after download
+                else:
+                    logger.error(f"Please download data from: https://huggingface.co/datasets/{repo_id}")
+                    raise
+            
+            # Check for updates if possible
+            try:
+                from huggingface_hub import HfApi
+                api = HfApi()
+                repo_info = api.dataset_info(repo_id=repo_id)
+                logger.info(f"Remote data last modified: {repo_info.last_modified}")
+                
+                if auto_download:
+                    # Simple check: if data directory is older than 1 day, consider update
+                    data_age = (datetime.now() - datetime.fromtimestamp(self.config.data_dir.stat().st_mtime)).days
+                    if data_age > 1:
+                        logger.info("Data might be outdated, updating...")
+                        from eu_climate.utils.data_loading import download_data
+                        download_data()
+                        
+            except Exception as e:
+                logger.debug(f"Could not check remote updates: {e}")
+                
+            logger.info("Data integrity check completed")
+            
+        except Exception as e:
+            logger.error(f"Data integrity check failed: {e}")
+            raise
+
+    def _upload_data(self) -> None:
+        """Upload processed results to HuggingFace repository if enabled."""
+        upload_config = self.config.config.get('upload', {})
+        if not upload_config.get('enabled', False):
+            logger.info("Upload disabled in configuration")
+            return
+            
+        logger.info("Starting data upload...")
+        
+        try:
+            # Load environment for API token
+            env_path = self.config.workspace_root / 'eu_climate' / 'config' / '.env'
+            if env_path.exists():
+                from dotenv import load_dotenv
+                load_dotenv(env_path)
+            
+            if not os.getenv('HF_API_TOKEN'):
+                logger.error("HF_API_TOKEN not found. Set it in config/.env to enable upload")
+                return
+            
+            # Run upload script
+            upload_script = self.config.workspace_root / 'eu_climate' / 'scripts' / 'upload_data.py'
+            if upload_script.exists():
+                result = subprocess.run([sys.executable, str(upload_script)], 
+                                      capture_output=True, text=True, timeout=300)
+                if result.returncode == 0:
+                    logger.info("Upload completed successfully")
+                else:
+                    logger.error(f"Upload failed: {result.stderr}")
+            else:
+                logger.error("Upload script not found")
+                
+        except Exception as e:
+            logger.error(f"Upload failed: {e}")
+
     def prepare_data(self) -> None:
         """Prepare all necessary data from both layers."""
         # Load and process hazard data
@@ -339,8 +427,53 @@ class RiskAssessment:
         # Export results
         hazard_layer.export_results(flood_extents)
 
-
-
+def check_data_integrity(config: ProjectConfig) -> None:
+    """Check data integrity and sync with remote repository if needed."""
+    logger.info("Checking data integrity...")
+    
+    try:
+        # Load config settings
+        repo_id = config.config['huggingface_repo']
+        auto_download = config.config.get('auto_download', True)
+        
+        # Check local data files
+        try:
+            config.validate_files()
+            logger.info("Local data validation passed")
+        except FileNotFoundError as e:
+            logger.warning(f"Missing data files: {e}")
+            if auto_download:
+                logger.info("Downloading missing data...")
+                from eu_climate.utils.data_loading import download_data
+                download_data()
+                config.validate_files()  # Re-validate after download
+            else:
+                logger.error(f"Please download data from: https://huggingface.co/datasets/{repo_id}")
+                raise
+        
+        # Check for updates if possible
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi()
+            repo_info = api.dataset_info(repo_id=repo_id)
+            logger.info(f"Remote data last modified: {repo_info.last_modified}")
+            
+            if auto_download:
+                # Simple check: if data directory is older than 1 day, consider update
+                data_age = (datetime.now() - datetime.fromtimestamp(config.data_dir.stat().st_mtime)).days
+                if data_age > 1:
+                    logger.info("Data might be outdated, updating...")
+                    from eu_climate.utils.data_loading import download_data
+                    download_data()
+                    
+        except Exception as e:
+            logger.debug(f"Could not check remote updates: {e}")
+            
+        logger.info("Data integrity check completed")
+        
+    except Exception as e:
+        logger.error(f"Data integrity check failed: {e}")
+        raise
 
 def main():
     """
@@ -355,6 +488,15 @@ def main():
     config = ProjectConfig()
     logger.info(f"Project initialized with data directory: {config.data_dir}")
     
+    # Perform data integrity check BEFORE creating any layers
+    logger.info("\n" + "="*40)
+    logger.info("DATA INTEGRITY CHECK")
+    logger.info("="*40)
+    check_data_integrity(config)
+    
+    # Now create RiskAssessment instance after data is confirmed available
+    risk_assessment = RiskAssessment(config)
+    
     # Initialize caching system
     try:
         cache_integrator = initialize_caching(config)
@@ -364,8 +506,15 @@ def main():
         logger.info("Continuing without caching...")
     
     try:
+        # Run the analysis
         # RiskAssessment(config).run_hazard_layer_analysis(config)
-        RiskAssessment(config).run_exposition(config)
+        risk_assessment.run_exposition(config)
+        
+        # Upload data after successful analysis (if enabled)
+        logger.info("\n" + "="*40)
+        logger.info("DATA UPLOAD CHECK")
+        logger.info("="*40)
+        risk_assessment._upload_data()
         
         # Print cache statistics if caching is enabled
         try:
