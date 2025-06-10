@@ -7,6 +7,8 @@ alwaysApply: false
 
 > Avoid deep nesting in control flow. Use early returns and function extraction to improve clarity.
 
+IF YOU FIND ANY INCOMPLIANCE WITH THIS RULE IN EXISTING CODE UPDATE IT.
+
 ## 📌 Description
 
 Never nest more than **3 levels** deep. Nesting increases cognitive load and hides the "happy path" under layers of logic.
