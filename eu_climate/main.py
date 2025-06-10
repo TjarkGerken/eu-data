@@ -24,7 +24,7 @@ from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
-from eu_climate.utils.data_loading import get_config, validate_env_vars
+from eu_climate.utils.data_loading import get_config, upload_data, validate_env_vars
 from eu_climate.utils.cache_utils import initialize_caching, create_cached_layers, print_cache_status
 import numpy as np
 import rasterio
@@ -172,6 +172,8 @@ class RiskAssessment:
         
         # Export results
         hazard_layer.export_results(flood_extents)
+    
+
 
 def check_data_integrity(config: ProjectConfig) -> None:
     """Check data integrity and sync with remote repository if needed."""
@@ -253,14 +255,14 @@ def main():
     
     try:
         # Run the analysis
-        risk_assessment.run_hazard_layer_analysis(config)
+        # risk_assessment.run_hazard_layer_analysis(config)
         risk_assessment.run_exposition(config)
         
         # Upload data after successful analysis (if enabled)
         logger.info("\n" + "="*40)
         logger.info("DATA UPLOAD CHECK")
         logger.info("="*40)
-        risk_assessment._upload_data()
+        upload_data()
         
         # Print cache statistics if caching is enabled
         try:
