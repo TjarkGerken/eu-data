@@ -1,0 +1,59 @@
+---
+description: 
+globs: "**/*.py", "**/*.ts", "**/*.js", "**/*.cpp"
+alwaysApply: false
+---
+---
+description: "Avoid unnecessary comments. Use expressive code, types, and naming instead."
+---
+
+# No Comments? Write Code That Speaks for Itself
+
+Prefer **clear code** over comments. Comments can go stale, lie, or obscure logic. When tempted to write a comment, **refactor the code** so that the intent becomes self-evident.
+
+## ✅ Do This Instead of Commenting
+
+- **Replace magic values** with well-named constants
+- **Extract complex conditions** into named variables or functions
+- **Use expressive types** (e.g. `Optional[int]`, `unique_ptr`)
+- **Encapsulate logic** in well-named functions
+- **Document only APIs, architecture, and non-obvious behaviour** => Do this within the central README.MD
+
+---
+
+### 🔁 Before: Relying on Comments (❌)
+```python
+# 5 means the message was successfully sent
+if status == 5:
+    send_notification()
+🧼 After: Code Speaks for Itself (✅)
+```
+
+```python
+MESSAGE_SENT = 5
+
+if status == MESSAGE_SENT:
+    send_notification()
+```
+🔁 Before: Comment Explaining Complex Logic (❌)
+```python
+# Check if the user is active, the subscription is valid,
+# and they haven't hit the rate limit
+if user.is_active and sub.is_valid() and not has_hit_limit(user):
+    serve_content()
+```
+🧼 After: Extraction + Naming (✅)
+
+```python
+def can_user_access(user):
+    return user.is_active and sub.is_valid() and not has_hit_limit(user)
+
+if can_user_access(user):
+    serve_content()
+```
+📌 Acceptable Uses for Comments
+Use comments only when code cannot express the following clearly:
+- Performance hacks that aren’t obvious
+- Algorithm citations or external references
+- Platform-specific quirks or constraints
+- TODOs, but only if tracked by issue
