@@ -3,8 +3,9 @@ from pathlib import Path
 from typing import Dict
 import numpy as np
 from rasterio.enums import Resampling
+import yaml
 from eu_climate.utils.utils import setup_logging
-from eu_climate.utils.data_loading import get_config
+# from eu_climate.utils.data_loading import get_config
 
 # Set up logging for the config module
 logger = setup_logging(__name__)
@@ -22,14 +23,40 @@ class ProjectConfig:
     - Visualization settings
     """
     
+    def get_config(self) -> dict:
+        """
+            Load configuration from YAML file.
+
+            Returns:
+                dict: Configuration dictionary
+        """
+        # Try multiple possible config locations
+        possible_paths = [
+            Path(__file__).parent.parent / "config" / "config.yaml"
+        ]
+        
+        for config_path in possible_paths:
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f).get('data', {})
+                    if not config:
+                        raise ValueError("Invalid configuration file: 'data' section is missing")
+                    return config
+        
+        raise FileNotFoundError(
+            "Configuration file not found! Ensure code/config/config.yaml exists."
+        )
+
     def __init__(self):
         """Initialize configuration from YAML file."""
-        self.config = get_config()
+        self.config = self.get_config()
         
         # Set up paths
-        self.data_dir = Path(self.config['data_paths']['local_data_dir'])
-        self.output_dir = Path(self.config['data_paths']['local_output_dir'])
         self.workspace_root = Path(os.getcwd())
+        self.huggingface_folder = self.workspace_root / "eu_climate" / self.config['data_paths']['local_data_dir']
+        self.data_dir =  self.huggingface_folder / self.config['data_paths']['source_data_dir']
+        self.output_dir = self.huggingface_folder / self.config['data_paths']['local_output_dir']
+        
         
         # Ensure directories exist
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +170,7 @@ class ProjectConfig:
         """Get path to land mass raster file."""
         return self.data_dir / self.config['file_paths']['land_mass_file']
     
-    def validate_files(self) -> None:
+    def validate_files(self) -> bool:
         """Validate that all required input files exist."""
         required_files = [
             (self.dem_path, "DEM"),
@@ -152,6 +179,7 @@ class ProjectConfig:
             (self.population_path, "Population Density"),
             (self.river_segments_path, "River Segments"),
             (self.river_nodes_path, "River Nodes"),
+            (self.land_mass_path, "Land Mass"),
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
             (self.relevant_area_path, "Relevant Area")
         ]
