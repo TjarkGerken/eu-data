@@ -1,0 +1,30 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+DO NOT APOLOGIZE!
+Make very concise summaries.
+The repo contains additional milestones within it, the requests will focus fully on the code.
+This code is stored in eu_climate with the following structure:
+eu_climate
+|- config           => ALL configs for the code must be maintained here
+|- risk_layers      => Contains the python files for the four layers (Hazard, Exposition and Relevance), as well as the merging layer
+|- data             => All Input data goes here. Should be synced with huggingface
+|- output           => All generated outputs must go here grouped by the four layers
+|- debug            => All logs files should go here
+|- scripts          => Contain Data Managament Scripts
+|- utils            => Contains all utility functions shared accross all files
+|- main.py          => used to run the risk assessment
+|- README.MD        => Use as a golden source of truth for documentation. Keep high level architecture documented here
+
+Do not ever write any other summarising markdown files, than the central README.MD. 
+
+Make components scoped and resuable
+
+
+TL;DR - Golden Rules Code Commenting 
+Docstrings: Always use them for public functions, classes, and modules.
+Type hints: They're documentation too.
+README: Write one. Seriously.
+

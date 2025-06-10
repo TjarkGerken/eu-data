@@ -241,7 +241,7 @@ class ExpositionLayer:
         plt.colorbar(im, label='Exposition Index')
         plt.title(title)
         plt.axis('off')
-        plt.show()
+        # plt.show()
 
     def export_exposition(self, data: np.ndarray, meta: dict, out_path: str):
         """Export the exposition index for each cell to a specified GeoTIFF path."""

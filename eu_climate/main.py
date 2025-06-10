@@ -507,7 +507,7 @@ def main():
     
     try:
         # Run the analysis
-        # RiskAssessment(config).run_hazard_layer_analysis(config)
+        risk_assessment.run_hazard_layer_analysis(config)
         risk_assessment.run_exposition(config)
         
         # Upload data after successful analysis (if enabled)

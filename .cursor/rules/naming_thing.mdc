@@ -1,0 +1,26 @@
+---
+description: 
+globs: "**/*.py", "**/*.ts", "**/*.js", "**/*.cpp"
+alwaysApply: false
+---
+# Naming Things Right
+
+> “There are only two hard things in computer science: cache invalidation and naming things.”
+
+## 📌 Rule Summary
+
+Avoid bad naming patterns by:
+- **No Single-Letter Variables:** Use descriptive names instead.
+- **Never Abbreviate:** Write out names fully for clarity.
+- **Skip Type Prefixes:** Avoid Hungarian notation and similar patterns.
+- **Include Units When Needed:** For example, use `delaySeconds` to indicate units.
+- **Use Specific, Meaningful Names:** Avoid generic names like “Utils”, “Base”, or “Abstract.” Instead, group related functions into well-named modules or classes and name them based on their purpose.
+
+## ✅ Best Practices
+
+- **Expressiveness Over Brevity:** Code is read more often than written; let names do the explaining.
+- **Clarity Over Convention:** Don't hide essential context in abbreviations.
+- **Let Types Do the Talking:** In statically typed languages, rely on the type system instead of embedding type hints in names.
+
+When in doubt, favor clarity—even if it means typing a few extra characters.
+
