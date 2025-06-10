@@ -10,8 +10,9 @@ This code is stored in eu_climate with the following structure:
 eu_climate
 |- config           => ALL configs for the code must be maintained here
 |- risk_layers      => Contains the python files for the four layers (Hazard, Exposition and Relevance), as well as the merging layer
-|- data             => All Input data goes here. Should be synced with huggingface
-|- output           => All generated outputs must go here grouped by the four layers
+|- data             => This folder and its sub-folder is to be synched with huggingface.
+|----- source       => All Input data goes here. 
+|----- output       => All generated outputs must go here grouped 
 |- debug            => All logs files should go here
 |- scripts          => Contain Data Managament Scripts
 |- utils            => Contains all utility functions shared accross all files

@@ -10,6 +10,7 @@ description: "Avoid unnecessary comments. Use expressive code, types, and naming
 # No Comments? Write Code That Speaks for Itself
 
 Prefer **clear code** over comments. Comments can go stale, lie, or obscure logic. When tempted to write a comment, **refactor the code** so that the intent becomes self-evident.
+IF YOU FIND ANY INCOMPLIANCE WITH THIS RULE IN EXISTING CODE UPDATE IT.
 
 ## ✅ Do This Instead of Commenting
 

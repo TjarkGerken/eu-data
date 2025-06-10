@@ -8,12 +8,13 @@ alwaysApply: false
 > “There are only two hard things in computer science: cache invalidation and naming things.”
 
 ## 📌 Rule Summary
-
+IF YOU FIND ANY INCOMPLIANCE WITH THIS RULE IN EXISTING CODE UPDATE IT.
 Avoid bad naming patterns by:
 - **No Single-Letter Variables:** Use descriptive names instead.
 - **Never Abbreviate:** Write out names fully for clarity.
-- **Skip Type Prefixes:** Avoid Hungarian notation and similar patterns.
+- **Skip Type Prefixes:** Avoid Hungarian notation and similar patterns. => Do not put types in variable names
 - **Include Units When Needed:** For example, use `delaySeconds` to indicate units.
+- Do not put types in your types (AbstactX, BaseX)
 - **Use Specific, Meaningful Names:** Avoid generic names like “Utils”, “Base”, or “Abstract.” Instead, group related functions into well-named modules or classes and name them based on their purpose.
 
 ## ✅ Best Practices

@@ -1,9 +1,10 @@
 data:
+  auto_download: true
   huggingface_repo: "TjarkGerken/eu-data"
-  auto_download: true # Set to false to disable automatic downloads
   data_paths:
-    local_data_dir: "eu_climate/data"
-    local_output_dir: "eu_climate/output"
+    local_data_dir: "data"
+    source_data_dir: "source"
+    local_output_dir: "output"
   file_paths:
     dem_file: "ClippedCopernicusHeightProfile.tif"
     ghs_built_c_file: "GHS_BUILT_C/GHS_BUILT_C.vrt"
@@ -29,12 +30,12 @@ data:
     auto_cleanup: true
     max_age_days: 7
     cache_strategies:
-      raster_data: "persistent"     # Large raster transformations cached persistently
-      calculations: "persistent"   # Intermediate calculations cached persistently  
-      final_results: "persistent"  # Final layer outputs cached persistently
+      raster_data: "persistent"
+      calculations: "persistent"
+      final_results: "persistent"
     logging:
-      cache_operations: true        # Log individual cache operations (debug mode)
-      cache_statistics: true        # Log cache statistics
+      cache_operations: true
+      cache_statistics: true
   exposition:
     ghs_built_c_weight: 0.2
     ghs_built_v_weight: 0.4
@@ -65,7 +66,7 @@ data:
     figure_size: [15, 10]
     dpi: 300
   upload:
-    enabled: true # Set to true to enable data upload to Hugging Face
+    enabled: true
   building:
     base_floor_height: 3
     max_floors: 30
