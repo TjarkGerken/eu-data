@@ -14,6 +14,8 @@ from typing import Tuple, Dict, Optional, Union
 from pathlib import Path
 import geopandas as gpd
 
+from eu_climate.utils.cache_manager import get_cache_manager
+
 logger = logging.getLogger(__name__)
 
 class RasterTransformer:
@@ -34,6 +36,7 @@ class RasterTransformer:
         self.target_crs = rasterio.crs.CRS.from_string(target_crs)
         self.target_resolution = target_resolution
         self.intermediate_crs = rasterio.crs.CRS.from_string(intermediate_crs)
+        self._cache_manager = get_cache_manager()
         
     def get_reference_bounds(self, reference_path: Union[str, Path]) -> Tuple[float, float, float, float]:
         """
@@ -84,6 +87,126 @@ class RasterTransformer:
             
         Returns:
             Tuple of (transformed data, transform, CRS)
+        """
+        # Check cache first
+        if self._cache_manager and self._cache_manager.enabled:
+            # Generate cache key
+            source_path = Path(source_path)
+            
+            # Include file timestamp and size in cache key
+            input_files = [str(source_path)]
+            
+            # Parameters that affect the transformation
+            parameters = {
+                'reference_bounds': reference_bounds,
+                'resampling_method': resampling_method,
+                'target_crs': str(self.target_crs),
+                'target_resolution': self.target_resolution,
+                'intermediate_crs': str(self.intermediate_crs)
+            }
+            
+            cache_key = self._cache_manager.generate_cache_key(
+                'RasterTransformer.transform_raster',
+                input_files,
+                parameters,
+                {}
+            )
+            
+            # Try to get from cache
+            cached_result = self._cache_manager.get(cache_key, 'raster_data')
+            if cached_result is not None:
+                logger.info(f"Cache hit for raster transformation: {source_path}")
+                # Reconstruct the result from cached data
+                data, metadata = cached_result
+                # Reconstruct transform from metadata
+                transform_data = metadata['transform']
+                logger.debug(f"Cached transform_data: {transform_data}, type: {type(transform_data)}, length: {len(transform_data)}")
+                
+                # Handle different transform formats and convert to list of floats
+                if isinstance(transform_data, (list, tuple, np.ndarray)):
+                    # Convert to flat list and ensure all are floats
+                    if hasattr(transform_data, 'flatten'):
+                        # It's a numpy array
+                        transform_list = transform_data.flatten().tolist()
+                    elif isinstance(transform_data, (list, tuple)):
+                        # It's already a list/tuple, but might be nested
+                        transform_list = []
+                        for item in transform_data:
+                            if isinstance(item, (list, tuple, np.ndarray)):
+                                # Flatten nested structures
+                                if hasattr(item, 'flatten'):
+                                    transform_list.extend(item.flatten().tolist())
+                                else:
+                                    transform_list.extend(list(item))
+                            else:
+                                transform_list.append(item)
+                    else:
+                        transform_list = list(transform_data)
+                    
+                    # Ensure we have at least 6 numeric values
+                    transform_floats = []
+                    for item in transform_list:
+                        try:
+                            transform_floats.append(float(item))
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid transform coefficient: {item}")
+                            continue
+                    
+                    if len(transform_floats) >= 6:
+                        # Use the first 6 coefficients
+                        transform = rasterio.Affine(*transform_floats[:6])
+                    else:
+                        logger.warning(f"Insufficient transform coefficients: {len(transform_floats)} < 6")
+                        logger.info("Falling back to fresh transformation")
+                        # Fall back to fresh transformation
+                        result = self._transform_raster_impl(source_path, reference_bounds, resampling_method)
+                        return result
+                else:
+                    logger.warning(f"Unexpected transform data type: {type(transform_data)}")
+                    logger.info("Falling back to fresh transformation")
+                    # Fall back to fresh transformation
+                    result = self._transform_raster_impl(source_path, reference_bounds, resampling_method)
+                    return result
+                    
+                # Reconstruct CRS
+                crs = rasterio.crs.CRS.from_string(metadata['crs'])
+                return data, transform, crs
+                
+            logger.info(f"Cache miss for raster transformation: {source_path}")
+        
+        # Perform the transformation
+        result = self._transform_raster_impl(source_path, reference_bounds, resampling_method)
+        
+        # Cache the result
+        if self._cache_manager and self._cache_manager.enabled:
+            # Package the result for caching: (data, metadata)
+            data, transform, crs = result
+            # Ensure transform coefficients are stored as a simple list of floats
+            transform_coeffs = [
+                float(transform.a), float(transform.b), float(transform.c),
+                float(transform.d), float(transform.e), float(transform.f)
+            ]
+            metadata = {
+                'transform': transform_coeffs,  # Save the 6 affine coefficients as simple float list
+                'crs': str(crs),
+                'shape': data.shape
+            }
+            cache_data = (data, metadata)
+            
+            success = self._cache_manager.set(cache_key, cache_data, 'raster_data')
+            if success:
+                logger.info(f"Successfully cached raster transformation: {source_path}")
+            else:
+                logger.warning(f"Failed to cache raster transformation: {source_path}")
+            
+        return result
+    
+    def _transform_raster_impl(self, 
+                              source_path: Union[str, Path],
+                              reference_bounds: Optional[Tuple[float, float, float, float]] = None,
+                              resampling_method: str = "bilinear") -> Tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS]:
+        """
+        Internal implementation of raster transformation (without caching).
         """
         source_path = Path(source_path)
         logger.info(f"Transforming raster: {source_path}")

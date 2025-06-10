@@ -328,175 +328,111 @@ class HazardLayer:
         return flood_extents
     
     def visualize_hazard_assessment(self, flood_extents: Dict[str, np.ndarray], 
-                                  save_plots: bool = True) -> None:
+                                      save_plots: bool = True) -> None:
         """
-        Create comprehensive visualizations of the hazard assessment results.
+        Create comprehensive visualization of hazard assessment results.
         
         Args:
-            flood_extents: Dictionary of flood extent results
-            save_plots: Whether to save plots to disk
+            flood_extents: Dictionary of flood extent data for each scenario
+            save_plots: Whether to save visualization to file
         """
-        logger.info("Creating hazard assessment visualizations...")
+        # Set up the plotting parameters
+        plt.style.use('default')
         
-        # Load NUTS administrative boundaries for overlay
-        nuts_gdf = self._load_nuts_boundaries()
-        
-        # Create a comprehensive multi-panel figure
+        # Create figure with proper grid layout
         fig = plt.figure(figsize=(20, 15))
-        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+        gs = plt.GridSpec(3, 3, figure=fig, height_ratios=[1, 1, 0.8], width_ratios=[1, 1, 1])
         
-        # Color schemes
-        dem_cmap = plt.cm.terrain
-        flood_cmap = mcolors.ListedColormap(['green', 'red'])
-        
-        # Set terrain colormap to focus on relevant elevation range
-        dem_cmap.set_bad('lightgray')  # Color for NaN values
-        norm = mcolors.Normalize(vmin=-10, vmax=10)
-        
+        # Get scenario names from flood extents
         scenarios = list(flood_extents.keys())
-        dem_data = flood_extents[scenarios[0]]['dem_data']
-        transform = flood_extents[scenarios[0]]['transform']
-        crs = flood_extents[scenarios[0]]['crs']
-        # Calculate extent in the target CRS using the transform and shape of the reprojected DEM
-        height, width = dem_data.shape
         
-        # Calculate DEM bounds for comparison
-        corners = [
-            (0, 0),  # top-left
-            (width, 0),  # top-right
-            (width, height),  # bottom-right
-            (0, height)  # bottom-left
-        ]
-        
-        # Transform corners to geographic coordinates
-        dem_bounds_coords = []
-        for x, y in corners:
-            x_geo, y_geo = transform * (x, y)
-            dem_bounds_coords.extend([float(x_geo), float(y_geo)])
-        
-        # Extract min/max coordinates
+        # Get DEM bounds for consistent visualization extent
+        first_scenario = list(flood_extents.values())[0]
         dem_bounds = [
-            min(dem_bounds_coords[::2]),  # left
-            max(dem_bounds_coords[::2]),  # right
-            min(dem_bounds_coords[1::2]),  # bottom
-            max(dem_bounds_coords[1::2])   # top
+            first_scenario['transform'].xoff,
+            first_scenario['transform'].xoff + first_scenario['transform'].a * first_scenario['dem_data'].shape[1],
+            first_scenario['transform'].yoff + first_scenario['transform'].e * first_scenario['dem_data'].shape[0],
+            first_scenario['transform'].yoff
         ]
+        
+        crs = first_scenario['crs']
+        
         logger.info(f"DEM bounds in visualization: {dem_bounds}")
         
-        # Load NUTS-L0 boundaries to determine the visualization extent
-        nuts_l0_path = self.config.data_dir / "NUTS-L0-NL.shp"
-        if nuts_l0_path.exists():
-            nuts_l0 = gpd.read_file(nuts_l0_path)
-            if nuts_l0.crs != crs:
-                nuts_l0 = nuts_l0.to_crs(crs)
-            
-            # Get the bounds of the NUTS-L0 area
-            bounds = nuts_l0.total_bounds
-            # Add a small buffer (1%) to the bounds
-            buffer_x = (bounds[2] - bounds[0]) * 0.01
-            buffer_y = (bounds[3] - bounds[1]) * 0.01
-            extent = [
-                float(bounds[0] - buffer_x),
-                float(bounds[2] + buffer_x),
-                float(bounds[1] - buffer_y),
-                float(bounds[3] + buffer_y)
-            ]
-            logger.info(f"Using NUTS-L0 bounds for visualization extent: {extent}")
-            
-            # Check if DEM bounds cover the NUTS bounds
-            if (dem_bounds[0] > bounds[0] or dem_bounds[1] < bounds[2] or 
-                dem_bounds[2] > bounds[1] or dem_bounds[3] < bounds[3]):
-                logger.warning("DEM does not fully cover NUTS bounds!")
-                logger.warning(f"DEM: {dem_bounds}")
-                logger.warning(f"NUTS: {bounds}")
+        # Try to load NUTS for extent calculation
+        nuts_gdf = self._load_nuts_boundaries()
+        
+        if nuts_gdf is not None:
+            # Get NUTS bounds in the target CRS for extent calculation
+            nuts_bounds = nuts_gdf.total_bounds  # [minx, miny, maxx, maxy]
+            logger.info(f"Using NUTS-L0 bounds for visualization extent: {nuts_bounds}")
         else:
-            # Fallback to DEM bounds with buffer if NUTS-L0 not available
-            buffer_x = (dem_bounds[1] - dem_bounds[0]) * 0.05
-            buffer_y = (dem_bounds[3] - dem_bounds[2]) * 0.05
-            extent = [
-                float(dem_bounds[0] + buffer_x),
-                float(dem_bounds[1] - buffer_x),
-                float(dem_bounds[2] + buffer_y),
-                float(dem_bounds[3] - buffer_y)
-            ]
-            logger.warning("NUTS-L0 boundaries not found, falling back to DEM bounds with buffer")
+            # Fall back to DEM bounds
+            nuts_bounds = dem_bounds
+            logger.info("No NUTS boundaries available, using DEM bounds for visualization extent")
         
-        # Load river data if not already loaded
-        if self.river_network is None:
-            self.load_river_data()
-        
-        # Ensure river network is in the correct CRS and clip to extent
+        # Clip river network to visualization extent for performance
         if self.river_network is not None:
-            if self.river_network.crs is None:
-                self.river_network.set_crs(crs, inplace=True)
-                logger.info(f"Set river network CRS to {crs}")
-            if self.river_nodes.crs is None:
-                self.river_nodes.set_crs(crs, inplace=True)
-                logger.info(f"Set river nodes CRS to {crs}")
-            
-            # Transform to target CRS if different
-            if self.river_network.crs != crs:
-                self.river_network = self.river_network.to_crs(crs)
-                logger.info(f"Transformed river network to {crs}")
-            if self.river_nodes.crs != crs:
-                self.river_nodes = self.river_nodes.to_crs(crs)
-                logger.info(f"Transformed river nodes to {crs}")
-            
-            # Clip river network to the visualization extent
-            from shapely.geometry import box
-            extent_box = box(extent[0], extent[2], extent[1], extent[3])
-            self.river_network = self.river_network[self.river_network.intersects(extent_box)]
-            self.river_nodes = self.river_nodes[self.river_nodes.intersects(extent_box)]
-            
-            # Log river network bounds after clipping
+            # Get NUTS-L0 bounds for clipping
             river_bounds = self.river_network.total_bounds
             logger.info(f"River network bounds after clipping: {river_bounds}")
         
-        # Log DEM bounds
-        logger.info(f"DEM extent (target CRS): left={extent[0]}, right={extent[1]}, bottom={extent[2]}, top={extent[3]}")
-        # Log river network bounds
-        if self.river_network is not None:
-            river_bounds = self.river_network.total_bounds
-            logger.info(f"River network bounds: {river_bounds}")
-        # Log NUTS bounds
-        if nuts_gdf is not None:
-            nuts_bounds = nuts_gdf.total_bounds
-            logger.info(f"NUTS bounds: {nuts_bounds}")
-
-        # Debug plot: Only overlays (NUTS and rivers)
-        fig_debug, ax_debug = plt.subplots(figsize=(8, 8))
-        if nuts_gdf is not None:
-            nuts_gdf.plot(ax=ax_debug, facecolor='none', edgecolor='black', linewidth=0.5, alpha=1.0, zorder=10)
-        if self.river_network is not None:
-            self.river_network.plot(ax=ax_debug, color='black', linewidth=0.1, alpha=1.0, zorder=11)
-        ax_debug.set_title('DEBUG: NUTS and River Network Overlays Only')
-        logger.info(f"DEBUG: Axis limits before autoscale: {ax_debug.get_xlim()}, {ax_debug.get_ylim()}")
-        ax_debug.set_xlim(dem_bounds[0], dem_bounds[1])
-        ax_debug.set_ylim(dem_bounds[2], dem_bounds[3])
-        ax_debug.autoscale(False)
-        logger.info(f"DEBUG: Axis limits after autoscale: {ax_debug.get_xlim()}, {ax_debug.get_ylim()}")
-        plt.savefig(self.config.output_dir / "debug_overlays_only.png", dpi=150, bbox_inches='tight')
-        plt.close(fig_debug)
+        # Get reference DEM data and transform for land mass alignment
+        reference_flood_data = list(flood_extents.values())[0]
+        reference_dem_data = reference_flood_data['dem_data']
+        reference_transform = reference_flood_data['transform']
         
-        # Panel 1: Original DEM with rivers
-        ax1 = fig.add_subplot(gs[0, 0])
-        # Use the same DEM bounds for visualization
-        im1 = ax1.imshow(dem_data, cmap=dem_cmap, norm=norm, aspect='equal', extent=dem_bounds)
-        # Make NUTS overlay more visible
-        if nuts_gdf is not None:
-            nuts_gdf.plot(ax=ax1, facecolor='none', edgecolor='black', linewidth=0.5, alpha=1.0, zorder=10)
-        # Make river overlay more visible
+        # Transform land mass data once outside the loop (optimization)
+        land_mass_data, land_transform, _ = self.transformer.transform_raster(
+            self.config.land_mass_path,
+            reference_bounds=None,
+            resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+        )
+        if not self.transformer.validate_alignment(land_mass_data, land_transform, reference_dem_data, reference_transform):
+            land_mask_aligned = self.transformer.ensure_alignment(
+                land_mass_data, land_transform, reference_transform, reference_dem_data.shape,
+                self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+            )
+        else:
+            land_mask_aligned = land_mass_data
+        
+        land_mask = (land_mask_aligned > 0).astype(np.uint8)
+        
+        # Panel 1: Overview/composite map with NUTS overlay and rivers
+        ax = fig.add_subplot(gs[0, 0])
+        
+        # Use reference DEM for the overview
+        dem_data = reference_dem_data
+        transform = reference_transform
+        
+        logger.info(f"DEM extent (target CRS): left={nuts_bounds[0]}, right={nuts_bounds[2]}, bottom={nuts_bounds[1]}, top={nuts_bounds[3]}")
+        
+        # Create a base elevation visualization clipped to NUTS extent
+        im1 = ax.imshow(dem_data, cmap='terrain', aspect='equal', 
+                       extent=dem_bounds, vmin=-25, vmax=100, alpha=0.8)
+        
+        # River network overlay
         if self.river_network is not None:
-            self.river_network.plot(ax=ax1, color='black', linewidth=0.1, alpha=1.0, zorder=11)
-        ax1.set_title('Original DEM with River Network\n(Copernicus Height Profile, Clipped -25m to 50m)', 
-                     fontsize=12, fontweight='bold')
-        ax1.set_xlabel('X Coordinate (m)')
-        ax1.set_ylabel('Y Coordinate (m)')
-        plt.colorbar(im1, ax=ax1, label='Elevation (m)', shrink=0.8)
-        # Set the extent to match the DEM bounds
-        ax1.set_xlim(dem_bounds[0], dem_bounds[1])
-        ax1.set_ylim(dem_bounds[2], dem_bounds[3])
-        ax1.autoscale(False)
+            logger.info(f"River network bounds: {self.river_network.total_bounds}")
+            self.river_network.plot(ax=ax, color='blue', linewidth=0.2, alpha=0.8, zorder=10)
+        
+        # NUTS overlay
+        if nuts_gdf is not None:
+            logger.info(f"NUTS bounds: {nuts_gdf.total_bounds}")
+            nuts_gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=1.0, alpha=1.0, zorder=11)
+        
+        logger.info(f"DEBUG: Axis limits before autoscale: {ax.get_xlim()}, {ax.get_ylim()}")
+        ax.autoscale(False)
+        logger.info(f"DEBUG: Axis limits after autoscale: {ax.get_xlim()}, {ax.get_ylim()}")
+        
+        ax.set_title('Study Area Overview\nElevation with River Network and Administrative Boundaries', 
+                    fontsize=12, fontweight='bold')
+        ax.set_xlabel('X Coordinate (m)')
+        ax.set_ylabel('Y Coordinate (m)')
+        
+        # Add colorbar for elevation
+        cbar1 = plt.colorbar(im1, ax=ax, shrink=0.8)
+        cbar1.set_label('Elevation (m)', rotation=270, labelpad=15)
         
         # Panels 2-4: Flood extent for each scenario with rivers
         for i, scenario_name in enumerate(scenarios):
@@ -506,20 +442,9 @@ class HazardLayer:
             scenario = flood_data['scenario']
             dem_data = flood_data['dem_data']
             transform = flood_data['transform']
-            # Always align land mask to DEM grid
-            land_mass_data, land_transform, _ = self.transformer.transform_raster(
-                self.config.land_mass_path,
-                reference_bounds=None,
-                resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
-            )
-            if not self.transformer.validate_alignment(land_mass_data, land_transform, dem_data, transform):
-                land_mass_data = self.transformer.ensure_alignment(
-                    land_mass_data, land_transform, transform, dem_data.shape,
-                    self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
-                )
-            land_mask = (land_mass_data > 0).astype(np.uint8)
+            
+            # Use the pre-computed land mask (optimization - no repeated transformations)
             # Always rasterize NUTS to DEM grid
-            nuts_gdf = self._load_nuts_boundaries()
             nuts_mask = rasterio.features.rasterize(
                 [(geom, 1) for geom in nuts_gdf.geometry],
                 out_shape=dem_data.shape,
@@ -661,8 +586,8 @@ class HazardLayer:
             output_path = self.config.output_dir / "hazard_layer_assessment.png"
             plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight')
             logger.info(f"Saved hazard assessment visualization to: {output_path}")
-        
-        plt.show()
+        # TODO: Remove this before pushing
+        # plt.show()
     
     def _load_nuts_boundaries(self) -> gpd.GeoDataFrame:
         """
