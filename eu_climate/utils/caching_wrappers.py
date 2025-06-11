@@ -14,10 +14,8 @@ Key Features:
 
 import functools
 from typing import Any, Dict, List, Optional, Callable
-from pathlib import Path
-import inspect
 
-from eu_climate.utils.cache_manager import get_cache_manager, cached_method
+from eu_climate.utils.cache_manager import get_cache_manager
 from eu_climate.utils.utils import setup_logging
 
 logger = setup_logging(__name__)
@@ -116,7 +114,6 @@ class CachingLayerWrapper:
                 'cache_type': 'calculations',
                 'config_attrs': ['n_risk_classes']
             },
-            
             # Relevance Layer Methods
             'load_economic_datasets': {
                 'cache_type': 'calculations',
