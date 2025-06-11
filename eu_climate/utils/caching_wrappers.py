@@ -14,10 +14,8 @@ Key Features:
 
 import functools
 from typing import Any, Dict, List, Optional, Callable
-from pathlib import Path
-import inspect
 
-from eu_climate.utils.cache_manager import get_cache_manager, cached_method
+from eu_climate.utils.cache_manager import get_cache_manager
 from eu_climate.utils.utils import setup_logging
 
 logger = setup_logging(__name__)
@@ -102,20 +100,6 @@ class CachingLayerWrapper:
                 'cache_type': 'calculations',
                 'config_attrs': []
             },
-            
-            # Risk Assessment Methods
-            'prepare_data': {
-                'cache_type': 'calculations',
-                'config_attrs': base_config_attrs
-            },
-            'calculate_integrated_risk': {
-                'cache_type': 'final_results',
-                'config_attrs': base_config_attrs + ['risk_weights', 'exposition_weights']
-            },
-            '_classify_risk_levels': {
-                'cache_type': 'calculations',
-                'config_attrs': ['n_risk_classes']
-            }
         }
         
         return config
