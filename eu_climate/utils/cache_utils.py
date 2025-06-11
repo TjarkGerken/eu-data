@@ -16,7 +16,8 @@ from eu_climate.utils.cache_manager import get_cache_manager, CacheManager
 from eu_climate.utils.caching_wrappers import (
     cache_hazard_layer, 
     cache_exposition_layer, 
-    cache_risk_assessment
+    cache_risk_assessment,
+    cache_relevance_layer
 )
 from eu_climate.utils.utils import setup_logging
 
@@ -87,6 +88,23 @@ class CacheIntegrator:
             logger.info("Enabled caching for RiskAssessment")
             return cached_layer
         return self._cached_layers[id(risk_assessment)]
+        
+    def enable_caching_for_relevance_layer(self, relevance_layer):
+        """
+        Enable caching for a RelevanceLayer instance.
+        
+        Args:
+            relevance_layer: RelevanceLayer instance to wrap with caching
+            
+        Returns:
+            Cached version of the relevance layer
+        """
+        if id(relevance_layer) not in self._cached_layers:
+            cached_layer = cache_relevance_layer(relevance_layer)
+            self._cached_layers[id(relevance_layer)] = cached_layer
+            logger.info("Enabled caching for RelevanceLayer")
+            return cached_layer
+        return self._cached_layers[id(relevance_layer)]
         
     def print_cache_statistics(self):
         """Print comprehensive cache statistics."""
@@ -215,13 +233,14 @@ def initialize_caching(config=None) -> CacheIntegrator:
     return integrator
 
 
-def create_cached_layers(hazard_layer=None, exposition_layer=None, risk_assessment=None, config=None):
+def create_cached_layers(hazard_layer=None, exposition_layer=None, relevance_layer=None, risk_assessment=None, config=None):
     """
     Create cached versions of layer instances.
     
     Args:
         hazard_layer: Optional HazardLayer instance
         exposition_layer: Optional ExpositionLayer instance
+        relevance_layer: Optional RelevanceLayer instance
         risk_assessment: Optional RiskAssessment instance
         config: Project configuration
         
@@ -236,6 +255,9 @@ def create_cached_layers(hazard_layer=None, exposition_layer=None, risk_assessme
         
     if exposition_layer:
         cached_layers['exposition'] = integrator.enable_caching_for_exposition_layer(exposition_layer)
+        
+    if relevance_layer:
+        cached_layers['relevance'] = integrator.enable_caching_for_relevance_layer(relevance_layer)
         
     if risk_assessment:
         cached_layers['risk'] = integrator.enable_caching_for_risk_assessment(risk_assessment)

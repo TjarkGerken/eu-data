@@ -4,7 +4,7 @@ EU Climate Risk Assessment System
 =================================
 
 A comprehensive geospatial analysis tool for assessing climate risks in European regions.
-This system implements a three-layer approach: Hazard, Exposition, and Risk.
+This system implements a four-layer approach: Hazard, Exposition, Relevance, and Risk.
 
 Technical Implementation:
 - Robust and reproducible data processing pipeline
@@ -22,10 +22,12 @@ import os
 import sys
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
+from eu_climate.risk_layers.relevance_layer import RelevanceLayer
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.data_loading import get_config, upload_data, validate_env_vars
 from eu_climate.utils.cache_utils import initialize_caching, create_cached_layers, print_cache_status
+from eu_climate.utils.caching_wrappers import cache_relevance_layer
 import numpy as np
 import rasterio
 import rasterio.mask
@@ -73,6 +75,7 @@ class RiskAssessment:
         # Create layer instances
         self.hazard_layer = HazardLayer(config)
         self.exposition_layer = ExpositionLayer(config)
+        self.relevance_layer = RelevanceLayer(config)
         
         self._apply_caching()
         
@@ -89,6 +92,7 @@ class RiskAssessment:
             cached_layers = create_cached_layers(
                 hazard_layer=self.hazard_layer,
                 exposition_layer=self.exposition_layer,
+                relevance_layer=self.relevance_layer,
                 risk_assessment=self,
                 config=self.config
             )
@@ -98,6 +102,8 @@ class RiskAssessment:
                 self.hazard_layer = cached_layers['hazard']
             if 'exposition' in cached_layers:
                 self.exposition_layer = cached_layers['exposition']
+            if 'relevance' in cached_layers:
+                self.relevance_layer = cached_layers['relevance']
                 
             logger.info("Caching applied to risk assessment layers")
             
@@ -173,7 +179,32 @@ class RiskAssessment:
         # Export results
         hazard_layer.export_results(flood_extents)
     
-
+    def run_relevance_layer_analysis(self, config: ProjectConfig) -> None:
+        """
+        Run the Relevance Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+        """
+        logger.info("\n" + "="*40)
+        logger.info("RELEVANCE LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        # Apply caching if enabled
+        try:
+            cached_relevance_layer = cache_relevance_layer(self.relevance_layer)
+            self.relevance_layer = cached_relevance_layer
+        except Exception as e:
+            logger.warning(f"Could not apply caching to relevance layer: {e}")
+        
+        # Process relevance layer analysis
+        relevance_layers = self.relevance_layer.run_relevance_analysis(
+            visualize=True,
+            export_individual_tifs=True,
+            output_dir=config.output_dir
+        )
+        
+        logger.info(f"Relevance layer analysis completed - Generated {len(relevance_layers)} layers")
 
 def check_data_integrity(config: ProjectConfig) -> None:
     """Check data integrity and sync with remote repository if needed."""
@@ -256,7 +287,8 @@ def main():
     try:
         # Run the analysis
         # risk_assessment.run_hazard_layer_analysis(config)
-        risk_assessment.run_exposition(config)
+        #risk_assessment.run_exposition(config)
+        risk_assessment.run_relevance_layer_analysis(config)
         
         # Upload data after successful analysis (if enabled)
         logger.info("\n" + "="*40)

@@ -115,6 +115,31 @@ class CachingLayerWrapper:
             '_classify_risk_levels': {
                 'cache_type': 'calculations',
                 'config_attrs': ['n_risk_classes']
+            },
+            
+            # Relevance Layer Methods
+            'load_economic_datasets': {
+                'cache_type': 'calculations',
+                'input_files_attr': [],
+                'config_attrs': base_config_attrs
+            },
+            'load_nuts_shapefile': {
+                'cache_type': 'calculations',
+                'input_files_attr': [],
+                'config_attrs': base_config_attrs
+            },
+            'rasterize_nuts_regions': {
+                'cache_type': 'raster_data',
+                'config_attrs': base_config_attrs + ['target_resolution']
+            },
+            'load_and_process_economic_data': {
+                'cache_type': 'calculations',
+                'config_attrs': base_config_attrs
+            },
+            'calculate_relevance': {
+                'cache_type': 'final_results',
+                'input_files_attr': [],
+                'config_attrs': base_config_attrs + ['exposition_weights', 'relevance_weights']
             }
         }
         
@@ -189,12 +214,23 @@ class CachingLayerWrapper:
                     if file_path:
                         input_files.append(str(file_path))
             elif isinstance(input_files_attr, list):
-                # Multiple attributes
+                # Multiple attributes  
                 for attr in input_files_attr:
+                    # Try direct attribute first
                     if hasattr(self._wrapped_layer, attr):
                         file_path = getattr(self._wrapped_layer, attr)
                         if file_path:
                             input_files.append(str(file_path))
+                    # For nested attributes like config.data_dir
+                    elif '.' in attr and hasattr(self._wrapped_layer, 'config'):
+                        try:
+                            obj = self._wrapped_layer.config
+                            for part in attr.split('.')[1:]:  # Skip 'config' part
+                                obj = getattr(obj, part)
+                            if obj:
+                                input_files.append(str(obj))
+                        except AttributeError:
+                            pass
                             
         # Extract config parameters
         config_params = {}
@@ -248,6 +284,11 @@ def cache_exposition_layer(exposition_layer):
 def cache_risk_assessment(risk_assessment):
     """Apply caching specifically to RiskAssessment instance."""
     return apply_caching_to_layer(risk_assessment, 'risk')
+
+
+def cache_relevance_layer(relevance_layer):
+    """Apply caching specifically to RelevanceLayer instance."""
+    return apply_caching_to_layer(relevance_layer, 'relevance')
 
 
 class CacheAwareMethod:
