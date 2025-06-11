@@ -1,6 +1,184 @@
 # EU Climate Risk Assessment System
 
-A comprehensive geospatial analysis tool for assessing climate risks in European regions using a three-layer approach: **Hazard**, **Exposition**, and **Risk**.
+A comprehensive geospatial analysis tool for assessing climate risks in European regions using a four-layer approach: Hazard, Exposition, Relevance, and Risk.
+
+## System Architecture
+
+### Risk Assessment Layers
+
+1. **Hazard Layer** - Sea level rise and flood risk assessment
+2. **Exposition Layer** - Building density, population, and infrastructure exposure
+3. **Relevance Layer** - Economic importance and vulnerability factors
+4. **Risk Layer** - Integrated risk assessment combining all factors
+
+### Unified Visualization Framework
+
+The system implements a **unified visualization approach** ensuring consistency across all layers:
+
+#### Key Features
+- **Consistent Study Area Definition**: All layers use NUTS-L3 boundaries for spatial reference
+- **Scientific Publication Standards**: Minimalistic, professional styling suitable for academic publications
+- **Standardized Color Schemes**: 
+  - Elevation: `terrain` colormap
+  - Hazard: `Reds` colormap
+  - Exposition: `viridis` colormap
+  - Relevance: `inferno` colormap
+- **Unified Coordinate Handling**: Proper alignment and extent calculation across all layers
+- **Automated PNG Generation**: All layers automatically generate publication-ready PNG visualizations
+
+#### Implementation Details
+
+**LayerVisualizer Class** (`eu_climate/utils/visualization.py`):
+- Centralized visualization utilities
+- Consistent NUTS boundary overlays
+- Standardized statistics boxes and colorbars
+- Scientific styling configuration
+
+**ScientificStyle Configuration**:
+- Figure size: 12x8 inches at 300 DPI
+- Font family: sans-serif with consistent sizing
+- NUTS boundaries: Dark blue-gray (#2c3e50) with 0.8 width
+- Statistics boxes: White background with rounded corners
+
+### Spatial Consistency
+
+All layers now use **NUTS-L3 boundaries** as the primary spatial reference:
+
+1. **Hazard Layer**: Updated to use NUTS-L3 bounds instead of full DEM extent
+2. **Exposition Layer**: Already using NUTS-L3 bounds for consistency
+3. **Relevance Layer**: Uses exposition layer metadata for perfect spatial alignment
+
+This ensures:
+- Consistent study area coverage across all analyses
+- Proper spatial alignment for risk integration
+- Clean visualization boundaries matching administrative regions
+
+### Automated Output Generation
+
+Each layer automatically generates:
+- **GeoTIFF files**: For spatial analysis and further processing
+- **PNG visualizations**: Publication-ready figures with consistent styling
+- **Summary statistics**: Quantitative analysis results
+
+#### Usage Examples
+
+```python
+# Exposition Layer with PNG generation
+exposition_layer = ExpositionLayer(config)
+exposition_layer.run_exposition(create_png=True)
+
+# Hazard Layer with PNG generation
+hazard_layer = HazardLayer(config)
+flood_extents = hazard_layer.process_scenarios()
+hazard_layer.export_results(flood_extents, create_png=True)
+
+# Relevance Layer with unified visualization
+relevance_layer = RelevanceLayer(config)
+relevance_layers = relevance_layer.run_relevance_analysis(visualize=True)
+```
+
+### Best Practices
+
+#### Visualization Standards
+- Use unified LayerVisualizer for all new visualizations
+- Follow ScientificStyle configuration for consistency
+- Include NUTS boundary overlays for geographic context
+- Add statistics boxes for quantitative information
+
+#### Spatial Reference
+- Always use NUTS-L3 boundaries for study area definition
+- Ensure proper coordinate alignment using transformer utilities
+- Validate spatial consistency across layers before integration
+
+#### Code Quality
+- Follow naming conventions (no abbreviations, descriptive names)
+- Use type hints and docstrings for all public functions
+- Implement early returns to reduce nesting
+- Extract complex logic into well-named helper functions
+
+## Technical Implementation
+
+### Data Processing Pipeline
+- Robust ETL processes for harmonizing diverse datasets
+- Standardized cartographic projections (EPSG:3035)
+- Risk approximation based on climate data and normalization factors
+- Downsampling techniques for fine-grained spatial analysis (30m resolution)
+
+### Caching System
+- Intelligent caching for expensive computations
+- Cache-aware method decorators
+- Configurable cache invalidation strategies
+
+### Quality Assurance
+- Comprehensive data validation
+- Automated integrity checks
+- Error handling and logging throughout the pipeline
+
+## File Structure
+
+```
+eu_climate/
+├── config/           # Configuration management
+├── risk_layers/      # Core analysis layers
+│   ├── hazard_layer.py
+│   ├── exposition_layer.py
+│   ├── relevance_layer.py
+│   └── risk_layer.py
+├── utils/            # Shared utilities
+│   ├── visualization.py  # Unified visualization framework
+│   ├── conversion.py     # Spatial transformations
+│   └── utils.py         # General utilities
+├── data/             # Data directory (synced with HuggingFace)
+│   ├── source/       # Input datasets
+│   └── output/       # Generated results
+├── debug/            # Log files
+├── scripts/          # Data management scripts
+└── main.py          # Main execution entry point
+```
+
+## Getting Started
+
+1. **Initialize Configuration**:
+   ```python
+   from eu_climate.config.config import ProjectConfig
+   config = ProjectConfig()
+   ```
+
+2. **Run Complete Analysis**:
+   ```python
+   from eu_climate.main import RiskAssessment
+   risk_assessment = RiskAssessment(config)
+   # Individual layers with PNG generation
+   risk_assessment.run_hazard_layer_analysis(config)
+   risk_assessment.run_exposition(config)
+   risk_assessment.run_relevance_layer_analysis(config)
+   ```
+
+3. **Access Results**:
+   - GeoTIFF files: `data/output/*.tif`
+   - PNG visualizations: `data/output/*.png`
+   - Summary statistics: `data/output/*_summary.csv`
+
+## Dependencies
+
+- **Geospatial**: rasterio, geopandas, shapely
+- **Scientific Computing**: numpy, scipy, scikit-learn
+- **Visualization**: matplotlib
+- **Data Management**: pandas, huggingface_hub
+- **Configuration**: pydantic, python-dotenv
+
+## Contributing
+
+When adding new features:
+1. Use the unified LayerVisualizer for all visualizations
+2. Ensure NUTS-L3 spatial consistency
+3. Follow the established naming conventions
+4. Add comprehensive docstrings and type hints
+5. Update this README with any architectural changes
+
+## Authors
+
+EU Geolytics Team - Climate Risk Assessment Specialists
 
 ## 🎯 Project Overview
 
