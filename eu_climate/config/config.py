@@ -62,6 +62,9 @@ class ProjectConfig:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
+        # Store data management parameters
+        self.auto_download = self.config.get('auto_download', True)
+        
         # Store processing parameters
         self._set_resampling_method()
         self.smoothing_sigma = self.config['processing']['smoothing_sigma']

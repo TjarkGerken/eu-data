@@ -104,13 +104,15 @@ class ExpositionLayer:
     def normalize_ghs_built_c(self, data: np.ndarray) -> np.ndarray:
         """Normalize GHS Built-C using config-driven class weights."""
         class_weights = self.config.ghs_built_c_class_weights
-        max_class = int(np.nanmax(data))
-        lookup = np.zeros(max_class + 1)
-        for k, v in class_weights.items():
-            lookup[int(k)] = v
-        normalized = lookup[data.astype(int)]
-        logger.info(f"GHS Built-C normalization - Min: {np.nanmin(normalized)}, Max: {np.nanmax(normalized)}, Mean: {np.nanmean(normalized)}")
-        return normalized
+        highest_class_value = int(np.nanmax(data))
+        weight_lookup_table = np.zeros(highest_class_value + 1)
+        
+        for class_index, weight_value in class_weights.items():
+            weight_lookup_table[int(class_index)] = weight_value
+            
+        normalized_data = weight_lookup_table[data.astype(int)]
+        logger.info(f"GHS Built-C normalization - Min: {np.nanmin(normalized_data)}, Max: {np.nanmax(normalized_data)}, Mean: {np.nanmean(normalized_data)}")
+        return normalized_data
 
     def normalize_raster(self, data: np.ndarray) -> np.ndarray:
         """Normalize a raster to 0-1 based on min/max values, ignoring NaNs."""
@@ -132,7 +134,6 @@ class ExpositionLayer:
         
         # Use the first layer's transform as reference for all other layers
         reference_transform = meta['transform']
-        reference_crs = meta['crs']
         reference_shape = ghs_built_c.shape
         
         # Load other layers with the same transform

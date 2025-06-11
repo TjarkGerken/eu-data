@@ -109,13 +109,12 @@ def check_data_availability() -> bool:
     config = get_config()
     
     data_dir = config.data_dir
-    output_dir = config.output_dir
     
     if not data_dir.exists():
         logger.info(f"Data directory not found: {data_dir}")
         return False
     
-    # Check for some key files to ensure data is properly downloaded
+    
     key_files = [
         data_dir / config.config['file_paths']['dem_file'],
         data_dir / config.config['file_paths']['population_file']

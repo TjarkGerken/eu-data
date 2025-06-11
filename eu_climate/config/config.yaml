@@ -24,7 +24,7 @@ data:
     smoothing_sigma: 1.0
     target_crs: "EPSG:3035"
   caching:
-    enabled: true
+    enabled: false
     cache_dir: ".cache"
     max_cache_size_gb: 10
     auto_cleanup: true

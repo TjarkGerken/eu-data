@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import os
 
 from eu_climate.config.config import ProjectConfig
+from eu_climate.utils.data_loading import download_data
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.caching_wrappers import CacheAwareMethod, cache_calculation_method, cache_raster_method, cache_result_method
@@ -303,7 +304,12 @@ class RelevanceLayer:
         
         # Check if any datasets were loaded
         if not economic_data:
-            raise ValueError("No economic datasets could be loaded. Please check data paths and files.")
+            #  Use the dataloader to load the data from huggingface
+            if self.config.auto_download:
+                download_data()
+            else:
+                raise ValueError("No economic datasets could be loaded. Downloading from huggingface is disabled.")
+            
         
         # Load NUTS shapefile
         nuts_gdf = self.nuts_mapper.load_nuts_shapefile()
