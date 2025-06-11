@@ -1,7 +1,7 @@
 ---
 description: 
-globs: "**/*.py", "**/*.ts", "**/*.js", "**/*.cpp"
-alwaysApply: false
+globs: 
+alwaysApply: true
 ---
 # Naming Things Right
 

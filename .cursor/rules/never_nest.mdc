@@ -1,7 +1,7 @@
 ---
 description: 
-globs: "**/*.py", "**/*.ts", "**/*.js"
-alwaysApply: false
+globs: 
+alwaysApply: true
 ---
 # Never Nester Rule
 

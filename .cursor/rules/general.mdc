@@ -22,7 +22,7 @@ eu_climate
 Do not ever write any other summarising markdown files, than the central README.MD. 
 
 Make components scoped and resuable
-
+We are using windows systems. Use powershell commands not Linux.
 
 TL;DR - Golden Rules Code Commenting 
 Docstrings: Always use them for public functions, classes, and modules.

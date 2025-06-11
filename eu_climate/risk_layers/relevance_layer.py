@@ -67,15 +67,25 @@ class EconomicDataLoader:
         # Filter for Netherlands (NL) and NUTS L3 regions
         nl_data = df[df['geo'].str.startswith('NL') & df['geo'].str.len().eq(5)]
         
+        nl_data_mio = nl_data[nl_data["unit"].str.contains("MIO_EUR")].reset_index(drop=True)
+
+
         # Get latest available year
-        latest_year = nl_data['TIME_PERIOD'].max()
-        latest_data = nl_data[nl_data['TIME_PERIOD'] == latest_year]
+        latest_year = nl_data_mio['TIME_PERIOD'].max()
+        latest_data = nl_data_mio[nl_data_mio['TIME_PERIOD'] == latest_year]
         
         # Clean and standardize
-        processed = latest_data[['geo', 'OBS_VALUE']].copy()
-        processed.columns = ['nuts_code', 'gdp_value']
+        processed = latest_data[['geo', 'OBS_VALUE', 'unit', 'Geopolitical entity (reporting)']].copy()
+        processed.columns = ['nuts_code', 'gdp_value', 'unit', 'region']
         processed['gdp_value'] = pd.to_numeric(processed['gdp_value'], errors='coerce')
-        processed = processed.dropna()
+
+        if processed.isna().any().any():
+            logger.warning("NAN values in GDP data")
+            len_before = len(processed)
+            processed = processed.dropna()
+            len_after = len(processed)
+            logger.warning(f"Dropped {len_before - len_after} NAN values in GDP data")
+
         
         logger.info(f"Processed GDP data: {len(processed)} regions for year {latest_year}")
         return processed
@@ -90,10 +100,14 @@ class EconomicDataLoader:
         latest_data = nl_data[nl_data['TIME_PERIOD'] == latest_year]
         
         # Aggregate by NUTS region (sum across all goods categories)
-        aggregated = latest_data.groupby('geo')['OBS_VALUE'].sum().reset_index()
+        aggregated = latest_data.groupby('geo').agg({
+            'OBS_VALUE': 'sum',
+            'unit': 'first', 
+            'Geopolitical entity (reporting)': 'first'
+        }).reset_index()
         
         # Clean and standardize
-        aggregated.columns = ['nuts_code', 'freight_value']
+        aggregated.columns = ['nuts_code', 'freight_value', 'unit', 'region']
         aggregated['freight_value'] = pd.to_numeric(aggregated['freight_value'], errors='coerce')
         aggregated = aggregated.dropna()
         
@@ -130,11 +144,18 @@ class NUTSDataMapper:
         
         # Determine NUTS code column in shapefile
         nuts_code_col = None
+
+        loading_nuts_mapping_path = os.path.join(self.config.data_dir, "Mapping_NL_NUTS_2021_2024.xlsx")
+
+        mapping_df = pd.read_excel(loading_nuts_mapping_path)
+
+
         for col in ['NUTS_ID', 'nuts_id', 'geo', 'GEOCODE']:
             if col in result_gdf.columns:
                 nuts_code_col = col
                 break
-                
+        
+
         if nuts_code_col is None:
             raise ValueError("Could not find NUTS code column in shapefile")
             
@@ -147,16 +168,20 @@ class NUTSDataMapper:
             # Create a copy and rename the value column to be dataset-specific
             df_renamed = df.copy()
             
-            # Map original column names to dataset-specific names
             if 'gdp_value' in df_renamed.columns:
-                # GDP dataset keeps its name
                 pass
             elif 'freight_value' in df_renamed.columns:
-                # Freight datasets get renamed based on dataset name
                 df_renamed = df_renamed.rename(columns={
                     'freight_value': f'{dataset_name}_value'
                 })
-            
+
+            for idx, row in df_renamed.iterrows():
+                if row['nuts_code'] in mapping_df[2021].values:
+                    mapping_idx = mapping_df.index[mapping_df[2021] == row['nuts_code']].tolist()
+                    if mapping_idx:
+                        df_renamed.at[idx, 'nuts_code'] = mapping_df.at[mapping_idx[0], 2024]
+
+ 
             # Perform the merge
             result_gdf = result_gdf.merge(
                 df_renamed, 
@@ -288,7 +313,8 @@ class RelevanceLayer:
         self.nuts_mapper = NUTSDataMapper(config)
         self.transformer = RasterTransformer(
             target_crs=config.target_crs,
-            target_resolution=30.0
+            target_resolution=30.0,
+            config=config
         )
         self.distributor = EconomicDistributor(config, self.transformer)
         
@@ -436,20 +462,31 @@ class RelevanceLayer:
             logger.info(f"Saved {layer_name} relevance layer to {output_path}")
     
     def visualize_relevance_layers(self, relevance_layers: Dict[str, np.ndarray], 
-                                 save_plots: bool = True, output_dir: Optional[Path] = None):
-        """Create and save visualization plots for each relevance layer."""
+                                 meta: dict = None,
+                                 save_plots: bool = True,
+                                 plot_labels:bool = False,
+                                 output_dir: Optional[Path] = None):
+        """Create and save visualization plots for each relevance layer with NUTS overlay and region labels."""
         if output_dir is None:
             output_dir = self.config.output_dir
             
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
+        # Load NUTS shapefile for overlay
+        try:
+            nuts_economic_gdf = self.load_and_process_economic_data()
+            logger.info(f"Loaded NUTS shapefile with economic data: {len(nuts_economic_gdf)} regions for overlay and labeling")
+        except Exception as e:
+            logger.warning(f"Could not load NUTS shapefile with economic data for overlay: {e}")
+            nuts_economic_gdf = None
+        
         # Define titles and colormaps for each layer
         layer_configs = {
-            'gdp': {'title': 'GDP Economic Relevance', 'cmap': 'viridis'},
-            'freight_loading': {'title': 'Freight Loading Economic Relevance', 'cmap': 'plasma'},
+            'gdp': {'title': 'GDP Economic Relevance', 'cmap': 'inferno'},
+            'freight_loading': {'title': 'Freight Loading Economic Relevance', 'cmap': 'inferno'},
             'freight_unloading': {'title': 'Freight Unloading Economic Relevance', 'cmap': 'inferno'},
-            'combined': {'title': 'Combined Economic Relevance', 'cmap': 'magma'}
+            'combined': {'title': 'Combined Economic Relevance', 'cmap': 'inferno'}
         }
         
         for layer_name, data in relevance_layers.items():
@@ -458,14 +495,41 @@ class RelevanceLayer:
                 
             config = layer_configs[layer_name]
             
-            # Create figure
-            plt.figure(figsize=self.config.figure_size, dpi=self.config.dpi)
+            # Create figure with subplot for proper axis control
+            fig, ax = plt.subplots(figsize=self.config.figure_size, dpi=self.config.dpi)
             
-            # Create plot
-            im = plt.imshow(data, cmap=config['cmap'], aspect='equal')
-            plt.colorbar(im, label='Economic Relevance Index (0-1)', shrink=0.6)
-            plt.title(config['title'], fontsize=14, fontweight='bold')
-            plt.axis('off')
+            # Get raster extent for proper coordinate alignment
+            extent = self._get_raster_extent(data, meta)
+            
+            # Create the main raster plot
+            im = ax.imshow(data, cmap=config['cmap'], aspect='equal', extent=extent)
+            
+            # Add NUTS overlay and labels if available
+            if nuts_economic_gdf is not None:
+                try:
+                    # Plot NUTS boundaries with bright cyan outline for better visibility
+                    nuts_economic_gdf.boundary.plot(
+                        ax=ax, 
+                        color='cyan',  # Bright cyan outline - more visible across different colormaps
+                        linewidth=0.3,  # Slightly thicker for better visibility
+                        alpha=0.95,
+                        zorder=10,  # Ensure it's on top
+                        linestyle='--'  # Solid line
+                    )
+                    
+                    if plot_labels:
+                        self._add_nuts_labels(ax, nuts_economic_gdf)
+                    
+                    logger.debug(f"Added NUTS overlay and labels to {layer_name} plot")
+                except Exception as e:
+                    logger.warning(f"Could not add NUTS overlay and labels to {layer_name}: {e}")
+            
+            # Add colorbar
+            cbar = plt.colorbar(im, ax=ax, label='Economic Relevance Index (0-1)', shrink=0.6)
+            
+            # Set title
+            ax.set_title(config['title'], fontsize=14, fontweight='bold')
+            ax.axis('off')
             
             # Add statistics text
             valid_data = data[data > 0]
@@ -473,17 +537,106 @@ class RelevanceLayer:
                 stats_text = (f'Min: {np.min(valid_data):.3f}\n'
                             f'Max: {np.max(valid_data):.3f}\n'
                             f'Mean: {np.mean(valid_data):.3f}')
-                plt.text(0.02, 0.98, stats_text, transform=plt.gca().transAxes,
-                        verticalalignment='top', bbox=dict(boxstyle='round', 
-                        facecolor='white', alpha=0.8))
+                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+                       verticalalignment='top', bbox=dict(boxstyle='round', 
+                       facecolor='white', alpha=0.8))
             
             if save_plots:
                 # Save as PNG for visualization
                 plot_path = output_dir / f"relevance_{layer_name}_plot.png"
                 plt.savefig(plot_path, bbox_inches='tight', dpi=self.config.dpi)
-                logger.info(f"Saved {layer_name} plot to {plot_path}")
+                logger.info(f"Saved {layer_name} plot with NUTS overlay and labels to {plot_path}")
                 
             plt.close()
+
+    def _add_nuts_labels(self, ax, nuts_gdf: gpd.GeoDataFrame):
+        """Add NUTS code and region name labels to the plot at polygon centroids."""
+        # Determine the NUTS code column
+        nuts_code_col = None
+        for col in ['NUTS_ID', 'nuts_id', 'geo', 'GEOCODE']:
+            if col in nuts_gdf.columns:
+                nuts_code_col = col
+                break
+        
+        if nuts_code_col is None:
+            logger.warning("Could not find NUTS code column for labeling")
+            return
+            
+        # Determine region name column (prefer original shapefile column if available, otherwise use merged 'region')
+        region_name_col = None
+        for col in ['NAME_LATN', 'NUTS_NAME', 'region']:
+            if col in nuts_gdf.columns:
+                region_name_col = col
+                break
+                
+        if region_name_col is None:
+            logger.warning("Could not find region name column for labeling")
+            region_name_col = nuts_code_col  # Fallback to just showing codes
+        
+        logger.debug(f"Using NUTS code column: {nuts_code_col}, region name column: {region_name_col}")
+        
+        # Add labels at polygon centroids
+        for idx, row in nuts_gdf.iterrows():
+            try:
+                # Calculate centroid for label placement
+                centroid = row.geometry.centroid
+                
+                # Get NUTS code and region name
+                nuts_code = str(row[nuts_code_col])
+                region_name = str(row[region_name_col]) if region_name_col != nuts_code_col else ""
+                
+                # Create label text
+                if region_name and region_name != nuts_code and region_name.lower() != 'nan':
+                    # Truncate long region names for better readability
+                    if len(region_name) > 15:
+                        region_name = region_name[:12] + "..."
+                    label_text = f"{nuts_code}\n{region_name}"
+                else:
+                    label_text = nuts_code
+                
+                # Add text annotation with background for better readability
+                ax.annotate(
+                    label_text,
+                    xy=(centroid.x, centroid.y),
+                    xytext=(0, 0),
+                    textcoords='offset points',
+                    ha='center',
+                    va='center',
+                    fontsize=8,
+                    fontweight='bold',
+                    color='white',
+                    bbox=dict(
+                        boxstyle='round,pad=0.3',
+                        facecolor='black',
+                        alpha=0.7,
+                        edgecolor='white',
+                        linewidth=0.5
+                    ),
+                    zorder=15  # Ensure labels are on top of everything
+                )
+                
+            except Exception as e:
+                logger.debug(f"Could not add label for region {row.get(nuts_code_col, 'unknown')}: {e}")
+                continue
+    
+    def _get_raster_extent(self, data: np.ndarray, meta: dict = None) -> Tuple[float, float, float, float]:
+        """Get raster extent for proper plotting coordinate alignment."""
+        if meta is not None and 'transform' in meta:
+            # Use actual geospatial transform for proper coordinate alignment
+            transform = meta['transform']
+            height, width = data.shape
+            
+            # Calculate bounds using affine transform
+            left = transform.c
+            right = left + width * transform.a
+            top = transform.f  
+            bottom = top + height * transform.e
+            
+            return (left, right, bottom, top)
+        else:
+            # Fallback to simple pixel coordinates
+            height, width = data.shape
+            return (0, width, 0, height)
     
     def run_relevance_analysis(self, visualize: bool = True, 
                              export_individual_tifs: bool = True,
@@ -498,9 +651,9 @@ class RelevanceLayer:
         if export_individual_tifs:
             self.save_relevance_layers(relevance_layers, meta, output_dir)
             
-        # Create visualizations
+        # Create visualizations with metadata for proper coordinate alignment
         if visualize:
-            self.visualize_relevance_layers(relevance_layers, True, output_dir)
+            self.visualize_relevance_layers(relevance_layers, meta, output_dir=output_dir)
             
         logger.info("Completed relevance layer analysis")
         return relevance_layers
