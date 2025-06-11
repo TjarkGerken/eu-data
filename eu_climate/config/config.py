@@ -66,6 +66,7 @@ class ProjectConfig:
         self._set_resampling_method()
         self.smoothing_sigma = self.config['processing']['smoothing_sigma']
         self.target_crs = self.config['processing']['target_crs']
+        self.target_resolution = 30.0  # 30m resolution for all layers
         
         # Store risk assessment parameters
         self.n_risk_classes = self.config['risk_assessment']['n_risk_classes']
@@ -73,6 +74,13 @@ class ProjectConfig:
         self.ghs_built_c_class_weights = self.config['risk_assessment']['ghs_built_c_class_weights']
         # Store exposition weights
         self.exposition_weights = self.config['exposition']
+        
+        # Store relevance weights
+        self.relevance_weights = self.config.get('relevance', {}).get('economic_datasets', {
+            'gdp': 0.4,
+            'freight_loading': 0.3,
+            'freight_unloading': 0.3
+        })
         
         # Store building parameters
         self.base_floor_height = self.config['building']['base_floor_height']

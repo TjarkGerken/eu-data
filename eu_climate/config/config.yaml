@@ -40,6 +40,16 @@ data:
     ghs_built_c_weight: 0.2
     ghs_built_v_weight: 0.4
     population_weight: 0.4
+  relevance:
+    economic_datasets:
+      gdp_weight: 0.4
+      freight_loading_weight: 0.3
+      freight_unloading_weight: 0.3
+    nuts_level: "L3"
+    economic_variables:
+      - "gdp"
+      - "freight_loading"
+      - "freight_unloading"
   risk_assessment:
     n_risk_classes: 5
     weights:
