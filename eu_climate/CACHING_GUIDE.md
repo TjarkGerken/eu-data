@@ -111,11 +111,6 @@ The following methods are automatically cached when the system is enabled:
 - `normalize_ghs_built_c()` - GHS Built-C normalization
 - `normalize_raster()` - General raster normalization
 
-#### RiskAssessment
-- `prepare_data()` - Data preparation
-- `calculate_integrated_risk()` - Risk calculation
-- `_classify_risk_levels()` - Risk classification
-
 ## Cache Management
 
 ### Command Line Interface
