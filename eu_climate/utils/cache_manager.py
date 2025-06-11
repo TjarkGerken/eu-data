@@ -79,10 +79,53 @@ class CacheManager:
         logger.info(f"Cache enabled: {self.enabled}")
         
     def _get_cache_config(self, key: str, default: Any) -> Any:
-        """Get cache configuration value with fallback to default."""
-        if self.config and hasattr(self.config, 'config'):
-            return self.config.config.get('caching', {}).get(key, default)
-        return default
+        """Get cache configuration value from YAML config."""
+        
+        # Debug logging to understand what we're working with
+        logger.info(f"DEBUG: Attempting to get cache config for key '{key}'")
+        logger.info(f"DEBUG: self.config type: {type(self.config)}")
+        logger.info(f"DEBUG: self.config: {self.config}")
+        
+        if self.config is None:
+            raise ValueError(f"No configuration provided to CacheManager, cannot get cache config for '{key}'")
+        
+        # Check if config is ProjectConfig instance
+        if hasattr(self.config, 'config'):
+            logger.info(f"DEBUG: Found config.config attribute, type: {type(self.config.config)}")
+            logger.info(f"DEBUG: config.config contents: {self.config.config}")
+            
+            yaml_config = self.config.config
+            if 'caching' not in yaml_config:
+                raise ValueError(f"'caching' section not found in YAML config. Available keys: {list(yaml_config.keys())}")
+            
+            caching_config = yaml_config['caching']
+            logger.info(f"DEBUG: Found caching config: {caching_config}")
+            
+            if key not in caching_config:
+                raise ValueError(f"Cache config key '{key}' not found. Available keys: {list(caching_config.keys())}")
+            
+            value = caching_config[key]
+            logger.info(f"Successfully retrieved cache config '{key}': {value}")
+            return value
+        
+        # Check if config is direct dict
+        elif isinstance(self.config, dict):
+            logger.info(f"DEBUG: Config is direct dict")
+            if 'caching' not in self.config:
+                raise ValueError(f"'caching' section not found in config dict. Available keys: {list(self.config.keys())}")
+            
+            caching_config = self.config['caching']
+            logger.info(f"DEBUG: Found caching config: {caching_config}")
+            
+            if key not in caching_config:
+                raise ValueError(f"Cache config key '{key}' not found. Available keys: {list(caching_config.keys())}")
+            
+            value = caching_config[key]
+            logger.info(f"Successfully retrieved cache config '{key}': {value}")
+            return value
+        
+        else:
+            raise ValueError(f"Invalid config type: {type(self.config)}. Expected ProjectConfig instance or dict with 'caching' section.")
         
     def generate_cache_key(self, 
                           function_name: str,
@@ -369,7 +412,12 @@ def cached_method(cache_type: str = 'calculations',
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
-            cache_manager = get_cache_manager()
+            # Get config from self object if available
+            config = None
+            if args and hasattr(args[0], 'config'):
+                config = args[0].config
+                
+            cache_manager = get_cache_manager(config)
             
             if not cache_manager.enabled:
                 return func(*args, **kwargs)

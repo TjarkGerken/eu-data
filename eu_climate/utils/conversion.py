@@ -24,7 +24,7 @@ class RasterTransformer:
     Ensures consistent coordinate transformations and grid alignment across different layers.
     """
     
-    def __init__(self, target_crs: str = "EPSG:3035", target_resolution: float = 30.0, intermediate_crs: str = "ESRI:54009"):
+    def __init__(self, target_crs: str = "EPSG:3035", target_resolution: float = 30.0, intermediate_crs: str = "ESRI:54009", config=None):
         """
         Initialize the RasterTransformer.
         
@@ -32,11 +32,12 @@ class RasterTransformer:
             target_crs: Target coordinate reference system (default: EPSG:3035)
             target_resolution: Target resolution in meters (default: 30m)
             intermediate_crs: Intermediate CRS for two-step transformations (default: ESRI:54009)
+            config: Configuration object for cache manager
         """
         self.target_crs = rasterio.crs.CRS.from_string(target_crs)
         self.target_resolution = target_resolution
         self.intermediate_crs = rasterio.crs.CRS.from_string(intermediate_crs)
-        self._cache_manager = get_cache_manager()
+        self._cache_manager = get_cache_manager(config)
         
     def get_reference_bounds(self, reference_path: Union[str, Path]) -> Tuple[float, float, float, float]:
         """

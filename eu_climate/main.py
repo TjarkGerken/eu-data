@@ -287,7 +287,7 @@ def main():
     try:
         # Run the analysis
         # risk_assessment.run_hazard_layer_analysis(config)
-        #risk_assessment.run_exposition(config)
+        risk_assessment.run_exposition(config)
         risk_assessment.run_relevance_layer_analysis(config)
         
         # Upload data after successful analysis (if enabled)

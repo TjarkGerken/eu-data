@@ -127,10 +127,10 @@ Use the cache management CLI for cache operations:
 python eu_climate/scripts/cache_manager_cli.py --stats
 
 # Clear all cache data
-python eu_climate/scripts/cache_manager_cli.py --clear all
+python -m eu_climate.scripts.cache_manager_cli --clear all
 
 # Clear specific cache type
-python eu_climate/scripts/cache_manager_cli.py --clear raster_data
+python -m eu_climate.scripts.cache_manager_cli --clear raster_data
 
 # Remove files older than 7 days
 python eu_climate/scripts/cache_manager_cli.py --cleanup 7
