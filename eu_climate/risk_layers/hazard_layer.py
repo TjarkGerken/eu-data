@@ -12,6 +12,8 @@ import matplotlib.colors as mcolors
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
+from eu_climate.utils.visualization import LayerVisualizer
+from pathlib import Path
 
 
 
@@ -29,6 +31,7 @@ class SeaLevelScenario:
     def get_default_scenarios(cls) -> List['SeaLevelScenario']:
         """Returns the default set of sea level rise scenarios."""
         return [
+            cls("Current", 0.0, "Current sea level - todays scenario"),
             cls("Conservative", 1.0, "1m sea level rise - conservative scenario"),
             cls("Moderate", 2.0, "2m sea level rise - moderate scenario"),
             cls("Severe", 3.0, "3m sea level rise - severe scenario")
@@ -69,6 +72,9 @@ class HazardLayer:
             config=self.config
         )
         
+        # Initialize visualizer for unified styling
+        self.visualizer = LayerVisualizer(self.config)
+        
         # Validate files exist
         for path in [self.dem_path, self.river_segments_path, self.river_nodes_path]:
             if not path.exists():
@@ -90,18 +96,25 @@ class HazardLayer:
             - Land mass mask (1=land, 0=water)
         """
         logger.info("Loading DEM data...")
-        # Load DEM as the reference grid
+        
+        # Get reference bounds from NUTS-L3 for consistency with other layers
+        nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+        reference_bounds = self.transformer.get_reference_bounds(nuts_l3_path)
+        
+        # Load DEM using NUTS-L3 bounds for consistent study area
         dem_data, transform, crs = self.transformer.transform_raster(
             self.dem_path,
-            reference_bounds=None,  # Do not use shapefile bounds
+            reference_bounds=reference_bounds,
             resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
         )
-        # Load and align land mass raster to DEM grid
+        
+        # Load and align land mass raster to DEM grid using same bounds
         land_mass_data, land_transform, _ = self.transformer.transform_raster(
             self.config.land_mass_path,
-            reference_bounds=None,  # Do not use shapefile bounds
+            reference_bounds=reference_bounds,
             resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
         )
+        
         if not self.transformer.validate_alignment(land_mass_data, land_transform, dem_data, transform):
             land_mass_data = self.transformer.ensure_alignment(
                 land_mass_data, land_transform, transform, dem_data.shape,
@@ -228,7 +241,7 @@ class HazardLayer:
                 self.load_river_data()
                 
             # Create a raster representation of the river network
-            river_raster = self._rasterize_river_network(dem_data.shape)
+            river_raster = self._rasterize_river_network(dem_data.shape, transform)
             
             # Enhance flood risk near rivers based on elevation and distance
             river_buffer = ndimage.distance_transform_edt(~river_raster)
@@ -287,20 +300,20 @@ class HazardLayer:
         
         return binary_risk.astype(np.uint8)
     
-    def _rasterize_river_network(self, shape: Tuple[int, int]) -> np.ndarray:
+    def _rasterize_river_network(self, shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
         """Convert river network to raster format."""
         river_raster = rasterio.features.rasterize(
             [(geom, 1) for geom in self.river_network.geometry],
             out_shape=shape,
-            transform=self.transform,
+            transform=transform,
             dtype=np.uint8
         )
         return river_raster
     
-    def calculate_river_distance(self, shape: Tuple[int, int]) -> np.ndarray:
+    def calculate_river_distance(self, shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
         """Calculate distance to nearest river for each pixel."""
-        river_raster = self._rasterize_river_network(shape)
-        return ndimage.distance_transform_edt(~river_raster) * self.transform[0]
+        river_raster = self._rasterize_river_network(shape, transform)
+        return ndimage.distance_transform_edt(~river_raster) * transform[0]
     
     def process_scenarios(self, custom_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
@@ -556,7 +569,7 @@ class HazardLayer:
                     color='skyblue', edgecolor='black', zorder=1)
             
             # Add vertical lines for each scenario
-            colors = ['green', 'orange', 'red']
+            colors = ['green', 'orange', 'red', 'cyan']
             for i, scenario_name in enumerate(scenarios):
                 scenario = flood_extents[scenario_name]['scenario']
                 ax6.axvline(scenario.rise_meters, color=colors[i], linestyle='--', 
@@ -672,12 +685,54 @@ class HazardLayer:
             logger.warning(f"Could not add NUTS overlay: {str(e)}")
             return
     
-    def export_results(self, flood_extents: Dict[str, np.ndarray]) -> None:
+    def create_png_visualizations(self, flood_extents: Dict[str, np.ndarray], 
+                                 output_dir: Optional[Path] = None) -> None:
+        """Create PNG visualizations for each hazard scenario using unified styling."""
+        if output_dir is None:
+            output_dir = self.config.output_dir
+            
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info("Creating PNG visualizations for hazard scenarios...")
+        
+        for scenario_name, flood_data in flood_extents.items():
+            flood_mask = flood_data['flood_mask']
+            transform = flood_data['transform']
+            crs = flood_data['crs']
+            scenario = flood_data['scenario']
+            dem_data = flood_data['dem_data']
+            
+            # Create metadata for visualization
+            meta = {
+                'crs': crs,
+                'transform': transform,
+                'height': flood_mask.shape[0],
+                'width': flood_mask.shape[1],
+                'dtype': 'uint8'
+            }
+            
+            # Create output path
+            png_path = output_dir / f"hazard_{scenario_name.lower()}_scenario.png"
+            
+            # Use unified visualizer for consistent styling
+            self.visualizer.visualize_hazard_scenario(
+                flood_mask=flood_mask,
+                dem_data=dem_data,
+                meta=meta,
+                scenario=scenario,
+                output_path=png_path
+            )
+            
+            logger.info(f"Saved {scenario_name} hazard scenario PNG to {png_path}")
+
+    def export_results(self, flood_extents: Dict[str, np.ndarray], create_png: bool = True) -> None:
         """
         Export hazard assessment results to files for further analysis.
         
         Args:
             flood_extents: Dictionary of flood extent results
+            create_png: Whether to create PNG visualizations for each scenario
         """
         logger.info("Exporting hazard assessment results...")
         
@@ -732,6 +787,9 @@ class HazardLayer:
         summary_path = self.config.output_dir / "hazard_assessment_summary.csv"
         summary_df.to_csv(summary_path, index=False)
         logger.info(f"Exported summary statistics to: {summary_path}")
+
+        if create_png:
+            self.create_png_visualizations(flood_extents)
 
 
 

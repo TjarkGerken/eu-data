@@ -16,6 +16,7 @@ from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.caching_wrappers import CacheAwareMethod, cache_calculation_method, cache_raster_method, cache_result_method
+from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 
 logger = setup_logging(__name__)
@@ -320,6 +321,9 @@ class RelevanceLayer:
         # Initialize exposition layer
         self.exposition_layer = ExpositionLayer(config)
         
+        # Initialize visualizer for unified styling
+        self.visualizer = LayerVisualizer(config)
+        
         logger.info("Initialized Relevance Layer")
     
     def load_and_process_economic_data(self) -> gpd.GeoDataFrame:
@@ -346,8 +350,11 @@ class RelevanceLayer:
         # Load and process economic data
         nuts_economic_gdf = self.load_and_process_economic_data()
         
-        # Get exposition layer
+        # Get exposition layer (now properly masked to study area)
         exposition_data, exposition_meta = self.exposition_layer.calculate_exposition()
+        logger.info(f"Using exposition layer for spatial distribution - "
+                   f"Min: {np.nanmin(exposition_data)}, Max: {np.nanmax(exposition_data)}, "
+                   f"Non-zero pixels: {np.sum(exposition_data > 0)}")
         
         # Determine which economic variables are available from the loaded data
         available_economic_columns = [col for col in nuts_economic_gdf.columns if col.endswith('_value')]
@@ -368,7 +375,7 @@ class RelevanceLayer:
                 nuts_economic_gdf, exposition_meta, variable
             )
             
-            # Distribute using exposition layer
+            # Distribute using exposition layer (which is now properly masked)
             distributed_raster = self.distributor.distribute_with_exposition(
                 economic_raster, exposition_data
             )
@@ -402,6 +409,10 @@ class RelevanceLayer:
         relevance_layers['combined'] = combined_relevance
         
         logger.info("Completed relevance layer calculation")
+        logger.info(f"Final combined relevance layer - "
+                   f"Min: {np.nanmin(combined_relevance)}, Max: {np.nanmax(combined_relevance)}, "
+                   f"Non-zero pixels: {np.sum(combined_relevance > 0)}")
+        
         return relevance_layers, exposition_meta
     
     def _normalize_economic_layer(self, data: np.ndarray) -> np.ndarray:
@@ -460,88 +471,29 @@ class RelevanceLayer:
                                  save_plots: bool = True,
                                  plot_labels:bool = False,
                                  output_dir: Optional[Path] = None):
-        """Create and save visualization plots for each relevance layer with NUTS overlay and region labels."""
+        """Create and save visualization plots for each relevance layer using unified styling."""
         if output_dir is None:
             output_dir = self.config.output_dir
             
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Load NUTS shapefile for overlay
-        try:
-            nuts_economic_gdf = self.load_and_process_economic_data()
-            logger.info(f"Loaded NUTS shapefile with economic data: {len(nuts_economic_gdf)} regions for overlay and labeling")
-        except Exception as e:
-            logger.warning(f"Could not load NUTS shapefile with economic data for overlay: {e}")
-            nuts_economic_gdf = None
-        
-        # Define titles and colormaps for each layer
-        layer_configs = {
-            'gdp': {'title': 'GDP Economic Relevance', 'cmap': 'inferno'},
-            'freight_loading': {'title': 'Freight Loading Economic Relevance', 'cmap': 'inferno'},
-            'freight_unloading': {'title': 'Freight Unloading Economic Relevance', 'cmap': 'inferno'},
-            'combined': {'title': 'Combined Economic Relevance', 'cmap': 'inferno'}
-        }
+        logger.info("Creating relevance layer visualizations using unified styling...")
         
         for layer_name, data in relevance_layers.items():
-            if layer_name not in layer_configs:
-                continue
-                
-            config = layer_configs[layer_name]
-            
-            # Create figure with subplot for proper axis control
-            fig, ax = plt.subplots(figsize=self.config.figure_size, dpi=self.config.dpi)
-            
-            # Get raster extent for proper coordinate alignment
-            extent = self._get_raster_extent(data, meta)
-            
-            # Create the main raster plot
-            im = ax.imshow(data, cmap=config['cmap'], aspect='equal', extent=extent)
-            
-            # Add NUTS overlay and labels if available
-            if nuts_economic_gdf is not None:
-                try:
-                    # Plot NUTS boundaries with bright cyan outline for better visibility
-                    nuts_economic_gdf.boundary.plot(
-                        ax=ax, 
-                        color='cyan',  # Bright cyan outline - more visible across different colormaps
-                        linewidth=0.3,  # Slightly thicker for better visibility
-                        alpha=0.95,
-                        zorder=10,  # Ensure it's on top
-                        linestyle='--'  # Solid line
-                    )
-                    
-                    if plot_labels:
-                        self._add_nuts_labels(ax, nuts_economic_gdf)
-                    
-                    logger.debug(f"Added NUTS overlay and labels to {layer_name} plot")
-                except Exception as e:
-                    logger.warning(f"Could not add NUTS overlay and labels to {layer_name}: {e}")
-            
-            # Add colorbar
-            cbar = plt.colorbar(im, ax=ax, label='Economic Relevance Index (0-1)', shrink=0.6)
-            
-            # Set title
-            ax.set_title(config['title'], fontsize=14, fontweight='bold')
-            ax.axis('off')
-            
-            # Add statistics text
-            valid_data = data[data > 0]
-            if len(valid_data) > 0:
-                stats_text = (f'Min: {np.min(valid_data):.3f}\n'
-                            f'Max: {np.max(valid_data):.3f}\n'
-                            f'Mean: {np.mean(valid_data):.3f}')
-                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
-                       verticalalignment='top', bbox=dict(boxstyle='round', 
-                       facecolor='white', alpha=0.8))
-            
             if save_plots:
-                # Save as PNG for visualization
+                # Create output path
                 plot_path = output_dir / f"relevance_{layer_name}_plot.png"
-                plt.savefig(plot_path, bbox_inches='tight', dpi=self.config.dpi)
-                logger.info(f"Saved {layer_name} plot with NUTS overlay and labels to {plot_path}")
                 
-            plt.close()
+                # Use unified visualizer for consistent styling
+                self.visualizer.visualize_relevance_layer(
+                    data=data,
+                    meta=meta,
+                    layer_name=layer_name,
+                    output_path=plot_path
+                )
+                
+                logger.info(f"Saved {layer_name} relevance layer PNG to {plot_path}")
 
     def _add_nuts_labels(self, ax, nuts_gdf: gpd.GeoDataFrame):
         """Add NUTS code and region name labels to the plot at polygon centroids."""
