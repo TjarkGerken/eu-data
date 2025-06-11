@@ -24,7 +24,7 @@ data:
     smoothing_sigma: 1.0
     target_crs: "EPSG:3035"
   caching:
-    enabled: true
+    enabled: false
     cache_dir: ".cache"
     max_cache_size_gb: 10
     auto_cleanup: true
@@ -62,11 +62,11 @@ data:
       3: 0.0 # open spaces, high vegetation
       4: 0.0 # water surfaces
       5: 0.1 # road surfaces
-      11: 0.3 # residential, <=3m
-      12: 0.4 # residential, 3-6m
-      13: 0.5 # residential, 6-15m
-      14: 0.7 # residential, 15-30m
-      15: 1.0 # residential, >30m
+      11: 0.1 # residential, <=3m
+      12: 0.2 # residential, 3-6m
+      13: 0.3 # residential, 6-15m
+      14: 0.4 # residential, 15-30m
+      15: 0.5 # residential, >30m
       21: 0.1 # non-residential, <=3m
       22: 0.2 # non-residential, 3-6m
       23: 0.3 # non-residential, 6-15m

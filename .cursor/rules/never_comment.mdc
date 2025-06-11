@@ -1,7 +1,7 @@
 ---
 description: 
-globs: "**/*.py", "**/*.ts", "**/*.js", "**/*.cpp"
-alwaysApply: false
+globs: 
+alwaysApply: true
 ---
 ---
 description: "Avoid unnecessary comments. Use expressive code, types, and naming instead."
