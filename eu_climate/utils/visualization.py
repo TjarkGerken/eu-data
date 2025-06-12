@@ -252,21 +252,63 @@ class LayerVisualizer:
         plt.close()
     
     def visualize_hazard_scenario(self, flood_mask: np.ndarray, dem_data: np.ndarray, 
-                                meta: dict, scenario, output_path: Optional[Path] = None) -> None:
+                                meta: dict, scenario, output_path: Optional[Path] = None,
+                                land_mask: Optional[np.ndarray] = None) -> None:
         """Create standardized hazard scenario visualization."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
         extent = self.get_raster_extent(flood_mask, meta)
         
+        # Calculate dynamic elevation range based on NUTS region if available
+        nuts_gdf = self.get_nuts_boundaries("L3")
+        
+        if nuts_gdf is not None and land_mask is not None:
+            # Create NUTS mask
+            import rasterio.features
+            nuts_mask = rasterio.features.rasterize(
+                [(geom, 1) for geom in nuts_gdf.geometry],
+                out_shape=dem_data.shape,
+                transform=meta['transform'],
+                dtype=np.uint8
+            )
+            
+            # Get elevation data within NUTS and land areas only
+            nuts_land_mask = (nuts_mask == 1) & (land_mask == 1) & (~np.isnan(dem_data))
+            if np.any(nuts_land_mask):
+                nuts_elevations = dem_data[nuts_land_mask]
+                elevation_min = np.percentile(nuts_elevations, 2) - 30 # Use 2nd percentile to avoid outliers and add 30m buffer to ensure that only water is blue
+                elevation_max = np.percentile(nuts_elevations, 98) + 100  # Use 98th percentile to avoid outliers and add 100m buffer to ensure that the entire landscape is visible (not all white)
+            else:
+                # Fallback to global range if no valid data
+                valid_elevations = dem_data[~np.isnan(dem_data)]
+                elevation_min = np.percentile(valid_elevations, 2) - 30
+                elevation_max = np.percentile(valid_elevations, 98) + 100
+        else:
+            # Fallback to global range if no NUTS data or land mask
+            valid_elevations = dem_data[~np.isnan(dem_data)]
+            elevation_min = np.percentile(valid_elevations, 2) - 30
+            elevation_max = np.percentile(valid_elevations, 98) + 100
+        
+        # Create masked elevation data for proper visualization
+        dem_for_vis = dem_data.copy()
+        
+        # Set water areas to below minimum land elevation if land mask is available
+        if land_mask is not None:
+            water_elevation = elevation_min - 10
+            dem_for_vis[land_mask == 0] = water_elevation
+            vmin_vis = water_elevation
+        else:
+            vmin_vis = elevation_min
+        
         # Create composite visualization showing elevation and flood risk
         # Use DEM as background with flood overlay
         im_dem = ax.imshow(
-            dem_data,
+            dem_for_vis,
             cmap=ScientificStyle.ELEVATION_CMAP,
             aspect='equal',
             extent=extent,
             alpha=0.7,
-            vmin=-5, vmax=50
+            vmin=vmin_vis, vmax=elevation_max
         )
         
         # Overlay flood risk areas
@@ -281,8 +323,8 @@ class LayerVisualizer:
         )
         
         # Add NUTS overlay
-        nuts_gdf = self.get_nuts_boundaries("L3")
-        self.add_nuts_overlay(ax, nuts_gdf)
+        if nuts_gdf is not None:
+            self.add_nuts_overlay(ax, nuts_gdf)
         
         # Styling
         title = f'Hazard Assessment - {scenario.name} Scenario\n({scenario.rise_meters}m Sea Level Rise)'
@@ -308,6 +350,7 @@ class LayerVisualizer:
         stats_text = (
             f'Scenario: {scenario.name}\n'
             f'Sea Level Rise: {scenario.rise_meters}m\n'
+            f'Elevation Range: {elevation_min:.1f}m to {elevation_max:.1f}m\n'
             f'Flood Coverage: {flood_percentage:.1f}%\n'
             f'Flooded Area: {flooded_pixels:,} pixels'
         )
