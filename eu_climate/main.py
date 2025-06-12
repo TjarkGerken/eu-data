@@ -180,7 +180,7 @@ class RiskAssessment:
         flood_extents = hazard_layer.process_scenarios()
         
         # Create visualizations
-        # hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
+        hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
         
         # Export results
         hazard_layer.export_results(flood_extents)
