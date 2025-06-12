@@ -246,11 +246,36 @@ class ExpositionLayer:
     def visualize_exposition(self, exposition: np.ndarray, meta: dict, title: str = "Exposition Layer"):
         """Visualize the exposition index for each cell using unified styling."""
         output_path = Path(self.config.output_dir) / 'exposition_layer.png'
+        
+        # Load land mask for proper water/land separation  
+        land_mask = None
+        try:
+            with rasterio.open(self.config.land_mass_path) as src:
+                # Transform land mask to match exposition layer resolution and extent
+                if meta and 'transform' in meta:
+                    land_mask, _ = rasterio.warp.reproject(
+                        source=src.read(1),
+                        destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=meta['transform'],
+                        dst_crs=meta['crs'],
+                        resampling=rasterio.enums.Resampling.nearest
+                    )
+                    # Ensure proper data type (1=land, 0=water)
+                    land_mask = (land_mask > 0).astype(np.uint8)
+                    logger.info("Loaded and transformed land mask for exposition visualization")
+                else:
+                    logger.warning("No metadata available for land mask transformation")
+        except Exception as e:
+            logger.warning(f"Could not load land mask for exposition visualization: {e}")
+        
         self.visualizer.visualize_exposition_layer(
             data=exposition,
             meta=meta,
             output_path=output_path,
-            title=title
+            title=title,
+            land_mask=land_mask
         )
 
     def export_exposition(self, data: np.ndarray, meta: dict, out_path: str):
@@ -270,11 +295,36 @@ class ExpositionLayer:
         # Create PNG visualization
         if create_png:
             png_path = Path(self.config.output_dir) / 'exposition_layer.png'
+            
+            # Load land mask for proper water/land separation  
+            land_mask = None
+            try:
+                with rasterio.open(self.config.land_mass_path) as src:
+                    # Transform land mask to match exposition layer resolution and extent
+                    if meta and 'transform' in meta:
+                        land_mask, _ = rasterio.warp.reproject(
+                            source=src.read(1),
+                            destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                            src_transform=src.transform,
+                            src_crs=src.crs,
+                            dst_transform=meta['transform'],
+                            dst_crs=meta['crs'],
+                            resampling=rasterio.enums.Resampling.nearest
+                        )
+                        # Ensure proper data type (1=land, 0=water)
+                        land_mask = (land_mask > 0).astype(np.uint8)
+                        logger.info("Loaded and transformed land mask for exposition PNG")
+                    else:
+                        logger.warning("No metadata available for land mask transformation")
+            except Exception as e:
+                logger.warning(f"Could not load land mask for exposition PNG: {e}")
+            
             self.visualizer.visualize_exposition_layer(
                 data=exposition,
                 meta=meta,
                 output_path=png_path,
-                title="Exposition Layer"
+                title="Exposition Layer",
+                land_mask=land_mask
             )
             logger.info(f"Exposition layer PNG saved to {png_path}")
         

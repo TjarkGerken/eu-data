@@ -480,17 +480,41 @@ class RelevanceLayer:
         
         logger.info("Creating relevance layer visualizations using unified styling...")
         
+        # Load land mask for proper water/land separation
+        land_mask = None
+        try:
+            with rasterio.open(self.config.land_mass_path) as src:
+                # Transform land mask to match relevance layer resolution and extent
+                if meta and 'transform' in meta:
+                    land_mask, _ = rasterio.warp.reproject(
+                        source=src.read(1),
+                        destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=meta['transform'],
+                        dst_crs=meta['crs'],
+                        resampling=rasterio.enums.Resampling.nearest
+                    )
+                    # Ensure proper data type (1=land, 0=water)
+                    land_mask = (land_mask > 0).astype(np.uint8)
+                    logger.info("Loaded and transformed land mask for relevance visualizations")
+                else:
+                    logger.warning("No metadata available for land mask transformation")
+        except Exception as e:
+            logger.warning(f"Could not load land mask for relevance visualizations: {e}")
+        
         for layer_name, data in relevance_layers.items():
             if save_plots:
                 # Create output path
                 plot_path = output_dir / f"relevance_{layer_name}_plot.png"
                 
-                # Use unified visualizer for consistent styling
+                # Use unified visualizer for consistent styling with land mask
                 self.visualizer.visualize_relevance_layer(
                     data=data,
                     meta=meta,
                     layer_name=layer_name,
-                    output_path=plot_path
+                    output_path=plot_path,
+                    land_mask=land_mask
                 )
                 
                 logger.info(f"Saved {layer_name} relevance layer PNG to {plot_path}")

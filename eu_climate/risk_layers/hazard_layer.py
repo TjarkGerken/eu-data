@@ -440,8 +440,7 @@ class HazardLayer:
             logger.info(f"Processing scenario: {scenario.name} ({scenario.rise_meters}m)")
             flood_risk = self.calculate_flood_extent(dem_data, scenario.rise_meters, transform, land_mask)
             flood_extents[scenario.name] = {
-                'flood_risk': flood_risk,  # Now normalized values 0-1 instead of binary
-                'flood_mask': (flood_risk > 0.3).astype(np.uint8),  # Binary mask for backwards compatibility
+                'flood_risk': flood_risk, 
                 'scenario': scenario,
                 'transform': transform,
                 'crs': crs,
@@ -599,7 +598,6 @@ class HazardLayer:
             ax = fig.add_subplot(gs[0, i+1]) if i < 2 else fig.add_subplot(gs[1, i-2])
             flood_data = flood_extents[scenario_name]
             flood_risk = flood_data['flood_risk']  # Use normalized risk values
-            flood_mask = flood_data['flood_mask']  # Binary mask for compatibility
             scenario = flood_data['scenario']
             dem_data = flood_data['dem_data']
             transform = flood_data['transform']
@@ -915,7 +913,6 @@ class HazardLayer:
         
         for scenario_name, flood_data in flood_extents.items():
             flood_risk = flood_data['flood_risk']
-            flood_mask = flood_data['flood_mask']
             transform = flood_data['transform']
             crs = flood_data['crs']
             scenario = flood_data['scenario']
@@ -944,28 +941,6 @@ class HazardLayer:
             )
             
             logger.info(f"Saved {scenario_name} normalized risk PNG to {risk_png_path}")
-            
-            # Also create binary mask visualization for compatibility
-            binary_meta = {
-                'crs': crs,
-                'transform': transform,
-                'height': flood_mask.shape[0],
-                'width': flood_mask.shape[1],
-                'dtype': 'uint8'
-            }
-            
-            binary_png_path = output_dir / f"hazard_binary_{scenario_name.lower()}_scenario.png"
-            
-            self.visualizer.visualize_hazard_scenario(
-                flood_mask=flood_mask,
-                dem_data=dem_data,
-                meta=binary_meta,
-                scenario=scenario,
-                output_path=binary_png_path,
-                land_mask=land_mask
-            )
-            
-            logger.info(f"Saved {scenario_name} binary mask PNG to {binary_png_path}")
 
     def export_results(self, flood_extents: Dict[str, np.ndarray], create_png: bool = True) -> None:
         """
@@ -979,7 +954,6 @@ class HazardLayer:
         
         for scenario_name, flood_data in flood_extents.items():
             flood_risk = flood_data['flood_risk']
-            flood_mask = flood_data['flood_mask']
             transform = flood_data['transform']
             crs = flood_data['crs']
             scenario = flood_data['scenario']
@@ -1011,31 +985,12 @@ class HazardLayer:
             
             logger.info(f"Exported {scenario_name} normalized flood risk to: {risk_output_path}")
             
-            # Also export binary mask for compatibility
-            mask_output_path = self.config.output_dir / f"flood_mask_{scenario_name.lower()}.tif"
-            
-            with rasterio.open(
-                mask_output_path,
-                'w',
-                driver='GTiff',
-                height=flood_mask.shape[0],
-                width=flood_mask.shape[1],
-                count=1,
-                dtype=flood_mask.dtype,
-                crs=crs,
-                transform=transform,
-                compress='lzw'
-            ) as dst:
-                dst.write(flood_mask, 1)
-                dst.set_band_description(1, f"Binary flood mask (risk > 0.3) for {scenario.rise_meters}m SLR")
-            
-            logger.info(f"Exported {scenario_name} binary flood mask to: {mask_output_path}")
+         
         
         # Export summary statistics
         summary_stats = []
         for scenario_name, flood_data in flood_extents.items():
             flood_risk = flood_data['flood_risk']
-            flood_mask = flood_data['flood_mask']
             dem_data = flood_data['dem_data']
             scenario = flood_data['scenario']
             
@@ -1047,7 +1002,6 @@ class HazardLayer:
             high_risk_area_km2 = np.sum(flood_risk > 0.7) * pixel_area_km2
             moderate_risk_area_km2 = np.sum((flood_risk > 0.3) & (flood_risk <= 0.7)) * pixel_area_km2
             low_risk_area_km2 = np.sum((flood_risk > 0.1) & (flood_risk <= 0.3)) * pixel_area_km2
-            binary_flood_area_km2 = np.sum(flood_mask) * pixel_area_km2
             
             # Mean and maximum risk
             valid_risk = flood_risk[~np.isnan(dem_data)]
@@ -1061,11 +1015,9 @@ class HazardLayer:
                 'high_risk_area_km2': high_risk_area_km2,
                 'moderate_risk_area_km2': moderate_risk_area_km2,
                 'low_risk_area_km2': low_risk_area_km2,
-                'binary_flood_area_km2': binary_flood_area_km2,
                 'high_risk_percentage': (high_risk_area_km2 / total_valid_area_km2) * 100,
                 'moderate_risk_percentage': (moderate_risk_area_km2 / total_valid_area_km2) * 100,
                 'low_risk_percentage': (low_risk_area_km2 / total_valid_area_km2) * 100,
-                'binary_flood_percentage': (binary_flood_area_km2 / total_valid_area_km2) * 100,
                 'mean_risk': mean_risk,
                 'max_risk': max_risk,
                 'description': scenario.description
