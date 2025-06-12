@@ -117,7 +117,7 @@ class RiskAssessment:
         logger.info("EXPOSITION LAYER ANALYSIS")
         logger.info("="*40)
         exposition_layer = ExpositionLayer(config)
-        exposition_layer.run_exposition(visualize=True, export_path=str(config.output_dir / 'exposition_layer.tif'), create_png=True)
+        exposition_layer.run_exposition(visualize=False, export_path=None, create_png=True)
 
     def run_risk_assessment(self, config: ProjectConfig, 
                            run_hazard: bool = True,
@@ -183,7 +183,7 @@ class RiskAssessment:
         # hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
         
         # Export results
-        hazard_layer.export_results(flood_extents, create_png=True)
+        hazard_layer.export_results(flood_extents)
     
     def run_relevance_layer_analysis(self, config: ProjectConfig) -> None:
         """
@@ -292,8 +292,8 @@ def main():
     
     try:
         # Run the analysis
-        # risk_assessment.run_hazard_layer_analysis(config)
-        risk_assessment.run_exposition(config)
+        risk_assessment.run_hazard_layer_analysis(config)
+        # risk_assessment.run_exposition(config)
         # risk_assessment.run_relevance_layer_analysis(config)
         
         # Upload data after successful analysis (if enabled)

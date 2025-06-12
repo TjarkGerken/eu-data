@@ -679,33 +679,6 @@ class HazardLayer:
             ]
             ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
 
-            # Save the normalized flood risk as GeoTIFF
-            output_path = self.config.output_dir / f"flood_risk_{scenario.name.lower()}.tif"
-            with rasterio.open(
-                output_path,
-                'w',
-                driver='GTiff',
-                height=flood_risk.shape[0],
-                width=flood_risk.shape[1],
-                count=1,
-                dtype=np.float32,
-                crs=crs,
-                transform=transform,
-                nodata=-9999.0,
-                compress='lzw'
-            ) as dst:
-                dst.write(flood_risk, 1)
-                dst.set_band_description(1, f"Normalized flood risk for {scenario.name} scenario ({scenario.rise_meters}m SLR)")
-                dst.update_tags(
-                    **{
-                        'description': 'Normalized flood risk values (0=no risk, 1=maximum risk)',
-                        'scenario': scenario.name,
-                        'sea_level_rise_m': str(scenario.rise_meters),
-                        'calculation_method': 'elevation_profile_with_river_enhancement'
-                    }
-                )
-            logger.info(f"Saved normalized flood risk for {scenario.name} scenario to: {output_path}")
-        
         # Panel 5: Flood risk progression (if we have less than 4 scenarios, place it in remaining slot)
         if len(scenarios) < 4:
             ax5 = fig.add_subplot(gs[1, len(scenarios) - 2])
@@ -879,15 +852,8 @@ class HazardLayer:
             logger.warning(f"Could not add NUTS overlay: {str(e)}")
             return
     
-    def create_png_visualizations(self, flood_extents: Dict[str, np.ndarray], 
-                                 output_dir: Optional[Path] = None) -> None:
+    def create_png_visualizations(self, flood_extents: Dict[str, np.ndarray]) -> None:
         """Create PNG visualizations for each hazard scenario using unified styling."""
-        if output_dir is None:
-            output_dir = self.config.output_dir
-            
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
         logger.info("Creating PNG visualizations for hazard scenarios...")
         
         # Get reference data for land mask calculation
@@ -928,7 +894,7 @@ class HazardLayer:
             }
             
             # Create output path for normalized risk
-            risk_png_path = output_dir / f"hazard_risk_{scenario_name.lower()}_scenario.png"
+            risk_png_path = self.config.output_dir / f"hazard_risk_{scenario_name.lower()}_scenario.png"
             
             # Use unified visualizer for normalized risk visualization
             self.visualizer.visualize_hazard_scenario(
@@ -940,15 +906,13 @@ class HazardLayer:
                 land_mask=land_mask,
             )
             
-            logger.info(f"Saved {scenario_name} normalized risk PNG to {risk_png_path}")
 
-    def export_results(self, flood_extents: Dict[str, np.ndarray], create_png: bool = True) -> None:
+    def export_results(self, flood_extents: Dict[str, np.ndarray]) -> None:
         """
         Export hazard assessment results to files for further analysis.
         
         Args:
             flood_extents: Dictionary of flood extent results
-            create_png: Whether to create PNG visualizations for each scenario
         """
         logger.info("Exporting hazard assessment results...")
         
@@ -1029,8 +993,8 @@ class HazardLayer:
         summary_df.to_csv(summary_path, index=False)
         logger.info(f"Exported summary statistics to: {summary_path}")
 
-        if create_png:
-            self.create_png_visualizations(flood_extents)
+        # Create PNG visualizations for all scenarios
+        self.create_png_visualizations(flood_extents)
 
 
 
