@@ -180,7 +180,7 @@ class RiskAssessment:
         flood_extents = hazard_layer.process_scenarios()
         
         # Create visualizations
-        hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
+        # hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
         
         # Export results
         hazard_layer.export_results(flood_extents, create_png=True)
@@ -292,9 +292,9 @@ def main():
     
     try:
         # Run the analysis
-        risk_assessment.run_hazard_layer_analysis(config)
+        # risk_assessment.run_hazard_layer_analysis(config)
         risk_assessment.run_exposition(config)
-        risk_assessment.run_relevance_layer_analysis(config)
+        # risk_assessment.run_relevance_layer_analysis(config)
         
         # Upload data after successful analysis (if enabled)
         logger.info("\n" + "="*40)

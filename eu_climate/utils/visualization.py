@@ -14,19 +14,29 @@ Key Features:
 """
 
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap, BoundaryNorm
 import numpy as np
 import geopandas as gpd
 import rasterio
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict
 from pathlib import Path
-import logging
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+
 
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 
 logger = setup_logging(__name__)
+colors = [
+    (0.0, '#b6ffb6'),   # Hellgrün bei 0
+    (0.5, '#ff0000'),   # Rot in der Mitte
+    (1.0, '#000000')    # Neon-Pink oben
+]
+
+# Neue Colormap erzeugen
+custom_cmap = LinearSegmentedColormap.from_list("custom_vanimo_style", colors)
 
 
 class ScientificStyle:
@@ -35,8 +45,18 @@ class ScientificStyle:
     # Color schemes for different data types
     ELEVATION_CMAP = 'terrain'
     HAZARD_CMAP = 'Reds'
-    EXPOSITION_CMAP = 'PiYG'
-    RELEVANCE_CMAP = 'PiYG'
+    EXPOSITION_CMAP = custom_cmap
+    RELEVANCE_CMAP = 'vanimo_r'  # Reversed colormap - high values (close to 1) now show in purple/pink
+    
+    # Zone classification values
+    WATER_VALUE = 0
+    OUTSIDE_NL_VALUE = 1  
+    LAND_BASE_VALUE = 2
+    
+    # Zone colors - centralized for all layer types
+    WATER_COLOR = '#1f78b4'         # Blue for water bodies
+    LAND_OUTSIDE_COLOR = '#bdbdbd'  # Light gray for areas outside Netherlands
+    LAND_BASE_COLOR = '#ffffff'     # White base for Netherlands land
     
     # Standard figure parameters
     FIGURE_SIZE = (12, 8)
@@ -49,13 +69,11 @@ class ScientificStyle:
     TICK_SIZE = 10
     LEGEND_SIZE = 10
     
-    # Color definitions
+    # Color definitions (legacy - maintained for backward compatibility)
     NUTS_BOUNDARY_COLOR = '#2c3e50'  # Dark blue-gray
     NUTS_BOUNDARY_WIDTH = 0.8
     NUTS_BOUNDARY_ALPHA = 0.9
     
-    WATER_COLOR = '#3498db'  # Light blue
-    LAND_OUTSIDE_COLOR = '#ecf0f1'  # Light gray
     SAFE_LAND_COLOR = '#27ae60'  # Green
     FLOOD_RISK_COLOR = '#e74c3c'  # Red
     
@@ -67,6 +85,17 @@ class ScientificStyle:
         'edgecolor': '#34495e',
         'linewidth': 1
     }
+    
+    @classmethod
+    def get_zone_colors(cls):
+        """Get standardized zone colors as a list for matplotlib colormaps."""
+        return [cls.WATER_COLOR, cls.LAND_OUTSIDE_COLOR, cls.LAND_BASE_COLOR]
+    
+    @classmethod
+    def create_zone_colormap(cls):
+        """Create standardized zone colormap for all layer visualizations."""
+        from matplotlib.colors import ListedColormap
+        return ListedColormap(cls.get_zone_colors())
 
 
 def setup_scientific_style():
@@ -212,35 +241,61 @@ class LayerVisualizer:
     
     def visualize_exposition_layer(self, data: np.ndarray, meta: dict, 
                                  output_path: Optional[Path] = None,
-                                 title: str = "Exposition Layer") -> None:
-        """Create standardized exposition layer visualization."""
+                                 title: str = "Exposition Layer",
+                                 land_mask: Optional[np.ndarray] = None) -> None:
+        """Create standardized exposition layer visualization with proper zone separation."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
         extent = self.get_raster_extent(data, meta)
         
-        # Create main visualization
+        # Create zone classification for background
+        zones = self.create_zone_classification(data.shape, meta['transform'], land_mask)
+        
+        # Display base zones first
+        zone_cmap = ScientificStyle.create_zone_colormap()
+        ax.imshow(zones, cmap=zone_cmap, aspect='equal', extent=extent, 
+                 vmin=ScientificStyle.WATER_VALUE, vmax=ScientificStyle.LAND_BASE_VALUE, alpha=1.0)
+        
+        # Create data overlay only for Netherlands land areas
+        netherlands_mask = (zones == ScientificStyle.LAND_BASE_VALUE) & (~np.isnan(data))
+        data_overlay = np.full_like(data, np.nan, dtype=np.float32)
+        data_overlay[netherlands_mask] = data[netherlands_mask]
+        
+        # Overlay exposition data
         im = ax.imshow(
-            data, 
+            data_overlay,
             cmap=ScientificStyle.EXPOSITION_CMAP,
-            aspect='equal', 
+            aspect='equal',
             extent=extent,
-            vmin=0, vmax=1
+            vmin=0, vmax=1,
+            alpha=0.85
         )
         
         # Add NUTS overlay
         nuts_gdf = self.get_nuts_boundaries("L3")
-        self.add_nuts_overlay(ax, nuts_gdf)
+        if nuts_gdf is not None:
+            self.add_nuts_overlay(ax, nuts_gdf)
         
         # Styling
         ax.set_title(title, fontsize=ScientificStyle.TITLE_SIZE, fontweight='bold', pad=20)
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
         
-        # Add colorbar
+        # Add colorbar for exposition data
         self.create_standard_colorbar(im, ax, 'Exposition Index (0-1)')
         
-        # Add statistics
-        self.add_statistics_box(ax, data, 'upper left')
+        # Add zone legend
+        import matplotlib.patches as mpatches
+        legend_patches = [
+            mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
+            mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
+        ]
+        ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
+        
+        # Add statistics for Netherlands areas only
+        if np.any(netherlands_mask):
+            netherlands_data = data[netherlands_mask]
+            self.add_statistics_box(ax, netherlands_data, 'upper left')
         
         plt.tight_layout()
         
@@ -254,7 +309,7 @@ class LayerVisualizer:
     def visualize_hazard_scenario(self, flood_mask: np.ndarray, dem_data: np.ndarray, 
                                 meta: dict, scenario, output_path: Optional[Path] = None,
                                 land_mask: Optional[np.ndarray] = None) -> None:
-        """Create standardized hazard scenario visualization."""
+        """Create standardized hazard scenario visualization with centralized zone handling."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
         extent = self.get_raster_extent(flood_mask, meta)
@@ -289,30 +344,35 @@ class LayerVisualizer:
             elevation_min = np.percentile(valid_elevations, 2) - 30
             elevation_max = np.percentile(valid_elevations, 98) + 100
         
+        # Create zone classification for background
+        zones = self.create_zone_classification(dem_data.shape, meta['transform'], land_mask)
+        
+        # Display base zones first
+        zone_cmap = ScientificStyle.create_zone_colormap()
+        ax.imshow(zones, cmap=zone_cmap, aspect='equal', extent=extent, 
+                 vmin=ScientificStyle.WATER_VALUE, vmax=ScientificStyle.LAND_BASE_VALUE, alpha=1.0)
+        
+        # Create elevation overlay for Netherlands land areas only
+        netherlands_mask = (zones == ScientificStyle.LAND_BASE_VALUE) & (~np.isnan(dem_data))
+        
         # Create masked elevation data for proper visualization
-        dem_for_vis = dem_data.copy()
+        dem_for_vis = np.full_like(dem_data, np.nan, dtype=np.float32)
+        dem_for_vis[netherlands_mask] = dem_data[netherlands_mask]
         
-        # Set water areas to below minimum land elevation if land mask is available
-        if land_mask is not None:
-            water_elevation = elevation_min - 10
-            dem_for_vis[land_mask == 0] = water_elevation
-            vmin_vis = water_elevation
-        else:
-            vmin_vis = elevation_min
-        
-        # Create composite visualization showing elevation and flood risk
-        # Use DEM as background with flood overlay
+        # Overlay elevation data with transparency
         im_dem = ax.imshow(
             dem_for_vis,
             cmap=ScientificStyle.ELEVATION_CMAP,
             aspect='equal',
             extent=extent,
             alpha=0.7,
-            vmin=vmin_vis, vmax=elevation_max
+            vmin=elevation_min, vmax=elevation_max
         )
         
-        # Overlay flood risk areas
-        flood_overlay = np.ma.masked_where(flood_mask == 0, flood_mask)
+        # Overlay flood risk areas on Netherlands land only
+        flood_overlay = np.full_like(flood_mask, np.nan, dtype=np.float32)
+        flood_overlay[netherlands_mask & (flood_mask > 0)] = flood_mask[netherlands_mask & (flood_mask > 0)]
+        
         im_flood = ax.imshow(
             flood_overlay,
             cmap=ScientificStyle.HAZARD_CMAP,
@@ -342,27 +402,37 @@ class LayerVisualizer:
             cbar_flood = self.create_standard_colorbar(im_flood, ax, 'Flood Risk', shrink=0.6)
             cbar_flood.ax.set_position([0.92, 0.55, 0.02, 0.3])
         
-        # Add statistics for flood extent
-        flooded_pixels = np.sum(flood_mask)
-        total_pixels = flood_mask.size
-        flood_percentage = (flooded_pixels / total_pixels) * 100
+        # Add zone legend
+        import matplotlib.patches as mpatches
+        legend_patches = [
+            mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
+            mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
+        ]
+        ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
         
-        stats_text = (
-            f'Scenario: {scenario.name}\n'
-            f'Sea Level Rise: {scenario.rise_meters}m\n'
-            f'Elevation Range: {elevation_min:.1f}m to {elevation_max:.1f}m\n'
-            f'Flood Coverage: {flood_percentage:.1f}%\n'
-            f'Flooded Area: {flooded_pixels:,} pixels'
-        )
-        
-        ax.text(
-            0.02, 0.98, stats_text,
-            transform=ax.transAxes,
-            verticalalignment='top',
-            horizontalalignment='left',
-            bbox=ScientificStyle.STATS_BOX_PROPS,
-            fontsize=ScientificStyle.TICK_SIZE
-        )
+        # Add statistics for flood extent in Netherlands only
+        if np.any(netherlands_mask):
+            netherlands_flood_mask = flood_mask[netherlands_mask]
+            flooded_pixels = np.sum(netherlands_flood_mask > 0)
+            total_netherlands_pixels = np.sum(netherlands_mask)
+            flood_percentage = (flooded_pixels / total_netherlands_pixels) * 100 if total_netherlands_pixels > 0 else 0
+            
+            stats_text = (
+                f'Scenario: {scenario.name}\n'
+                f'Sea Level Rise: {scenario.rise_meters}m\n'
+                f'Elevation Range: {elevation_min:.1f}m to {elevation_max:.1f}m\n'
+                f'Flood Coverage (NL): {flood_percentage:.1f}%\n'
+                f'Flooded Area (NL): {flooded_pixels:,} pixels'
+            )
+            
+            ax.text(
+                0.02, 0.98, stats_text,
+                transform=ax.transAxes,
+                verticalalignment='top',
+                horizontalalignment='left',
+                bbox=ScientificStyle.STATS_BOX_PROPS,
+                fontsize=ScientificStyle.TICK_SIZE
+            )
         
         plt.tight_layout()
         
@@ -380,24 +450,40 @@ class LayerVisualizer:
         pass
     
     def visualize_relevance_layer(self, data: np.ndarray, meta: dict,
-                                layer_name: str, output_path: Optional[Path] = None) -> None:
-        """Create standardized relevance layer visualization."""
+                                layer_name: str, output_path: Optional[Path] = None,
+                                land_mask: Optional[np.ndarray] = None) -> None:
+        """Create standardized relevance layer visualization with proper zone separation."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
         extent = self.get_raster_extent(data, meta)
         
-        # Create main visualization
+        # Create zone classification for background
+        zones = self.create_zone_classification(data.shape, meta['transform'], land_mask)
+        
+        # Display base zones first
+        zone_cmap = ScientificStyle.create_zone_colormap()
+        ax.imshow(zones, cmap=zone_cmap, aspect='equal', extent=extent, 
+                 vmin=ScientificStyle.WATER_VALUE, vmax=ScientificStyle.LAND_BASE_VALUE, alpha=1.0)
+        
+        # Create data overlay only for Netherlands land areas
+        netherlands_mask = (zones == ScientificStyle.LAND_BASE_VALUE) & (~np.isnan(data))
+        data_overlay = np.full_like(data, np.nan, dtype=np.float32)
+        data_overlay[netherlands_mask] = data[netherlands_mask]
+        
+        # Overlay relevance data with reversed colormap (high values now purple/pink)
         im = ax.imshow(
-            data,
-            cmap=ScientificStyle.RELEVANCE_CMAP,
+            data_overlay,
+            cmap=ScientificStyle.RELEVANCE_CMAP,  # Now using reversed colormap
             aspect='equal',
             extent=extent,
-            vmin=0, vmax=1
+            vmin=0, vmax=1,
+            alpha=0.85
         )
         
         # Add NUTS overlay
         nuts_gdf = self.get_nuts_boundaries("L3")
-        self.add_nuts_overlay(ax, nuts_gdf)
+        if nuts_gdf is not None:
+            self.add_nuts_overlay(ax, nuts_gdf)
         
         # Styling
         title_map = {
@@ -412,11 +498,21 @@ class LayerVisualizer:
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
         
-        # Add colorbar
+        # Add colorbar for relevance data
         self.create_standard_colorbar(im, ax, 'Economic Relevance Index (0-1)')
         
-        # Add statistics
-        self.add_statistics_box(ax, data, 'upper left')
+        # Add zone legend
+        import matplotlib.patches as mpatches
+        legend_patches = [
+            mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
+            mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
+        ]
+        ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
+        
+        # Add statistics for Netherlands areas only
+        if np.any(netherlands_mask):
+            netherlands_data = data[netherlands_mask]
+            self.add_statistics_box(ax, netherlands_data, 'upper left')
         
         plt.tight_layout()
         
@@ -426,6 +522,47 @@ class LayerVisualizer:
             logger.info(f"Saved {layer_name} relevance visualization to {output_path}")
         
         plt.close()
+
+    def create_zone_classification(self, data_shape: Tuple[int, int], transform: dict, 
+                                  land_mask: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Create standardized zone classification for all layer visualizations.
+        
+        Args:
+            data_shape: Shape of the data array (height, width)
+            transform: Raster transform
+            land_mask: Optional land mask array (1=land, 0=water)
+            
+        Returns:
+            Zone classification array with values:
+            - WATER_VALUE (0): Water bodies
+            - OUTSIDE_NL_VALUE (1): Land outside Netherlands  
+            - LAND_BASE_VALUE (2): Netherlands land
+        """
+        # Initialize zone classification
+        zones = np.full(data_shape, ScientificStyle.LAND_BASE_VALUE, dtype=np.uint8)
+        
+        # Get NUTS boundaries for Netherlands
+        nuts_gdf = self.get_nuts_boundaries("L3")
+        
+        if nuts_gdf is not None:
+            import rasterio.features
+            # Create NUTS mask
+            nuts_mask = rasterio.features.rasterize(
+                [(geom, 1) for geom in nuts_gdf.geometry],
+                out_shape=data_shape,
+                transform=transform,
+                dtype=np.uint8
+            )
+            
+            # Set areas outside Netherlands
+            zones[nuts_mask == 0] = ScientificStyle.OUTSIDE_NL_VALUE
+        
+        # Set water areas if land mask is provided
+        if land_mask is not None:
+            zones[land_mask == 0] = ScientificStyle.WATER_VALUE
+            
+        return zones
 
 
 def create_flood_composite_colormap():
