@@ -412,6 +412,34 @@ class HazardLayer:
         
         land_mask = (land_mask_aligned > 0).astype(np.uint8)
         
+        # Calculate dynamic elevation range for NUTS region
+        if nuts_gdf is not None:
+            nuts_mask = rasterio.features.rasterize(
+                [(geom, 1) for geom in nuts_gdf.geometry],
+                out_shape=reference_dem_data.shape,
+                transform=reference_transform,
+                dtype=np.uint8
+            )
+            # Get elevation data within NUTS and land areas only
+            nuts_land_mask = (nuts_mask == 1) & (land_mask == 1) & (~np.isnan(reference_dem_data))
+            if np.any(nuts_land_mask):
+                nuts_elevations = reference_dem_data[nuts_land_mask]
+                elevation_min = np.percentile(nuts_elevations, 2) - 30 # Use 2nd percentile to avoid outliers and add 30m buffer to ensure that only water is blue
+                elevation_max = np.percentile(nuts_elevations, 98) + 100 # Use 98th percentile to avoid outliers and add 100m buffer to ensure that the entire landscape is visible (not all white)
+                logger.info(f"Dynamic elevation range for NUTS region: {elevation_min:.1f}m to {elevation_max:.1f}m")
+            else:
+                # Fallback to global range if no valid data
+                valid_elevations = reference_dem_data[~np.isnan(reference_dem_data)]
+                elevation_min = np.percentile(valid_elevations, 2) - 30 # Use 2nd percentile to avoid outliers and add 30m buffer to ensure that only water is blue
+                elevation_max = np.percentile(valid_elevations, 98) + 100 # Use 98th percentile to avoid outliers and add 100m buffer to ensure that the entire landscape is visible (not all white)
+                logger.info(f"Fallback elevation range: {elevation_min:.1f}m to {elevation_max:.1f}m")
+        else:
+            # Fallback to global range if no NUTS data
+            valid_elevations = reference_dem_data[~np.isnan(reference_dem_data)]
+            elevation_min = np.percentile(valid_elevations, 2) - 30 # Use 2nd percentile to avoid outliers and add 30m buffer to ensure that only water is blue
+            elevation_max = np.percentile(valid_elevations, 98) + 100 # Use 98th percentile to avoid outliers and add 100m buffer to ensure that the entire landscape is visible (not all white)
+            logger.info(f"Global elevation range: {elevation_min:.1f}m to {elevation_max:.1f}m")
+        
         # Panel 1: Overview/composite map with NUTS overlay and rivers
         ax = fig.add_subplot(gs[0, 0])
         
@@ -421,35 +449,44 @@ class HazardLayer:
         
         logger.info(f"DEM extent (target CRS): left={nuts_bounds[0]}, right={nuts_bounds[2]}, bottom={nuts_bounds[1]}, top={nuts_bounds[3]}")
         
-        # Create a base elevation visualization clipped to NUTS extent
-        im1 = ax.imshow(dem_data, cmap='terrain', aspect='equal', 
-                       extent=dem_bounds, vmin=-25, vmax=100, alpha=0.8)
+        # Create masked elevation data for proper visualization
+        # Create a copy of DEM data for visualization
+        dem_for_vis = dem_data.copy()
+        
+        # Set water areas (where land_mask == 0) to a specific value for proper visualization
+        water_elevation = elevation_min - 10  # Set water to below minimum land elevation
+        dem_for_vis[land_mask == 0] = water_elevation
+        
+        # Create a base elevation visualization with proper water/land distinction
+        im1 = ax.imshow(dem_for_vis, cmap='terrain', aspect='equal', 
+                       extent=dem_bounds, vmin=water_elevation, vmax=elevation_max, alpha=0.8)
         
         # River network overlay
         if self.river_network is not None:
             logger.info(f"River network bounds: {self.river_network.total_bounds}")
-            self.river_network.plot(ax=ax, color='blue', linewidth=0.2, alpha=0.8, zorder=10)
+            self.river_network.plot(ax=ax, color='darkblue', linewidth=0.5, alpha=0.9, zorder=10)
         
         # NUTS overlay
         if nuts_gdf is not None:
             logger.info(f"NUTS bounds: {nuts_gdf.total_bounds}")
             nuts_gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=1.0, alpha=1.0, zorder=11)
         
-        logger.info(f"DEBUG: Axis limits before autoscale: {ax.get_xlim()}, {ax.get_ylim()}")
         ax.autoscale(False)
-        logger.info(f"DEBUG: Axis limits after autoscale: {ax.get_xlim()}, {ax.get_ylim()}")
         
         ax.set_title('Study Area Overview\nElevation with River Network and Administrative Boundaries', 
                     fontsize=12, fontweight='bold')
         ax.set_xlabel('X Coordinate (m)')
         ax.set_ylabel('Y Coordinate (m)')
         
-        # Add colorbar for elevation
+        # Add colorbar for elevation with proper range
         cbar1 = plt.colorbar(im1, ax=ax, shrink=0.8)
         cbar1.set_label('Elevation (m)', rotation=270, labelpad=15)
         
-        # Panels 2-4: Flood extent for each scenario with rivers
+        # Panels 2-5: Flood extent for each scenario with rivers
         for i, scenario_name in enumerate(scenarios):
+            if i >= 4:  # Only show first 4 scenarios
+                break
+                
             ax = fig.add_subplot(gs[0, i+1]) if i < 2 else fig.add_subplot(gs[1, i-2])
             flood_data = flood_extents[scenario_name]
             flood_mask = flood_data['flood_mask']
@@ -468,10 +505,10 @@ class HazardLayer:
 
             # Composite mask for visualization
             composite = np.zeros_like(dem_data, dtype=np.uint8)
-            composite[(land_mask==0)] = 0  # water
+            composite[(land_mask==0)] = 0  # water (from land mass file)
             composite[(land_mask==1) & (nuts_mask==0)] = 1  # land outside NUTS
-            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==0)] = 2  # safe
-            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==1)] = 3
+            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==0)] = 2  # safe land
+            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==1)] = 3  # flood risk
 
             from matplotlib.colors import ListedColormap, BoundaryNorm
             cmap = ListedColormap(['#1f78b4', '#bdbdbd', '#33a02c', '#e31a1c'])
@@ -485,9 +522,9 @@ class HazardLayer:
             
             # River network overlay
             if self.river_network is not None:
-                self.river_network.plot(ax=ax, color='black', linewidth=0.1, alpha=1.0, zorder=11)
+                self.river_network.plot(ax=ax, color='darkblue', linewidth=0.3, alpha=1.0, zorder=11)
                 
-            ax.set_title(f'{scenario.name} Scenario with River Network\n({scenario.rise_meters}m SLR)', 
+            ax.set_title(f'{scenario.name} Scenario\n({scenario.rise_meters}m SLR)', 
                         fontsize=12, fontweight='bold')
             ax.set_xlabel('X Coordinate (m)')
             ax.set_ylabel('Y Coordinate (m)')
@@ -499,7 +536,7 @@ class HazardLayer:
             import matplotlib.patches as mpatches
             legend_patches = [
                 mpatches.Patch(color='#1f78b4', label='Water'),
-                mpatches.Patch(color='#bdbdbd', label='Outside of Netherlands'),
+                mpatches.Patch(color='#bdbdbd', label='Outside Netherlands'),
                 mpatches.Patch(color='#33a02c', label='Safe Land'),
                 mpatches.Patch(color='#e31a1c', label='Flood Risk')
             ]
@@ -533,8 +570,12 @@ class HazardLayer:
                 )
             logger.info(f"Saved composite mask for {scenario.name} scenario to: {output_path}")
         
-        # Panel 5: Flood risk progression
-        ax5 = fig.add_subplot(gs[1, 2])
+        # Panel 5: Flood risk progression (if we have less than 4 scenarios, place it in remaining slot)
+        if len(scenarios) < 4:
+            ax5 = fig.add_subplot(gs[1, len(scenarios) - 2])
+        else:
+            ax5 = fig.add_subplot(gs[1, 2])
+            
         flood_areas = []
         scenario_names = []
         rise_values = []
@@ -549,7 +590,8 @@ class HazardLayer:
             scenario_names.append(flood_data['scenario'].name)
             rise_values.append(flood_data['scenario'].rise_meters)
         
-        bars = ax5.bar(scenario_names, flood_areas, color=['green', 'orange', 'red'], alpha=0.7)
+        colors = ['green', 'orange', 'red', 'purple'][:len(scenarios)]
+        bars = ax5.bar(scenario_names, flood_areas, color=colors, alpha=0.7)
         ax5.set_title('Flooded Area by Scenario', fontsize=12, fontweight='bold')
         ax5.set_ylabel('Flooded Area (km²)')
         ax5.set_xlabel('Sea Level Rise Scenario')
@@ -563,33 +605,48 @@ class HazardLayer:
         # Panel 6: River network with elevation profile
         ax6 = fig.add_subplot(gs[2, :])
         if self.river_network is not None:
-            # Plot elevation histogram
-            valid_elevations = dem_data[~np.isnan(dem_data)]
-            ax6.hist(valid_elevations, bins=100, range=(-25, 50), alpha=0.7, 
+            # Plot elevation histogram using dynamic range
+            if nuts_gdf is not None and np.any(nuts_land_mask):
+                valid_elevations = nuts_elevations
+                hist_range = (elevation_min, elevation_max)
+                range_label = "NUTS Region"
+            else:
+                valid_elevations = reference_dem_data[~np.isnan(reference_dem_data)]
+                hist_range = (elevation_min, elevation_max)
+                range_label = "Study Area"
+                
+            ax6.hist(valid_elevations, bins=100, range=hist_range, alpha=0.7, 
                     color='skyblue', edgecolor='black', zorder=1)
             
             # Add vertical lines for each scenario
-            colors = ['green', 'orange', 'red', 'cyan']
+            colors = ['green', 'orange', 'red', 'purple']
             for i, scenario_name in enumerate(scenarios):
                 scenario = flood_extents[scenario_name]['scenario']
                 ax6.axvline(scenario.rise_meters, color=colors[i], linestyle='--', 
                            linewidth=2, label=f'{scenario.name} ({scenario.rise_meters}m)', zorder=2)
             
-            # Add river statistics
-            river_stats = "River Network Statistics:\n"
-            river_stats += f"Total Segments: {len(self.river_network)}\n"
-            river_stats += f"Total Nodes: {len(self.river_nodes)}"
-            ax6.text(0.98, 0.98, river_stats, transform=ax6.transAxes,
+            # Add statistics
+            stats_text = f"Elevation Statistics ({range_label}):\n"
+            stats_text += f"Min: {elevation_min:.1f}m\n"
+            stats_text += f"Max: {elevation_max:.1f}m\n"
+            stats_text += f"Mean: {np.mean(valid_elevations):.1f}m\n"
+            if self.river_network is not None:
+                stats_text += f"\nRiver Network:\n"
+                stats_text += f"Segments: {len(self.river_network)}\n"
+                stats_text += f"Nodes: {len(self.river_nodes)}"
+            
+            ax6.text(0.98, 0.98, stats_text, transform=ax6.transAxes,
                     verticalalignment='top', horizontalalignment='right',
                     bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
             
         ax6.set_xlabel('Elevation (m)')
         ax6.set_ylabel('Frequency')
-        ax6.set_title('Elevation Distribution with Sea Level Rise Thresholds\n' +
-                     '(Clipped to -25m to 50m range)', fontsize=12, fontweight='bold')
+        ax6.set_title(f'Elevation Distribution with Sea Level Rise Thresholds\n' +
+                     f'(Range: {elevation_min:.1f}m to {elevation_max:.1f}m)', fontsize=12, fontweight='bold')
         ax6.legend()
         ax6.grid(True, alpha=0.3)
-        ax6.set_xlim(-25, 50)
+        ax6.set_xlim(elevation_min - (elevation_max - elevation_min) * 0.1, 
+                     elevation_max + (elevation_max - elevation_min) * 0.1)
         
         # Add main title
         fig.suptitle('EU Climate Risk Assessment - Hazard Layer Analysis\n' + 
@@ -696,6 +753,27 @@ class HazardLayer:
         
         logger.info("Creating PNG visualizations for hazard scenarios...")
         
+        # Get reference data for land mask calculation
+        reference_flood_data = list(flood_extents.values())[0]
+        reference_dem_data = reference_flood_data['dem_data']
+        reference_transform = reference_flood_data['transform']
+        
+        # Transform land mass data once for all scenarios
+        land_mass_data, land_transform, _ = self.transformer.transform_raster(
+            self.config.land_mass_path,
+            reference_bounds=None,
+            resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+        )
+        if not self.transformer.validate_alignment(land_mass_data, land_transform, reference_dem_data, reference_transform):
+            land_mask_aligned = self.transformer.ensure_alignment(
+                land_mass_data, land_transform, reference_transform, reference_dem_data.shape,
+                self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+            )
+        else:
+            land_mask_aligned = land_mass_data
+        
+        land_mask = (land_mask_aligned > 0).astype(np.uint8)
+        
         for scenario_name, flood_data in flood_extents.items():
             flood_mask = flood_data['flood_mask']
             transform = flood_data['transform']
@@ -721,7 +799,8 @@ class HazardLayer:
                 dem_data=dem_data,
                 meta=meta,
                 scenario=scenario,
-                output_path=png_path
+                output_path=png_path,
+                land_mask=land_mask
             )
             
             logger.info(f"Saved {scenario_name} hazard scenario PNG to {png_path}")
