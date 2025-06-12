@@ -206,22 +206,25 @@ class HazardLayer:
     
     def calculate_flood_extent(self, dem_data: np.ndarray, sea_level_rise: float, transform: rasterio.Affine, land_mask: np.ndarray) -> np.ndarray:
         """
-        Calculate flood extent based on DEM, river network, sea level rise scenario, and land mass mask.
+        Calculate normalized flood risk based on DEM, river network, sea level rise scenario, and land mass mask.
         Args:
             dem_data: Digital elevation model data array
             sea_level_rise: Sea level rise in meters
             transform: Affine transform matrix for the DEM data
             land_mask: Binary land mask (1=land, 0=water)
         Returns:
-            Binary array where 1 indicates flooded areas, 0 indicates safe areas
+            Normalized array where values range from 0 (no risk) to 1 (maximum risk)
         """
-        logger.info(f"Calculating flood extent for {sea_level_rise}m sea level rise...")
+        logger.info(f"Calculating normalized flood risk for {sea_level_rise}m sea level rise...")
+        
         # Load NUTS boundaries
         nuts_gdf = self._load_nuts_boundaries()
         if nuts_gdf is None:
             raise ValueError("Could not load NUTS boundaries - required for flood extent calculation")
+        
         # Create a mask for valid land areas (non-NaN DEM values)
         valid_land_mask = ~np.isnan(dem_data)
+        
         # Always rasterize NUTS to DEM grid
         nuts_mask = rasterio.features.rasterize(
             [(geom, 1) for geom in nuts_gdf.geometry],
@@ -229,76 +232,58 @@ class HazardLayer:
             transform=transform,
             dtype=np.uint8
         )
+        
         # Combine masks to get valid study area (now includes land mask)
         valid_study_area = (valid_land_mask & (nuts_mask == 1) & (land_mask == 1))
         
-        # Basic flood model: areas below sea level rise are considered flooded
-        # Only consider areas within valid study area
-        flood_mask = (dem_data <= sea_level_rise) & valid_study_area
+        # Calculate elevation-based flood risk using normalized approach
+        elevation_risk = self._calculate_elevation_flood_risk(dem_data, sea_level_rise)
         
-        try:
-            if self.river_network is None:
-                self.load_river_data()
-                
-            # Create a raster representation of the river network
-            river_raster = self._rasterize_river_network(dem_data.shape, transform)
-            
-            # Enhance flood risk near rivers based on elevation and distance
-            river_buffer = ndimage.distance_transform_edt(~river_raster)
-            river_influence = np.exp(-river_buffer / 1000)  # Decay factor for river influence
-            
-            # Calculate elevation-based flood risk
-            elevation_risk = np.clip((sea_level_rise - dem_data) / sea_level_rise, 0, 1)
-            
-            # Combine flood risks, but only within valid study area
-            combined_risk = np.maximum(
-                flood_mask,
-                ((elevation_risk * river_influence) > 0.5) & valid_study_area
-            )
-            
-        except Exception as e:
-            logger.warning(f"Could not process river data: {str(e)}")
-            logger.warning("Proceeding with basic flood model without river influence")
-            combined_risk = flood_mask
+        # Calculate river proximity risk enhancement
+        river_risk_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
         
-        # Apply morphological operations to create more realistic flood extent
-        # First smooth the data
+        # Combine elevation and river risks
+        combined_risk = self._combine_flood_risks(elevation_risk, river_risk_enhancement, valid_study_area)
+        
+        # Apply spatial smoothing to create more realistic flood patterns
         smoothed_risk = ndimage.gaussian_filter(
             np.nan_to_num(combined_risk, nan=0),
             sigma=self.config.smoothing_sigma
         )
         
-        # Then apply binary operations
-        binary_risk = smoothed_risk > 0.5
-        binary_risk = ndimage.binary_closing(binary_risk)
-        binary_risk = ndimage.binary_fill_holes(binary_risk)
-        
-        # Ensure we only consider areas within valid study area
-        binary_risk = binary_risk & valid_study_area
+        # Ensure values remain in [0, 1] range and only within valid study area
+        normalized_risk = np.clip(smoothed_risk, 0, 1) * valid_study_area
         
         # Calculate statistics using actual pixel areas from transform
-        # Calculate actual pixel area in square meters
-        # In EPSG:3035, the pixel size varies with latitude
-        # We use the average of the top and bottom pixel heights
         pixel_width = abs(transform[0])  # Width of a pixel in meters
         pixel_height_top = abs(transform[4])  # Height of a pixel at the top
         pixel_height_bottom = abs(transform[4] + transform[5] * dem_data.shape[0])  # Height at the bottom
         pixel_height_avg = (pixel_height_top + pixel_height_bottom) / 2
         pixel_area_m2 = pixel_width * pixel_height_avg
         
-        # Calculate areas only for valid study area
-        flooded_pixels = np.int64(np.sum(binary_risk))
+        # Calculate areas for different risk levels
         valid_pixels = np.int64(np.sum(valid_study_area))
+        high_risk_pixels = np.int64(np.sum((normalized_risk > 0.7) & valid_study_area))
+        moderate_risk_pixels = np.int64(np.sum((normalized_risk > 0.3) & (normalized_risk <= 0.7) & valid_study_area))
+        low_risk_pixels = np.int64(np.sum((normalized_risk > 0.1) & (normalized_risk <= 0.3) & valid_study_area))
         
-        flooded_area_km2 = (flooded_pixels * pixel_area_m2) / 1_000_000.0
         total_area_km2 = (valid_pixels * pixel_area_m2) / 1_000_000.0
-        flood_percentage = (flooded_area_km2 / total_area_km2) * 100.0 if total_area_km2 > 0 else 0.0
+        high_risk_area_km2 = (high_risk_pixels * pixel_area_m2) / 1_000_000.0
+        moderate_risk_area_km2 = (moderate_risk_pixels * pixel_area_m2) / 1_000_000.0
+        low_risk_area_km2 = (low_risk_pixels * pixel_area_m2) / 1_000_000.0
+        
+        # Calculate mean and max risk values
+        valid_risk_values = normalized_risk[valid_study_area]
+        mean_risk = np.mean(valid_risk_values) if len(valid_risk_values) > 0 else 0.0
+        max_risk = np.max(valid_risk_values) if len(valid_risk_values) > 0 else 0.0
         
         logger.info(f"  Total study area: {total_area_km2:.2f} km²")
-        logger.info(f"  Flooded area: {flooded_area_km2:.2f} km²")
-        logger.info(f"  Flood percentage: {flood_percentage:.2f}%")
+        logger.info(f"  High risk area (>0.7): {high_risk_area_km2:.2f} km² ({high_risk_area_km2/total_area_km2*100:.1f}%)")
+        logger.info(f"  Moderate risk area (0.3-0.7): {moderate_risk_area_km2:.2f} km² ({moderate_risk_area_km2/total_area_km2*100:.1f}%)")
+        logger.info(f"  Low risk area (0.1-0.3): {low_risk_area_km2:.2f} km² ({low_risk_area_km2/total_area_km2*100:.1f}%)")
+        logger.info(f"  Mean risk: {mean_risk:.3f}, Max risk: {max_risk:.3f}")
         
-        return binary_risk.astype(np.uint8)
+        return normalized_risk.astype(np.float32)
     
     def _rasterize_river_network(self, shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
         """Convert river network to raster format."""
@@ -315,6 +300,129 @@ class HazardLayer:
         river_raster = self._rasterize_river_network(shape, transform)
         return ndimage.distance_transform_edt(~river_raster) * transform[0]
     
+    def _calculate_elevation_flood_risk(self, dem_data: np.ndarray, sea_level_rise: float) -> np.ndarray:
+        """
+        Calculate normalized flood risk based on elevation relative to sea level rise.
+        
+        Args:
+            dem_data: Digital elevation model data
+            sea_level_rise: Sea level rise scenario in meters
+            
+        Returns:
+            Normalized flood risk (0-1) based on elevation
+        """
+        # Calculate elevation difference relative to sea level rise
+        elevation_diff = dem_data - sea_level_rise
+        
+        # Areas below sea level rise have maximum risk (1.0)
+        # Areas above sea level rise have decreasing risk based on height
+        max_safe_elevation = self.config.elevation_risk['max_safe_elevation_m']
+        decay_factor = self.config.elevation_risk['risk_decay_factor']
+        
+        # Initialize risk array
+        risk = np.zeros_like(dem_data, dtype=np.float32)
+        
+        # Areas below sea level rise: risk = 1.0
+        below_slr = elevation_diff <= 0
+        risk[below_slr] = 1.0
+        
+        # Areas above sea level rise: exponential decay
+        above_slr = elevation_diff > 0
+        risk[above_slr] = np.exp(-elevation_diff[above_slr] / decay_factor)
+        
+        # Areas above max safe elevation have minimal risk
+        very_high = elevation_diff > max_safe_elevation
+        risk[very_high] = 0.01  # Small residual risk
+        
+        return np.clip(risk, 0, 1)
+    
+    def _calculate_river_risk_enhancement(self, shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
+        """
+        Calculate flood risk enhancement based on distance to rivers using configurable zones.
+        
+        Args:
+            shape: Shape of the raster grid
+            transform: Affine transform matrix
+            
+        Returns:
+            Risk enhancement multiplier (1.0 = no enhancement, >1.0 = increased risk)
+        """
+        try:
+            if self.river_network is None:
+                self.load_river_data()
+            
+            if self.river_network is None:
+                logger.warning("No river network available, skipping river risk enhancement")
+                return np.ones(shape, dtype=np.float32)
+            
+            # Create raster representation of rivers
+            river_raster = self._rasterize_river_network(shape, transform)
+            
+            # Calculate distance to nearest river in meters
+            river_distance_pixels = ndimage.distance_transform_edt(~river_raster)
+            pixel_size = abs(transform[0])  # Pixel size in meters
+            river_distance_meters = river_distance_pixels * pixel_size
+            
+            # Initialize enhancement array with base value (no enhancement)
+            enhancement = np.ones(shape, dtype=np.float32)
+            
+            # Apply zone-based enhancements from config
+            zones = self.config.river_zones
+            
+            # High risk zone (closest to rivers)
+            high_risk_mask = river_distance_meters <= zones['high_risk_distance_m']
+            enhancement[high_risk_mask] = zones['high_risk_weight']
+            
+            # Moderate risk zone
+            moderate_risk_mask = (river_distance_meters > zones['high_risk_distance_m']) & \
+                               (river_distance_meters <= zones['moderate_risk_distance_m'])
+            enhancement[moderate_risk_mask] = zones['moderate_risk_weight']
+            
+            # Low risk zone (furthest from rivers but still influenced)
+            low_risk_mask = (river_distance_meters > zones['moderate_risk_distance_m']) & \
+                           (river_distance_meters <= zones['low_risk_distance_m'])
+            enhancement[low_risk_mask] = zones['low_risk_weight']
+            
+            logger.info(f"Applied river risk enhancement: {np.sum(high_risk_mask)} high risk, "
+                       f"{np.sum(moderate_risk_mask)} moderate risk, {np.sum(low_risk_mask)} low risk pixels")
+            
+            return enhancement
+            
+        except Exception as e:
+            logger.warning(f"Could not calculate river risk enhancement: {str(e)}")
+            return np.ones(shape, dtype=np.float32)
+    
+    def _combine_flood_risks(self, elevation_risk: np.ndarray, river_enhancement: np.ndarray, 
+                           valid_study_area: np.ndarray) -> np.ndarray:
+        """
+        Combine elevation-based flood risk with river proximity enhancement.
+        
+        Args:
+            elevation_risk: Base flood risk from elevation (0-1)
+            river_enhancement: Risk enhancement multiplier from rivers (≥1.0)
+            valid_study_area: Mask for valid areas to consider
+            
+        Returns:
+            Combined normalized flood risk (0-1)
+        """
+        # Apply river enhancement to elevation risk
+        enhanced_risk = elevation_risk * river_enhancement
+        
+        # Normalize to ensure values stay in [0, 1] range
+        # Only consider areas within valid study area for normalization
+        valid_enhanced_risk = enhanced_risk[valid_study_area]
+        
+        if len(valid_enhanced_risk) > 0 and np.max(valid_enhanced_risk) > 1.0:
+            # Scale down values that exceed 1.0
+            max_enhanced_risk = np.max(valid_enhanced_risk)
+            enhanced_risk = enhanced_risk / max_enhanced_risk
+            logger.info(f"Normalized enhanced risk by factor {1/max_enhanced_risk:.3f}")
+        
+        # Ensure only valid study areas have risk values
+        combined_risk = enhanced_risk * valid_study_area
+        
+        return np.clip(combined_risk, 0, 1)
+    
     def process_scenarios(self, custom_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
         Process all sea level rise scenarios and generate flood extent maps.
@@ -330,9 +438,10 @@ class HazardLayer:
         flood_extents = {}
         for scenario in scenarios:
             logger.info(f"Processing scenario: {scenario.name} ({scenario.rise_meters}m)")
-            flood_extent = self.calculate_flood_extent(dem_data, scenario.rise_meters, transform, land_mask)
+            flood_risk = self.calculate_flood_extent(dem_data, scenario.rise_meters, transform, land_mask)
             flood_extents[scenario.name] = {
-                'flood_mask': flood_extent,
+                'flood_risk': flood_risk,  # Now normalized values 0-1 instead of binary
+                'flood_mask': (flood_risk > 0.3).astype(np.uint8),  # Binary mask for backwards compatibility
                 'scenario': scenario,
                 'transform': transform,
                 'crs': crs,
@@ -482,19 +591,19 @@ class HazardLayer:
         cbar1 = plt.colorbar(im1, ax=ax, shrink=0.8)
         cbar1.set_label('Elevation (m)', rotation=270, labelpad=15)
         
-        # Panels 2-5: Flood extent for each scenario with rivers
+        # Panels 2-5: Normalized flood risk for each scenario with rivers
         for i, scenario_name in enumerate(scenarios):
             if i >= 4:  # Only show first 4 scenarios
                 break
                 
             ax = fig.add_subplot(gs[0, i+1]) if i < 2 else fig.add_subplot(gs[1, i-2])
             flood_data = flood_extents[scenario_name]
-            flood_mask = flood_data['flood_mask']
+            flood_risk = flood_data['flood_risk']  # Use normalized risk values
+            flood_mask = flood_data['flood_mask']  # Binary mask for compatibility
             scenario = flood_data['scenario']
             dem_data = flood_data['dem_data']
             transform = flood_data['transform']
             
-            # Use the pre-computed land mask (optimization - no repeated transformations)
             # Always rasterize NUTS to DEM grid
             nuts_mask = rasterio.features.rasterize(
                 [(geom, 1) for geom in nuts_gdf.geometry],
@@ -503,18 +612,43 @@ class HazardLayer:
                 dtype=np.uint8
             )
 
-            # Composite mask for visualization
-            composite = np.zeros_like(dem_data, dtype=np.uint8)
-            composite[(land_mask==0)] = 0  # water (from land mass file)
-            composite[(land_mask==1) & (nuts_mask==0)] = 1  # land outside NUTS
-            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==0)] = 2  # safe land
-            composite[(land_mask==1) & (nuts_mask==1) & (flood_mask==1)] = 3  # flood risk
-
-            from matplotlib.colors import ListedColormap, BoundaryNorm
-            cmap = ListedColormap(['#1f78b4', '#bdbdbd', '#33a02c', '#e31a1c'])
-            norm = BoundaryNorm([0,1,2,3,4], cmap.N)
-            # Use the same extent as the DEM for all visualizations
-            im = ax.imshow(composite, cmap=cmap, norm=norm, aspect='equal', extent=dem_bounds)
+            # Create visualization showing normalized flood risk with proper background zones
+            valid_study_area = (land_mask == 1) & (nuts_mask == 1) & (~np.isnan(dem_data))
+            
+            # Create composite visualization array
+            # Start with a base array for all zones
+            composite_display = np.zeros_like(dem_data, dtype=np.uint8)
+            
+            # Define zone values
+            WATER_VALUE = 0      # Existing water bodies (blue)
+            OUTSIDE_NL_VALUE = 1 # Land outside Netherlands (gray)  
+            LAND_BASE_VALUE = 2  # Base value for Netherlands land
+            
+            # Set base zones
+            composite_display[land_mask == 0] = WATER_VALUE  # Water areas from land mass file
+            composite_display[(land_mask == 1) & (nuts_mask == 0)] = OUTSIDE_NL_VALUE  # Outside Netherlands
+            composite_display[valid_study_area] = LAND_BASE_VALUE  # Netherlands land areas
+            
+            # Create risk overlay only for valid study areas
+            risk_overlay = np.full_like(dem_data, np.nan, dtype=np.float32)
+            risk_overlay[valid_study_area] = flood_risk[valid_study_area]
+            
+            # Display base zones first
+            from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+            base_colors = ['#1f78b4', '#bdbdbd', '#ffffff']  # Blue (water), Gray (outside NL), White (NL land base)
+            base_cmap = ListedColormap(base_colors)
+            
+            # Show base zones
+            ax.imshow(composite_display, cmap=base_cmap, aspect='equal', extent=dem_bounds, 
+                     vmin=0, vmax=2, alpha=1.0)
+            
+            # Create flood risk colormap (warm colors for risk)
+            risk_colors = ['#ffffcc', '#feb24c', '#fd8d3c', '#fc4e2a', '#e31a1c', '#b10026']
+            risk_cmap = LinearSegmentedColormap.from_list('flood_risk', risk_colors, N=256)
+            
+            # Overlay flood risk only on Netherlands land areas
+            im = ax.imshow(risk_overlay, cmap=risk_cmap, aspect='equal', extent=dem_bounds, 
+                          vmin=0, vmax=1, alpha=0.85)
             
             # NUTS overlay
             if nuts_gdf is not None:
@@ -524,51 +658,55 @@ class HazardLayer:
             if self.river_network is not None:
                 self.river_network.plot(ax=ax, color='darkblue', linewidth=0.3, alpha=1.0, zorder=11)
                 
-            ax.set_title(f'{scenario.name} Scenario\n({scenario.rise_meters}m SLR)', 
+            ax.set_title(f'{scenario.name} Scenario\n({scenario.rise_meters}m SLR) - Normalized Risk', 
                         fontsize=12, fontweight='bold')
             ax.set_xlabel('X Coordinate (m)')
             ax.set_ylabel('Y Coordinate (m)')
-            # Set the extent to match the DEM bounds
             ax.set_xlim(dem_bounds[0], dem_bounds[1])
             ax.set_ylim(dem_bounds[2], dem_bounds[3])
             ax.autoscale(False)
-            # Add colorbar with custom ticks
+            
+            # Add colorbar for flood risk
+            cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+            cbar.set_label('Flood Risk (0=safe, 1=maximum)', rotation=270, labelpad=15)
+            
+            # Add legend for zones and risk levels
             import matplotlib.patches as mpatches
             legend_patches = [
-                mpatches.Patch(color='#1f78b4', label='Water'),
+                mpatches.Patch(color='#1f78b4', label='Existing Water Bodies'),
                 mpatches.Patch(color='#bdbdbd', label='Outside Netherlands'),
-                mpatches.Patch(color='#33a02c', label='Safe Land'),
-                mpatches.Patch(color='#e31a1c', label='Flood Risk')
+                mpatches.Patch(color='#ffffcc', label='Low Flood Risk (0-0.3)'),
+                mpatches.Patch(color='#fd8d3c', label='Moderate Risk (0.3-0.7)'),
+                mpatches.Patch(color='#e31a1c', label='High Risk (0.7-1.0)')
             ]
             ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
 
-            # Save the composite mask as GeoTIFF
-            output_path = self.config.output_dir / f"composite_mask_{scenario.name.lower()}.tif"
+            # Save the normalized flood risk as GeoTIFF
+            output_path = self.config.output_dir / f"flood_risk_{scenario.name.lower()}.tif"
             with rasterio.open(
                 output_path,
                 'w',
                 driver='GTiff',
-                height=composite.shape[0],
-                width=composite.shape[1],
+                height=flood_risk.shape[0],
+                width=flood_risk.shape[1],
                 count=1,
-                dtype=composite.dtype,
+                dtype=np.float32,
                 crs=crs,
                 transform=transform,
-                nodata=None,
+                nodata=-9999.0,
                 compress='lzw'
             ) as dst:
-                dst.write(composite, 1)
-                dst.set_band_description(1, f"Composite mask for {scenario.name} scenario ({scenario.rise_meters}m SLR)")
-                # Add category descriptions as metadata
+                dst.write(flood_risk, 1)
+                dst.set_band_description(1, f"Normalized flood risk for {scenario.name} scenario ({scenario.rise_meters}m SLR)")
                 dst.update_tags(
                     **{
-                        '0': 'Water',
-                        '1': 'Outside Netherlands',
-                        '2': 'Safe Land',
-                        '3': 'Flood Risk'
+                        'description': 'Normalized flood risk values (0=no risk, 1=maximum risk)',
+                        'scenario': scenario.name,
+                        'sea_level_rise_m': str(scenario.rise_meters),
+                        'calculation_method': 'elevation_profile_with_river_enhancement'
                     }
                 )
-            logger.info(f"Saved composite mask for {scenario.name} scenario to: {output_path}")
+            logger.info(f"Saved normalized flood risk for {scenario.name} scenario to: {output_path}")
         
         # Panel 5: Flood risk progression (if we have less than 4 scenarios, place it in remaining slot)
         if len(scenarios) < 4:
@@ -582,18 +720,19 @@ class HazardLayer:
         
         for scenario_name in scenarios:
             flood_data = flood_extents[scenario_name]
-            flood_mask = flood_data['flood_mask']
+            flood_risk = flood_data['flood_risk']
             dem_data = flood_data['dem_data']
             
-            flooded_area_km2 = np.sum(flood_mask) * (30 * 30) / 1_000_000
-            flood_areas.append(flooded_area_km2)
+            # Calculate area with significant flood risk (>0.3)
+            high_risk_area_km2 = np.sum(flood_risk > 0.3) * (30 * 30) / 1_000_000
+            flood_areas.append(high_risk_area_km2)
             scenario_names.append(flood_data['scenario'].name)
             rise_values.append(flood_data['scenario'].rise_meters)
         
         colors = ['green', 'orange', 'red', 'purple'][:len(scenarios)]
         bars = ax5.bar(scenario_names, flood_areas, color=colors, alpha=0.7)
-        ax5.set_title('Flooded Area by Scenario', fontsize=12, fontweight='bold')
-        ax5.set_ylabel('Flooded Area (km²)')
+        ax5.set_title('High Flood Risk Area by Scenario\n(Risk > 0.3)', fontsize=12, fontweight='bold')
+        ax5.set_ylabel('High Risk Area (km²)')
         ax5.set_xlabel('Sea Level Rise Scenario')
         
         # Add value labels on bars
@@ -649,8 +788,8 @@ class HazardLayer:
                      elevation_max + (elevation_max - elevation_min) * 0.1)
         
         # Add main title
-        fig.suptitle('EU Climate Risk Assessment - Hazard Layer Analysis\n' + 
-                    'Sea Level Rise and River Network Impact Assessment', 
+        fig.suptitle('EU Climate Risk Assessment - Enhanced Hazard Layer Analysis\n' + 
+                    'Normalized Flood Risk with River Zone Enhancement and Elevation Profiles', 
                     fontsize=16, fontweight='bold', y=0.98)
         
         if save_plots:
@@ -775,6 +914,7 @@ class HazardLayer:
         land_mask = (land_mask_aligned > 0).astype(np.uint8)
         
         for scenario_name, flood_data in flood_extents.items():
+            flood_risk = flood_data['flood_risk']
             flood_mask = flood_data['flood_mask']
             transform = flood_data['transform']
             crs = flood_data['crs']
@@ -785,25 +925,49 @@ class HazardLayer:
             meta = {
                 'crs': crs,
                 'transform': transform,
+                'height': flood_risk.shape[0],
+                'width': flood_risk.shape[1],
+                'dtype': 'float32'
+            }
+            
+            # Create output path for normalized risk
+            risk_png_path = output_dir / f"hazard_risk_{scenario_name.lower()}_scenario.png"
+            
+            # Use unified visualizer for normalized risk visualization
+            self.visualizer.visualize_hazard_scenario(
+                flood_mask=flood_risk,  # Pass normalized risk values
+                dem_data=dem_data,
+                meta=meta,
+                scenario=scenario,
+                output_path=risk_png_path,
+                land_mask=land_mask,
+                use_normalized_risk=True  # New parameter to handle continuous values
+            )
+            
+            logger.info(f"Saved {scenario_name} normalized risk PNG to {risk_png_path}")
+            
+            # Also create binary mask visualization for compatibility
+            binary_meta = {
+                'crs': crs,
+                'transform': transform,
                 'height': flood_mask.shape[0],
                 'width': flood_mask.shape[1],
                 'dtype': 'uint8'
             }
             
-            # Create output path
-            png_path = output_dir / f"hazard_{scenario_name.lower()}_scenario.png"
+            binary_png_path = output_dir / f"hazard_binary_{scenario_name.lower()}_scenario.png"
             
-            # Use unified visualizer for consistent styling
             self.visualizer.visualize_hazard_scenario(
                 flood_mask=flood_mask,
                 dem_data=dem_data,
-                meta=meta,
+                meta=binary_meta,
                 scenario=scenario,
-                output_path=png_path,
-                land_mask=land_mask
+                output_path=binary_png_path,
+                land_mask=land_mask,
+                use_normalized_risk=False
             )
             
-            logger.info(f"Saved {scenario_name} hazard scenario PNG to {png_path}")
+            logger.info(f"Saved {scenario_name} binary mask PNG to {binary_png_path}")
 
     def export_results(self, flood_extents: Dict[str, np.ndarray], create_png: bool = True) -> None:
         """
@@ -816,16 +980,44 @@ class HazardLayer:
         logger.info("Exporting hazard assessment results...")
         
         for scenario_name, flood_data in flood_extents.items():
+            flood_risk = flood_data['flood_risk']
             flood_mask = flood_data['flood_mask']
             transform = flood_data['transform']
             crs = flood_data['crs']
             scenario = flood_data['scenario']
             
-            # Export as GeoTIFF
-            output_path = self.config.output_dir / f"flood_extent_{scenario_name.lower()}.tif"
+            # Export normalized flood risk as GeoTIFF
+            risk_output_path = self.config.output_dir / f"flood_risk_{scenario_name.lower()}.tif"
             
             with rasterio.open(
-                output_path,
+                risk_output_path,
+                'w',
+                driver='GTiff',
+                height=flood_risk.shape[0],
+                width=flood_risk.shape[1],
+                count=1,
+                dtype=np.float32,
+                crs=crs,
+                transform=transform,
+                nodata=-9999.0,
+                compress='lzw'
+            ) as dst:
+                dst.write(flood_risk, 1)
+                dst.set_band_description(1, f"Normalized flood risk for {scenario.rise_meters}m SLR")
+                dst.update_tags(
+                    description='Normalized flood risk values (0=no risk, 1=maximum risk)',
+                    scenario=scenario.name,
+                    sea_level_rise_m=str(scenario.rise_meters),
+                    method='elevation_profile_with_river_enhancement'
+                )
+            
+            logger.info(f"Exported {scenario_name} normalized flood risk to: {risk_output_path}")
+            
+            # Also export binary mask for compatibility
+            mask_output_path = self.config.output_dir / f"flood_mask_{scenario_name.lower()}.tif"
+            
+            with rasterio.open(
+                mask_output_path,
                 'w',
                 driver='GTiff',
                 height=flood_mask.shape[0],
@@ -837,27 +1029,47 @@ class HazardLayer:
                 compress='lzw'
             ) as dst:
                 dst.write(flood_mask, 1)
-                dst.set_band_description(1, f"Flood extent for {scenario.rise_meters}m SLR")
+                dst.set_band_description(1, f"Binary flood mask (risk > 0.3) for {scenario.rise_meters}m SLR")
             
-            logger.info(f"Exported {scenario_name} flood extent to: {output_path}")
+            logger.info(f"Exported {scenario_name} binary flood mask to: {mask_output_path}")
         
         # Export summary statistics
         summary_stats = []
         for scenario_name, flood_data in flood_extents.items():
+            flood_risk = flood_data['flood_risk']
             flood_mask = flood_data['flood_mask']
             dem_data = flood_data['dem_data']
             scenario = flood_data['scenario']
             
-            flooded_area_km2 = np.sum(flood_mask) * (30 * 30) / 1_000_000
-            total_valid_area_km2 = np.sum(~np.isnan(dem_data)) * (30 * 30) / 1_000_000
-            flood_percentage = (flooded_area_km2 / total_valid_area_km2) * 100
+            # Calculate areas for different risk levels
+            pixel_area_km2 = (30 * 30) / 1_000_000
+            total_valid_area_km2 = np.sum(~np.isnan(dem_data)) * pixel_area_km2
+            
+            # Risk level statistics
+            high_risk_area_km2 = np.sum(flood_risk > 0.7) * pixel_area_km2
+            moderate_risk_area_km2 = np.sum((flood_risk > 0.3) & (flood_risk <= 0.7)) * pixel_area_km2
+            low_risk_area_km2 = np.sum((flood_risk > 0.1) & (flood_risk <= 0.3)) * pixel_area_km2
+            binary_flood_area_km2 = np.sum(flood_mask) * pixel_area_km2
+            
+            # Mean and maximum risk
+            valid_risk = flood_risk[~np.isnan(dem_data)]
+            mean_risk = np.mean(valid_risk) if len(valid_risk) > 0 else 0.0
+            max_risk = np.max(valid_risk) if len(valid_risk) > 0 else 0.0
             
             summary_stats.append({
                 'scenario': scenario_name,
                 'sea_level_rise_m': scenario.rise_meters,
-                'flooded_area_km2': flooded_area_km2,
                 'total_area_km2': total_valid_area_km2,
-                'flood_percentage': flood_percentage,
+                'high_risk_area_km2': high_risk_area_km2,
+                'moderate_risk_area_km2': moderate_risk_area_km2,
+                'low_risk_area_km2': low_risk_area_km2,
+                'binary_flood_area_km2': binary_flood_area_km2,
+                'high_risk_percentage': (high_risk_area_km2 / total_valid_area_km2) * 100,
+                'moderate_risk_percentage': (moderate_risk_area_km2 / total_valid_area_km2) * 100,
+                'low_risk_percentage': (low_risk_area_km2 / total_valid_area_km2) * 100,
+                'binary_flood_percentage': (binary_flood_area_km2 / total_valid_area_km2) * 100,
+                'mean_risk': mean_risk,
+                'max_risk': max_risk,
                 'description': scenario.description
             })
         

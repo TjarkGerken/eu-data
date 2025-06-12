@@ -90,6 +90,21 @@ class ProjectConfig:
         self.figure_size = tuple(self.config['visualization']['figure_size'])
         self.dpi = self.config['visualization']['dpi']
         
+        # Store hazard layer parameters
+        hazard_config = self.config.get('hazard', {})
+        self.river_zones = hazard_config.get('river_zones', {
+            'high_risk_distance_m': 50,
+            'high_risk_weight': 3.0,
+            'moderate_risk_distance_m': 100,
+            'moderate_risk_weight': 2.0,
+            'low_risk_distance_m': 250,
+            'low_risk_weight': 1.5
+        })
+        self.elevation_risk = hazard_config.get('elevation_risk', {
+            'max_safe_elevation_m': 10.0,
+            'risk_decay_factor': 2.0
+        })
+        
         # Validate configuration
         self._validate_config()
         
