@@ -941,7 +941,6 @@ class HazardLayer:
                 scenario=scenario,
                 output_path=risk_png_path,
                 land_mask=land_mask,
-                use_normalized_risk=True  # New parameter to handle continuous values
             )
             
             logger.info(f"Saved {scenario_name} normalized risk PNG to {risk_png_path}")
@@ -963,8 +962,7 @@ class HazardLayer:
                 meta=binary_meta,
                 scenario=scenario,
                 output_path=binary_png_path,
-                land_mask=land_mask,
-                use_normalized_risk=False
+                land_mask=land_mask
             )
             
             logger.info(f"Saved {scenario_name} binary mask PNG to {binary_png_path}")

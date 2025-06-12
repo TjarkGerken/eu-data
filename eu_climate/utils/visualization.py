@@ -35,8 +35,8 @@ class ScientificStyle:
     # Color schemes for different data types
     ELEVATION_CMAP = 'terrain'
     HAZARD_CMAP = 'Reds'
-    EXPOSITION_CMAP = 'inferno'
-    RELEVANCE_CMAP = 'inferno'
+    EXPOSITION_CMAP = 'PiYG'
+    RELEVANCE_CMAP = 'PiYG'
     
     # Standard figure parameters
     FIGURE_SIZE = (12, 8)
