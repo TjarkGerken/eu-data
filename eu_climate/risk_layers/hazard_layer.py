@@ -700,7 +700,7 @@ class HazardLayer:
             scenario_names.append(flood_data['scenario'].name)
             rise_values.append(flood_data['scenario'].rise_meters)
         
-        colors = ['green', 'orange', 'red', 'purple'][:len(scenarios)]
+        colors = ['#2e8b57', '#ff8c00', '#dc143c', '#8a2be2'][:len(scenarios)]  # SeaGreen, DarkOrange, Crimson, BlueViolet
         bars = ax5.bar(scenario_names, flood_areas, color=colors, alpha=0.7)
         ax5.set_title('High Flood Risk Area by Scenario\n(Risk > 0.3)', fontsize=12, fontweight='bold')
         ax5.set_ylabel('High Risk Area (km²)')
@@ -907,6 +907,209 @@ class HazardLayer:
             )
             
 
+    def create_flood_risk_bar_charts(self, flood_extents: Dict[str, np.ndarray]) -> None:
+        """
+        Create standalone bar charts for flood risk analysis.
+        
+        Args:
+            flood_extents: Dictionary of flood extent results
+        """
+        logger.info("Creating standalone flood risk bar charts...")
+        
+        # Calculate data for both charts
+        flood_areas = []
+        scenario_names = []
+        rise_values = []
+        total_study_area_km2 = None
+        
+        for scenario_name in flood_extents.keys():
+            flood_data = flood_extents[scenario_name]
+            flood_risk = flood_data['flood_risk']
+            dem_data = flood_data['dem_data']
+            scenario = flood_data['scenario']
+            
+            # Calculate pixel area in km²
+            pixel_area_km2 = (30 * 30) / 1_000_000
+            
+            # Calculate total study area from first scenario (should be same for all)
+            if total_study_area_km2 is None:
+                # Load NUTS boundaries to calculate study area
+                nuts_gdf = self._load_nuts_boundaries()
+                if nuts_gdf is not None:
+                    # Get reference data for land mask calculation
+                    reference_transform = flood_data['transform']
+                    
+                    # Transform land mass data
+                    land_mass_data, land_transform, _ = self.transformer.transform_raster(
+                        self.config.land_mass_path,
+                        reference_bounds=None,
+                        resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+                    )
+                    if not self.transformer.validate_alignment(land_mass_data, land_transform, dem_data, reference_transform):
+                        land_mask_aligned = self.transformer.ensure_alignment(
+                            land_mass_data, land_transform, reference_transform, dem_data.shape,
+                            self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
+                        )
+                    else:
+                        land_mask_aligned = land_mass_data
+                    
+                    land_mask = (land_mask_aligned > 0).astype(np.uint8)
+                    
+                    # Rasterize NUTS to DEM grid
+                    nuts_mask = rasterio.features.rasterize(
+                        [(geom, 1) for geom in nuts_gdf.geometry],
+                        out_shape=dem_data.shape,
+                        transform=reference_transform,
+                        dtype=np.uint8
+                    )
+                    
+                    # Calculate valid study area
+                    valid_study_area = (~np.isnan(dem_data)) & (nuts_mask == 1) & (land_mask == 1)
+                    total_study_area_km2 = np.sum(valid_study_area) * pixel_area_km2
+                else:
+                    # Fallback: use all non-NaN DEM areas
+                    total_study_area_km2 = np.sum(~np.isnan(dem_data)) * pixel_area_km2
+            
+            # Calculate area with significant flood risk (>0.3)
+            high_risk_area_km2 = np.sum(flood_risk > 0.3) * pixel_area_km2
+            flood_areas.append(high_risk_area_km2)
+            scenario_names.append(scenario.name)
+            rise_values.append(scenario.rise_meters)
+        
+        # Define consistent colors for all charts
+        scenario_colors = ['#2e8b57', '#ff8c00', '#dc143c', '#8a2be2'][:len(scenario_names)]  # SeaGreen, DarkOrange, Crimson, BlueViolet
+        
+        # Create absolute bar chart
+        self._create_absolute_flood_risk_chart(scenario_names, flood_areas, scenario_colors)
+        
+        # Create relative stacked bar chart
+        self._create_relative_flood_risk_chart(scenario_names, flood_areas, total_study_area_km2, scenario_colors)
+        
+        logger.info("Completed creation of standalone flood risk bar charts")
+    
+    def _create_absolute_flood_risk_chart(self, scenario_names: List[str], flood_areas: List[float], colors: List[str]) -> None:
+        """
+        Create standalone absolute flood risk bar chart.
+        
+        Args:
+            scenario_names: List of scenario names
+            flood_areas: List of high risk areas in km²
+            colors: List of colors for consistent styling
+        """
+        plt.figure(figsize=(12, 8))
+        
+        bars = plt.bar(scenario_names, flood_areas, color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+        
+        plt.title('High Flood Risk Area by Sea Level Rise Scenario\n(Risk > 0.3)', 
+                 fontsize=16, fontweight='bold', pad=20)
+        plt.ylabel('High Risk Area (km²)', fontsize=14, fontweight='bold')
+        plt.xlabel('Sea Level Rise Scenario', fontsize=14, fontweight='bold')
+        
+        # Add value labels on bars
+        for bar, area in zip(bars, flood_areas):
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
+                    f'{area:.1f} km²', ha='center', va='bottom', fontweight='bold', fontsize=12)
+        
+        # Add grid for better readability
+        plt.grid(True, alpha=0.3, axis='y')
+        plt.gca().set_axisbelow(True)
+        
+        # Improve styling
+        plt.xticks(fontsize=12, fontweight='bold')
+        plt.yticks(fontsize=12)
+        plt.tight_layout()
+        
+        # Add subtitle with methodology
+        plt.figtext(0.5, 0.02, 'Based on DEM analysis with river network enhancement and 30m resolution', 
+                   ha='center', fontsize=10, style='italic')
+        
+        # Save the chart
+        output_path = self.config.output_dir / "flood_risk_absolute_by_scenario.png"
+        plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        logger.info(f"Saved absolute flood risk bar chart to: {output_path}")
+    
+    def _create_relative_flood_risk_chart(self, scenario_names: List[str], flood_areas: List[float], 
+                                        total_area_km2: float, colors: List[str]) -> None:
+        """
+        Create standalone relative flood risk stacked bar chart.
+        
+        Args:
+            scenario_names: List of scenario names
+            flood_areas: List of high risk areas in km²
+            total_area_km2: Total study area in km²
+            colors: List of colors for consistent styling
+        """
+        plt.figure(figsize=(12, 8))
+        
+        # Calculate percentages
+        risk_percentages = [(area / total_area_km2) * 100 for area in flood_areas]
+        safe_percentages = [100 - risk_pct for risk_pct in risk_percentages]
+        
+        # Create stacked bar chart
+        bar_width = 0.6
+        x_positions = range(len(scenario_names))
+        
+        # Bottom bars (safe areas) - use light gray
+        safe_bars = plt.bar(x_positions, safe_percentages, bar_width, 
+                           label='Safe Areas (Risk ≤ 0.3)', color='lightgray', 
+                           alpha=0.8, edgecolor='black', linewidth=1)
+        
+        # Top bars (risk areas) - use scenario colors
+        risk_bars = plt.bar(x_positions, risk_percentages, bar_width, 
+                           bottom=safe_percentages, label='High Risk Areas (Risk > 0.3)', 
+                           color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+        
+        plt.title('Relative Flood Risk Distribution by Sea Level Rise Scenario\n(Percentage of Total Study Area)', 
+                 fontsize=16, fontweight='bold', pad=20)
+        plt.ylabel('Percentage of Study Area (%)', fontsize=14, fontweight='bold')
+        plt.xlabel('Sea Level Rise Scenario', fontsize=14, fontweight='bold')
+        
+        # Set x-axis labels
+        plt.xticks(x_positions, scenario_names, fontsize=12, fontweight='bold')
+        plt.yticks(fontsize=12)
+        
+        # Add percentage labels on risk areas
+        for i, (risk_pct, area_km2) in enumerate(zip(risk_percentages, flood_areas)):
+            if risk_pct > 2:  # Only show label if percentage is significant enough
+                plt.text(i, safe_percentages[i] + risk_pct/2, 
+                        f'{risk_pct:.1f}%\n({area_km2:.1f} km²)', 
+                        ha='center', va='center', fontweight='bold', fontsize=10,
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+        
+        # Add total area information on safe areas
+        for i, safe_pct in enumerate(safe_percentages):
+            if safe_pct > 10:  # Only show if there's enough space
+                safe_area_km2 = total_area_km2 - flood_areas[i]
+                plt.text(i, safe_pct/2, f'{safe_pct:.1f}%', 
+                        ha='center', va='center', fontweight='bold', fontsize=10,
+                        color='darkgray')
+        
+        # Add grid for better readability
+        plt.grid(True, alpha=0.3, axis='y')
+        plt.gca().set_axisbelow(True)
+        
+        # Add legend
+        plt.legend(loc='upper right', fontsize=12, frameon=True, fancybox=True, shadow=True)
+        
+        # Set y-axis to 0-100%
+        plt.ylim(0, 100)
+        
+        plt.tight_layout()
+        
+        # Add subtitle with total area information
+        plt.figtext(0.5, 0.02, f'Total Study Area: {total_area_km2:.1f} km² (NUTS regions on land)', 
+                   ha='center', fontsize=10, style='italic')
+        
+        # Save the chart
+        output_path = self.config.output_dir / "flood_risk_relative_by_scenario.png"
+        plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        logger.info(f"Saved relative flood risk stacked bar chart to: {output_path}")
+
     def export_results(self, flood_extents: Dict[str, np.ndarray]) -> None:
         """
         Export hazard assessment results to files for further analysis.
@@ -995,6 +1198,9 @@ class HazardLayer:
 
         # Create PNG visualizations for all scenarios
         self.create_png_visualizations(flood_extents)
+        
+        # Create standalone flood risk bar charts
+        self.create_flood_risk_bar_charts(flood_extents)
 
 
 
