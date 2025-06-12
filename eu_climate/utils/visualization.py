@@ -29,31 +29,57 @@ from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 
 logger = setup_logging(__name__)
-colors = [
-    (0.0, '#b6ffb6'),   # Hellgrün bei 0
-    (0.5, '#ff0000'),   # Rot in der Mitte
-    (1.0, '#000000')    # Neon-Pink oben
+
+exposition_colors = [ 
+    (0.0, '#ffffff'),
+    (0.05, '#d8f3dc'),    
+    (0.125, '#b7e4c7'),    
+    # (0.25, '#95d5b2'),    
+    # (0.375, '#74c69d'),    
+    # (0.5, '#52b788'),    
+    # (0.625, '#40916c'),    
+    (0.25, '#2d6a4f'),    
+    (0.5, '#1b4332'),    
+    (0.7, '#081c15'),
+    (1.0, '#000000')
+]
+
+economic_risk_colors = [
+    (0.0, '#ffffff'),    
+        (0.1, '#b6ffb6'),   
+    (0.5, '#ff0000'),   
+    (1.0, '#000000')    
+]
+
+hazard_risk_colors = [ 
+    (0.0, '#ffffff'),
+    (0.2, '#fff3e6'),
+    (0.4, '#e95555'),
+    (0.75, '#e30613'),      
+    (1.0, '#9f040e'),  
 ]
 
 # Neue Colormap erzeugen
-custom_cmap = LinearSegmentedColormap.from_list("custom_vanimo_style", colors)
-
+exposition_cmap = LinearSegmentedColormap.from_list("exposition_colors", exposition_colors)
+economic_cmap = LinearSegmentedColormap.from_list("economic_risk_colors", economic_risk_colors)
+hazard_cmap = LinearSegmentedColormap.from_list("hazard_risk_colors", hazard_risk_colors)
 
 class ScientificStyle:
     """Scientific publication styling configuration."""
     
     # Color schemes for different data types
     ELEVATION_CMAP = 'terrain'
-    HAZARD_CMAP = 'Reds'
-    EXPOSITION_CMAP = custom_cmap
-    RELEVANCE_CMAP = 'vanimo_r'  # Reversed colormap - high values (close to 1) now show in purple/pink
+    HAZARD_CMAP = hazard_cmap
+    EXPOSITION_CMAP = exposition_cmap
+    RELEVANCE_CMAP = exposition_cmap  
+    ECONOMIC_RISK_CMAP = economic_cmap
     
     # Zone classification values
     WATER_VALUE = 0
     OUTSIDE_NL_VALUE = 1  
     LAND_BASE_VALUE = 2
     
-    # Zone colors - centralized for all layer types
+    # Zone colors
     WATER_COLOR = '#1f78b4'         # Blue for water bodies
     LAND_OUTSIDE_COLOR = '#bdbdbd'  # Light gray for areas outside Netherlands
     LAND_BASE_COLOR = '#ffffff'     # White base for Netherlands land
@@ -71,7 +97,7 @@ class ScientificStyle:
     
     # Color definitions (legacy - maintained for backward compatibility)
     NUTS_BOUNDARY_COLOR = '#2c3e50'  # Dark blue-gray
-    NUTS_BOUNDARY_WIDTH = 0.8
+    NUTS_BOUNDARY_WIDTH = 0.5
     NUTS_BOUNDARY_ALPHA = 0.9
     
     SAFE_LAND_COLOR = '#27ae60'  # Green
@@ -100,9 +126,9 @@ class ScientificStyle:
 
 def setup_scientific_style():
     """Configure matplotlib for scientific publications."""
-    plt.style.use('default')  # Start with clean default
+    plt.style.use('default')  
     
-    # Set font properties
+
     plt.rcParams.update({
         'font.family': ScientificStyle.FONT_FAMILY,
         'font.size': ScientificStyle.LABEL_SIZE,
@@ -360,14 +386,14 @@ class LayerVisualizer:
         dem_for_vis[netherlands_mask] = dem_data[netherlands_mask]
         
         # Overlay elevation data with transparency
-        im_dem = ax.imshow(
-            dem_for_vis,
-            cmap=ScientificStyle.ELEVATION_CMAP,
-            aspect='equal',
-            extent=extent,
-            alpha=0.7,
-            vmin=elevation_min, vmax=elevation_max
-        )
+        # im_dem = ax.imshow(
+        #     dem_for_vis,
+        #     cmap=ScientificStyle.ELEVATION_CMAP,
+        #     aspect='equal',
+        #     extent=extent,
+        #     alpha=0.7,
+        #     vmin=elevation_min, vmax=elevation_max
+        # )
         
         # Overlay flood risk areas on Netherlands land only
         flood_overlay = np.full_like(flood_mask, np.nan, dtype=np.float32)
@@ -394,8 +420,8 @@ class LayerVisualizer:
         
         # Add dual colorbars
         # Elevation colorbar
-        cbar_dem = self.create_standard_colorbar(im_dem, ax, 'Elevation (m)', shrink=0.6)
-        cbar_dem.ax.set_position([0.92, 0.15, 0.02, 0.3])
+        # cbar_dem = self.create_standard_colorbar(im_dem, ax, 'Elevation (m)', shrink=0.6)
+        # cbar_dem.ax.set_position([0.92, 0.15, 0.02, 0.3])
         
         # Flood risk colorbar (only if there are flooded areas)
         if np.any(flood_mask > 0):
@@ -413,18 +439,17 @@ class LayerVisualizer:
         # Add statistics for flood extent in Netherlands only
         if np.any(netherlands_mask):
             netherlands_flood_mask = flood_mask[netherlands_mask]
-            flooded_pixels = np.sum(netherlands_flood_mask > 0)
+            flooded_pixels = np.sum(netherlands_flood_mask > 0.3)
             total_netherlands_pixels = np.sum(netherlands_mask)
             flood_percentage = (flooded_pixels / total_netherlands_pixels) * 100 if total_netherlands_pixels > 0 else 0
             
             stats_text = (
                 f'Scenario: {scenario.name}\n'
                 f'Sea Level Rise: {scenario.rise_meters}m\n'
-                f'Elevation Range: {elevation_min:.1f}m to {elevation_max:.1f}m\n'
                 f'Flood Coverage (NL): {flood_percentage:.1f}%\n'
-                f'Flooded Area (NL): {flooded_pixels:,} pixels'
+                f'Flooded Area (NL): {(flooded_pixels * 30 * 30) / 1000000:.2f} km^2'
             )
-            
+        
             ax.text(
                 0.02, 0.98, stats_text,
                 transform=ax.transAxes,

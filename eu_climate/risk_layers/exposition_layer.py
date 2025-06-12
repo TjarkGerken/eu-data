@@ -292,8 +292,8 @@ class ExpositionLayer:
         self.save_exposition_layer(exposition, meta, out_path)
         logger.info(f"Exposition layer saved to {out_path}")
         
-        # Create PNG visualization
-        if create_png:
+        # Create PNG visualization (only once)
+        if create_png or visualize:
             png_path = Path(self.config.output_dir) / 'exposition_layer.png'
             
             # Load land mask for proper water/land separation  
@@ -327,11 +327,6 @@ class ExpositionLayer:
                 land_mask=land_mask
             )
             logger.info(f"Exposition layer PNG saved to {png_path}")
-        
-        if visualize:
-            self.visualize_exposition(exposition, meta)
-        if export_path:
-            self.export_exposition(exposition, meta, export_path)
 
     def _apply_study_area_mask(self, exposition: np.ndarray, transform: rasterio.Affine, shape: Tuple[int, int]) -> np.ndarray:
         """Apply study area mask using NUTS boundaries and land mass data."""

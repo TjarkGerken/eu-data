@@ -86,7 +86,7 @@ data:
     figure_size: [15, 10]
     dpi: 300
   upload:
-    enabled: false
+    enabled: true
   building:
     base_floor_height: 3
     max_floors: 30
