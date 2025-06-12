@@ -26,11 +26,11 @@ data:
   hazard:
     river_zones:
       high_risk_distance_m: 50 # Distance for significantly higher flood risk weighting
-      high_risk_weight: 3.0 # Weight multiplier for high risk zone
+      high_risk_weight: 2.0 # Weight multiplier for high risk zone
       moderate_risk_distance_m: 100 # Distance for moderately higher flood risk weighting
-      moderate_risk_weight: 2.0 # Weight multiplier for moderate risk zone
+      moderate_risk_weight: 1.5 # Weight multiplier for moderate risk zone
       low_risk_distance_m: 250 # Distance for slightly higher flood risk weighting
-      low_risk_weight: 1.5 # Weight multiplier for low risk zone
+      low_risk_weight: 1.25 # Weight multiplier for low risk zone
     elevation_risk:
       max_safe_elevation_m: 10.0 # Maximum elevation above sea level rise considered completely safe
       risk_decay_factor: 2.0 # Controls how quickly risk decreases with elevation above sea level rise
@@ -48,9 +48,9 @@ data:
       cache_operations: true
       cache_statistics: true
   exposition:
-    ghs_built_c_weight: 0.2
-    ghs_built_v_weight: 0.4
-    population_weight: 0.4
+    ghs_built_c_weight: 0.7
+    ghs_built_v_weight: 0.3
+    population_weight: 0.7
   relevance:
     economic_datasets:
       gdp_weight: 0.4
@@ -64,25 +64,24 @@ data:
   risk_assessment:
     n_risk_classes: 5
     weights:
-      hazard: 0.4
-      exposition: 0.4
-      economic: 0.2
+      hazard: 0.5
+      economic: 0.5
     ghs_built_c_class_weights:
       1: 0.0 # open spaces, low vegetation
       2: 0.0 # open spaces, medium vegetation
       3: 0.0 # open spaces, high vegetation
       4: 0.0 # water surfaces
-      5: 0.1 # road surfaces
-      11: 0.1 # residential, <=3m
-      12: 0.2 # residential, 3-6m
-      13: 0.3 # residential, 6-15m
-      14: 0.4 # residential, 15-30m
-      15: 0.5 # residential, >30m
-      21: 0.1 # non-residential, <=3m
-      22: 0.2 # non-residential, 3-6m
-      23: 0.3 # non-residential, 6-15m
-      24: 0.4 # non-residential, 15-30m
-      25: 0.5 # non-residential, >30m
+      5: 0.5 # road surfaces
+      11: 0.6 # residential, <=3m
+      12: 0.7 # residential, 3-6m
+      13: 0.8 # residential, 6-15m
+      14: 0.8 # residential, 15-30m
+      15: 0.8 # residential, >30m
+      21: 0.6 # non-residential, <=3m
+      22: 0.7 # non-residential, 3-6m
+      23: 0.8 # non-residential, 6-15m
+      24: 0.8 # non-residential, 15-30m
+      25: 0.8 # non-residential, >30m
   visualization:
     figure_size: [15, 10]
     dpi: 300
