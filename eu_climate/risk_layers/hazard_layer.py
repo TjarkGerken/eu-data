@@ -237,7 +237,7 @@ class HazardLayer:
         valid_study_area = (valid_land_mask & (nuts_mask == 1) & (land_mask == 1))
         
         # Calculate elevation-based flood risk using normalized approach
-        elevation_risk = self._calculate_elevation_flood_risk(dem_data, sea_level_rise)
+        elevation_risk = self._calculate_elevation_flood_risk(dem_data, sea_level_rise, valid_study_area)
         
         # Calculate river proximity risk enhancement
         river_risk_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
@@ -251,8 +251,8 @@ class HazardLayer:
             sigma=self.config.smoothing_sigma
         )
         
-        # Ensure values remain in [0, 1] range and only within valid study area
-        normalized_risk = np.clip(smoothed_risk, 0, 1) * valid_study_area
+        # Apply final unified normalization while preserving gradients
+        final_risk = self._apply_final_normalization(smoothed_risk, valid_study_area)
         
         # Calculate statistics using actual pixel areas from transform
         pixel_width = abs(transform[0])  # Width of a pixel in meters
@@ -263,9 +263,9 @@ class HazardLayer:
         
         # Calculate areas for different risk levels
         valid_pixels = np.int64(np.sum(valid_study_area))
-        high_risk_pixels = np.int64(np.sum((normalized_risk > 0.7) & valid_study_area))
-        moderate_risk_pixels = np.int64(np.sum((normalized_risk > 0.3) & (normalized_risk <= 0.7) & valid_study_area))
-        low_risk_pixels = np.int64(np.sum((normalized_risk > 0.1) & (normalized_risk <= 0.3) & valid_study_area))
+        high_risk_pixels = np.int64(np.sum((final_risk > 0.7) & valid_study_area))
+        moderate_risk_pixels = np.int64(np.sum((final_risk > 0.3) & (final_risk <= 0.7) & valid_study_area))
+        low_risk_pixels = np.int64(np.sum((final_risk > 0.1) & (final_risk <= 0.3) & valid_study_area))
         
         total_area_km2 = (valid_pixels * pixel_area_m2) / 1_000_000.0
         high_risk_area_km2 = (high_risk_pixels * pixel_area_m2) / 1_000_000.0
@@ -273,7 +273,7 @@ class HazardLayer:
         low_risk_area_km2 = (low_risk_pixels * pixel_area_m2) / 1_000_000.0
         
         # Calculate mean and max risk values
-        valid_risk_values = normalized_risk[valid_study_area]
+        valid_risk_values = final_risk[valid_study_area]
         mean_risk = np.mean(valid_risk_values) if len(valid_risk_values) > 0 else 0.0
         max_risk = np.max(valid_risk_values) if len(valid_risk_values) > 0 else 0.0
         
@@ -283,7 +283,7 @@ class HazardLayer:
         logger.info(f"  Low risk area (0.1-0.3): {low_risk_area_km2:.2f} km² ({low_risk_area_km2/total_area_km2*100:.1f}%)")
         logger.info(f"  Mean risk: {mean_risk:.3f}, Max risk: {max_risk:.3f}")
         
-        return normalized_risk.astype(np.float32)
+        return final_risk.astype(np.float32)
     
     def _rasterize_river_network(self, shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
         """Convert river network to raster format."""
@@ -300,41 +300,134 @@ class HazardLayer:
         river_raster = self._rasterize_river_network(shape, transform)
         return ndimage.distance_transform_edt(~river_raster) * transform[0]
     
-    def _calculate_elevation_flood_risk(self, dem_data: np.ndarray, sea_level_rise: float) -> np.ndarray:
+    def _calculate_elevation_flood_risk(self, dem_data: np.ndarray, sea_level_rise: float, 
+                                        valid_study_area: np.ndarray) -> np.ndarray:
         """
-        Calculate normalized flood risk based on elevation relative to sea level rise.
+        Calculate selective flood risk based on elevation within study area context.
+        
+        Uses a more selective approach that concentrates high risk in truly vulnerable areas,
+        avoiding too many maximum values and overly broad risk distribution.
         
         Args:
             dem_data: Digital elevation model data
             sea_level_rise: Sea level rise scenario in meters
+            valid_study_area: Boolean mask defining the valid study area for normalization
             
         Returns:
-            Normalized flood risk (0-1) based on elevation
+            Selective flood risk with realistic distribution
         """
-        # Calculate elevation difference relative to sea level rise
-        elevation_diff = dem_data - sea_level_rise
+        # Get study area elevation statistics for normalization
+        study_elevations = dem_data[valid_study_area]
         
-        # Areas below sea level rise have maximum risk (1.0)
-        # Areas above sea level rise have decreasing risk based on height
+        if len(study_elevations) == 0:
+            logger.warning("No valid elevations in study area, returning zero risk")
+            return np.zeros_like(dem_data, dtype=np.float32)
+        
+        # Calculate elevation range within study area
+        min_study_elevation = np.min(study_elevations)
+        max_study_elevation = np.max(study_elevations)
+        elevation_range = max_study_elevation - min_study_elevation
+        mean_study_elevation = np.mean(study_elevations)
+        
+        # Calculate critical thresholds
         max_safe_elevation = self.config.elevation_risk['max_safe_elevation_m']
-        decay_factor = self.config.elevation_risk['risk_decay_factor']
+        safe_threshold = max_safe_elevation + sea_level_rise
         
-        # Initialize risk array
+        # Log study area elevation statistics
+        logger.info(f"Study area elevation range: {min_study_elevation:.2f}m to {max_study_elevation:.2f}m")
+        logger.info(f"Study area mean elevation: {mean_study_elevation:.2f}m")
+        logger.info(f"Sea level rise scenario: {sea_level_rise:.2f}m")
+        logger.info(f"Safe elevation threshold: {safe_threshold:.2f}m")
+        
+        # Handle edge case where all elevations are the same
+        if elevation_range == 0:
+            logger.warning("All elevations in study area are identical, using uniform risk")
+            uniform_risk = 0.3 if min_study_elevation <= safe_threshold else 0.05
+            return np.full_like(dem_data, uniform_risk, dtype=np.float32)
+        
+        # Calculate vulnerability based on position relative to sea level rise
+        elevation_above_slr = dem_data - sea_level_rise
+        
+        # Create base risk using more selective approach
+        # Only areas within a reasonable vulnerability range get significant risk
+        vulnerability_range = max(10.0, elevation_range * 0.3)  # Focus on bottom 30% of elevation range or 10m, whichever is larger
+        
+        # Calculate selective risk - concentrate high risk in truly vulnerable areas
         risk = np.zeros_like(dem_data, dtype=np.float32)
         
-        # Areas below sea level rise: risk = 1.0
-        below_slr = elevation_diff <= 0
-        risk[below_slr] = 1.0
+        # Areas below sea level rise - use exponential decay from surface
+        below_slr_mask = elevation_above_slr <= 0
+        if np.any(below_slr_mask):
+            # Higher risk for areas further below sea level rise, but not all = 1.0
+            depth_below_slr = np.abs(elevation_above_slr[below_slr_mask])
+            # Use exponential function that starts high but doesn't saturate immediately
+            risk[below_slr_mask] = 0.8 + 0.19 * (1 - np.exp(-depth_below_slr / 2.0))  # Max ~0.99, not 1.0
         
-        # Areas above sea level rise: exponential decay
-        above_slr = elevation_diff > 0
-        risk[above_slr] = np.exp(-elevation_diff[above_slr] / decay_factor)
+        # Areas above sea level rise but within vulnerability range
+        vulnerable_mask = (elevation_above_slr > 0) & (elevation_above_slr <= vulnerability_range)
+        if np.any(vulnerable_mask):
+            # Exponential decay based on height above sea level rise
+            height_above_slr = elevation_above_slr[vulnerable_mask]
+            decay_factor = self.config.elevation_risk['risk_decay_factor']
+            # Scale the risk to avoid too many high values
+            risk[vulnerable_mask] = 0.6 * np.exp(-height_above_slr / decay_factor)
         
-        # Areas above max safe elevation have minimal risk
-        very_high = elevation_diff > max_safe_elevation
-        risk[very_high] = 0.01  # Small residual risk
+        # Areas well above vulnerability range but below safe threshold - minimal risk
+        moderate_mask = (elevation_above_slr > vulnerability_range) & (dem_data <= safe_threshold)
+        if np.any(moderate_mask):
+            risk[moderate_mask] = 0.05 + 0.1 * np.exp(-(elevation_above_slr[moderate_mask] - vulnerability_range) / 5.0)
         
-        return np.clip(risk, 0, 1)
+        # Areas above safe threshold - very minimal risk
+        safe_mask = dem_data > safe_threshold
+        if np.any(safe_mask):
+            risk[safe_mask] = 0.001 + 0.009 * np.exp(-(dem_data[safe_mask] - safe_threshold) / 10.0)
+        
+        # Apply study area context adjustment
+        # Adjust risk based on relative position within study area
+        study_percentile = np.zeros_like(dem_data, dtype=np.float32)
+        study_percentile[valid_study_area] = (
+            (dem_data[valid_study_area] - min_study_elevation) / elevation_range
+        )
+        
+        # Lower elevations within study area get slight risk boost
+        # Higher elevations get slight risk reduction
+        context_adjustment = 1.0 + 0.2 * (1.0 - study_percentile) - 0.1 * study_percentile
+        context_adjustment = np.clip(context_adjustment, 0.5, 1.5)
+        
+        # Apply context adjustment
+        adjusted_risk = risk * context_adjustment
+        
+        # Ensure realistic value distribution - avoid too many high values
+        final_risk = np.clip(adjusted_risk, 0.001, 0.95)  # Cap at 0.95 instead of 1.0
+        
+        # Log final risk statistics
+        final_valid_risks = final_risk[valid_study_area]
+        if len(final_valid_risks) > 0:
+            logger.info(f"Risk calculation statistics:")
+            logger.info(f"  Range: {np.min(final_valid_risks):.4f} to {np.max(final_valid_risks):.4f}")
+            logger.info(f"  Mean: {np.mean(final_valid_risks):.4f}")
+            logger.info(f"  Median: {np.median(final_valid_risks):.4f}")
+            
+            # Count risk distribution
+            very_high_count = np.sum(final_valid_risks > 0.8)
+            high_risk_count = np.sum((final_valid_risks > 0.6) & (final_valid_risks <= 0.8))
+            moderate_risk_count = np.sum((final_valid_risks > 0.3) & (final_valid_risks <= 0.6))
+            low_risk_count = np.sum((final_valid_risks > 0.1) & (final_valid_risks <= 0.3))
+            minimal_risk_count = np.sum(final_valid_risks <= 0.1)
+            
+            total_pixels = len(final_valid_risks)
+            logger.info(f"Risk distribution:")
+            logger.info(f"  Very High (>0.8): {very_high_count/total_pixels*100:.1f}% ({very_high_count} pixels)")
+            logger.info(f"  High (0.6-0.8): {high_risk_count/total_pixels*100:.1f}% ({high_risk_count} pixels)")
+            logger.info(f"  Moderate (0.3-0.6): {moderate_risk_count/total_pixels*100:.1f}% ({moderate_risk_count} pixels)")
+            logger.info(f"  Low (0.1-0.3): {low_risk_count/total_pixels*100:.1f}% ({low_risk_count} pixels)")
+            logger.info(f"  Minimal (≤0.1): {minimal_risk_count/total_pixels*100:.1f}% ({minimal_risk_count} pixels)")
+            
+            # Calculate total significant risk area (>0.3)
+            significant_risk_count = very_high_count + high_risk_count + moderate_risk_count
+            logger.info(f"  Total significant risk (>0.3): {significant_risk_count/total_pixels*100:.1f}%")
+        
+        return final_risk.astype(np.float32)
     
     def _calculate_river_risk_enhancement(self, shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
         """
@@ -395,33 +488,191 @@ class HazardLayer:
     def _combine_flood_risks(self, elevation_risk: np.ndarray, river_enhancement: np.ndarray, 
                            valid_study_area: np.ndarray) -> np.ndarray:
         """
-        Combine elevation-based flood risk with river proximity enhancement.
+        Combine elevation-based flood risk with river proximity enhancement using unified normalization.
         
         Args:
-            elevation_risk: Base flood risk from elevation (0-1)
+            elevation_risk: Base flood risk from elevation (normalized within study area)
             river_enhancement: Risk enhancement multiplier from rivers (≥1.0)
             valid_study_area: Mask for valid areas to consider
             
         Returns:
-            Combined normalized flood risk (0-1)
+            Combined flood risk with preserved gradients and unified normalization
         """
         # Apply river enhancement to elevation risk
         enhanced_risk = elevation_risk * river_enhancement
         
-        # Normalize to ensure values stay in [0, 1] range
-        # Only consider areas within valid study area for normalization
+        # Get valid enhanced risk values for normalization
         valid_enhanced_risk = enhanced_risk[valid_study_area]
         
-        if len(valid_enhanced_risk) > 0 and np.max(valid_enhanced_risk) > 1.0:
-            # Scale down values that exceed 1.0
-            max_enhanced_risk = np.max(valid_enhanced_risk)
-            enhanced_risk = enhanced_risk / max_enhanced_risk
-            logger.info(f"Normalized enhanced risk by factor {1/max_enhanced_risk:.3f}")
+        if len(valid_enhanced_risk) == 0:
+            logger.warning("No valid enhanced risk values, returning original elevation risk")
+            return elevation_risk * valid_study_area
+        
+        # Calculate statistics for enhanced risk
+        mean_enhanced_risk = np.mean(valid_enhanced_risk)
+        max_enhanced_risk = np.max(valid_enhanced_risk)
+        percentile_99 = np.percentile(valid_enhanced_risk, 99)
+        
+        logger.info(f"Enhanced risk statistics - Mean: {mean_enhanced_risk:.4f}, Max: {max_enhanced_risk:.4f}, "
+                   f"99th percentile: {percentile_99:.4f}")
+        
+        # Apply soft normalization to preserve gradients while keeping values reasonable
+        if percentile_99 > 1.0:
+            # Use 99th percentile instead of max to avoid outliers dominating normalization
+            normalization_factor = 1.0 / percentile_99
+            enhanced_risk = enhanced_risk * normalization_factor
+            logger.info(f"Applied soft normalization using 99th percentile factor: {normalization_factor:.3f}")
         
         # Ensure only valid study areas have risk values
         combined_risk = enhanced_risk * valid_study_area
         
-        return np.clip(combined_risk, 0, 1)
+        # Apply very soft upper bound to prevent extreme outliers while preserving gradients
+        # This replaces the hard np.clip(0, 1) with a more nuanced approach
+        max_reasonable_risk = 1.2  # Allow some values above 1.0 for better gradient preservation
+        combined_risk = np.where(
+            combined_risk > max_reasonable_risk,
+            max_reasonable_risk * (1 - np.exp(-(combined_risk - max_reasonable_risk) / 0.3)),
+            combined_risk
+        )
+        
+        # Final statistics
+        final_valid_risk = combined_risk[valid_study_area]
+        if len(final_valid_risk) > 0:
+            logger.info(f"Final combined risk - Mean: {np.mean(final_valid_risk):.4f}, "
+                       f"Max: {np.max(final_valid_risk):.4f}, Min: {np.min(final_valid_risk):.4f}")
+            
+            # Risk distribution after combination
+            high_risk_pct = np.sum(final_valid_risk > 0.7) / len(final_valid_risk) * 100
+            moderate_risk_pct = np.sum((final_valid_risk > 0.3) & (final_valid_risk <= 0.7)) / len(final_valid_risk) * 100
+            low_risk_pct = np.sum((final_valid_risk > 0.1) & (final_valid_risk <= 0.3)) / len(final_valid_risk) * 100
+            
+            logger.info(f"Combined risk distribution - High (>0.7): {high_risk_pct:.1f}%, "
+                       f"Moderate (0.3-0.7): {moderate_risk_pct:.1f}%, Low (0.1-0.3): {low_risk_pct:.1f}%")
+        
+        return combined_risk
+    
+    def _apply_final_normalization(self, risk_data: np.ndarray, valid_study_area: np.ndarray) -> np.ndarray:
+        """
+        Apply conservative final normalization to preserve realistic risk distributions.
+        
+        This method applies minimal normalization to preserve the selective risk calculation
+        while ensuring interpretable values and targeting ~40% significant risk coverage.
+        
+        Args:
+            risk_data: Risk data after smoothing
+            valid_study_area: Boolean mask for valid study area
+            
+        Returns:
+            Final normalized risk data with realistic distribution
+        """
+        # Apply study area mask first
+        masked_risk = risk_data * valid_study_area
+        
+        # Get valid risk values for normalization
+        valid_risk_values = masked_risk[valid_study_area]
+        
+        if len(valid_risk_values) == 0:
+            logger.warning("No valid risk values for final normalization")
+            return masked_risk.astype(np.float32)
+        
+        # Calculate current distribution statistics
+        risk_mean = np.mean(valid_risk_values)
+        risk_median = np.median(valid_risk_values)
+        risk_std = np.std(valid_risk_values)
+        risk_min = np.min(valid_risk_values)
+        risk_max = np.max(valid_risk_values) 
+        risk_95th = np.percentile(valid_risk_values, 95)
+        risk_99th = np.percentile(valid_risk_values, 99)
+        
+        # Calculate current significant risk coverage
+        current_significant_risk_pct = np.sum(valid_risk_values > 0.3) / len(valid_risk_values) * 100
+        
+        logger.info(f"Pre-normalization statistics:")
+        logger.info(f"  Mean: {risk_mean:.4f}, Median: {risk_median:.4f}, Std: {risk_std:.4f}")
+        logger.info(f"  Range: {risk_min:.4f} to {risk_max:.4f}")
+        logger.info(f"  95th percentile: {risk_95th:.4f}, 99th percentile: {risk_99th:.4f}")
+        logger.info(f"  Current significant risk coverage (>0.3): {current_significant_risk_pct:.1f}%")
+        
+        # Apply minimal normalization - preserve the careful risk calculation
+        normalized_risk = masked_risk.copy()
+        
+        # Only apply normalization if values exceed reasonable bounds
+        if risk_max > 1.0:
+            # Use conservative normalization to preserve risk structure
+            # Target keeping 99th percentile around 0.9-0.95
+            if risk_99th > 0.95:
+                normalization_factor = 0.90 / risk_99th  # More conservative
+                normalized_risk = masked_risk * normalization_factor
+                logger.info(f"Applied conservative normalization with factor: {normalization_factor:.3f}")
+            else:
+                logger.info("Risk values within acceptable range, minimal adjustment applied")
+                # Just ensure no values exceed 1.0
+                normalized_risk = np.minimum(masked_risk, 1.0)
+        else:
+            logger.info("Risk values already in optimal range, no normalization needed")
+        
+        # Apply very gentle smoothing of extreme outliers only
+        # This prevents a few extreme values from dominating while preserving most of the distribution
+        reasonable_max = 0.98  # Slightly below 1.0
+        outlier_mask = normalized_risk > reasonable_max
+        if np.any(outlier_mask):
+            # Apply very gentle saturation only to extreme outliers
+            normalized_risk[outlier_mask] = reasonable_max + 0.02 * np.tanh(
+                (normalized_risk[outlier_mask] - reasonable_max) / 0.1
+            )
+            outlier_count = np.sum(outlier_mask & valid_study_area)
+            logger.info(f"Applied gentle saturation to {outlier_count} extreme outlier pixels")
+        
+        # Ensure meaningful minimum values (avoid too many zeros)
+        min_meaningful_risk = 0.001
+        normalized_risk = np.where(
+            valid_study_area,
+            np.maximum(normalized_risk, min_meaningful_risk),
+            normalized_risk
+        )
+        
+        # Final distribution statistics
+        final_valid_values = normalized_risk[valid_study_area]
+        final_mean = np.mean(final_valid_values)
+        final_median = np.median(final_valid_values)
+        final_max = np.max(final_valid_values)
+        final_min = np.min(final_valid_values)
+        final_95th = np.percentile(final_valid_values, 95)
+        
+        # Calculate final risk distribution
+        very_high_count = np.sum(final_valid_values > 0.8)
+        high_risk_count = np.sum((final_valid_values > 0.6) & (final_valid_values <= 0.8))
+        moderate_risk_count = np.sum((final_valid_values > 0.3) & (final_valid_values <= 0.6))
+        low_risk_count = np.sum((final_valid_values > 0.1) & (final_valid_values <= 0.3))
+        minimal_risk_count = np.sum(final_valid_values <= 0.1)
+        
+        total_count = len(final_valid_values)
+        significant_risk_count = very_high_count + high_risk_count + moderate_risk_count
+        final_significant_risk_pct = significant_risk_count / total_count * 100
+        
+        logger.info(f"Post-normalization statistics:")
+        logger.info(f"  Mean: {final_mean:.4f}, Median: {final_median:.4f}")
+        logger.info(f"  Range: {final_min:.4f} to {final_max:.4f}, 95th percentile: {final_95th:.4f}")
+        
+        logger.info(f"Final risk distribution:")
+        logger.info(f"  Very High (>0.8): {very_high_count/total_count*100:.1f}% ({very_high_count} pixels)")
+        logger.info(f"  High (0.6-0.8): {high_risk_count/total_count*100:.1f}% ({high_risk_count} pixels)")
+        logger.info(f"  Moderate (0.3-0.6): {moderate_risk_count/total_count*100:.1f}% ({moderate_risk_count} pixels)")
+        logger.info(f"  Low (0.1-0.3): {low_risk_count/total_count*100:.1f}% ({low_risk_count} pixels)")
+        logger.info(f"  Minimal (≤0.1): {minimal_risk_count/total_count*100:.1f}% ({minimal_risk_count} pixels)")
+        logger.info(f"  **Total significant risk (>0.3): {final_significant_risk_pct:.1f}%**")
+        
+        # Provide guidance on risk distribution
+        if final_significant_risk_pct > 50:
+            logger.warning(f"Significant risk coverage ({final_significant_risk_pct:.1f}%) is higher than expected (~40%). "
+                          "Consider adjusting vulnerability_range or risk thresholds.")
+        elif final_significant_risk_pct < 30:
+            logger.warning(f"Significant risk coverage ({final_significant_risk_pct:.1f}%) is lower than expected (~40%). "
+                          "Consider increasing vulnerability sensitivity.")
+        else:
+            logger.info(f"Significant risk coverage ({final_significant_risk_pct:.1f}%) is within expected range (30-50%).")
+        
+        return normalized_risk.astype(np.float32)
     
     def process_scenarios(self, custom_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
