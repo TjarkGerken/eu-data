@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 from pathlib import Path
 from huggingface_hub import HfApi, upload_folder, snapshot_download
@@ -112,7 +113,8 @@ def download_data() -> bool:
             repo_type="dataset",
             local_dir=config.huggingface_folder,
             local_dir_use_symlinks=False,
-            resume_download=True
+            resume_download=True,
+            token=api_token
         )
         
         logger.info(f"Successfully downloaded repository to {config.huggingface_folder}")
@@ -222,3 +224,56 @@ def ensure_data_availability() -> bool:
             logger.error("Unable to download data automatically.")
             return False
     return True
+
+
+def check_data_integrity(config: ProjectConfig) -> None:
+    """Check data integrity and sync with remote repository if needed."""
+    logger.info("Checking data integrity...")
+    
+    try:
+        # Load config settings
+        repo_id = config.config['huggingface_repo']
+        auto_download = config.config.get('auto_download', True)
+        
+        # Check local data files
+        try:
+            config.validate_files()
+            logger.info("Local data validation passed")
+        except FileNotFoundError as e:
+            logger.warning(f"Missing data files: {e}")
+            if auto_download:
+                logger.info("Downloading missing data...")
+                from eu_climate.utils.data_loading import download_data
+                download_data()
+                config.validate_files()  # Re-validate after download
+            else:
+                logger.error(f"Please download data from: https://huggingface.co/datasets/{repo_id}")
+                raise
+        
+        # Check for updates if possible
+        try:
+            from huggingface_hub import HfApi
+            api_token = os.getenv('HF_API_TOKEN')
+            if api_token:
+                api = HfApi(token=api_token)
+            else:
+                api = HfApi()
+            repo_info = api.dataset_info(repo_id=repo_id)
+            logger.info(f"Remote data last modified: {repo_info.last_modified}")
+            
+            if auto_download:
+                # Simple check: if data directory is older than 1 day, consider update
+                data_age = (datetime.now() - datetime.fromtimestamp(config.data_dir.stat().st_mtime)).days
+                if data_age > 1:
+                    logger.info("Data might be outdated, updating...")
+                    from eu_climate.utils.data_loading import download_data
+                    download_data()
+                    
+        except Exception as e:
+            logger.debug(f"Could not check remote updates: {e}")
+            
+        logger.info("Data integrity check completed")
+        
+    except Exception as e:
+        logger.error(f"Data integrity check failed: {e}")
+        raise

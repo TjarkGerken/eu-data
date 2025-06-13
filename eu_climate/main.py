@@ -25,7 +25,7 @@ from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.risk_layers.relevance_layer import RelevanceLayer
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
-from eu_climate.utils.data_loading import get_config, upload_data, validate_env_vars
+from eu_climate.utils.data_loading import check_data_integrity, get_config, upload_data, validate_env_vars
 from eu_climate.utils.cache_utils import initialize_caching, create_cached_layers, print_cache_status
 from eu_climate.utils.caching_wrappers import cache_relevance_layer
 import numpy as np
@@ -153,8 +153,7 @@ class RiskAssessment:
 
         return risk_indices
         
-    @staticmethod
-    def run_hazard_layer_analysis(config: ProjectConfig) -> None:
+    def run_hazard_layer_analysis(self, config: ProjectConfig) -> None:
         """
         Run the Hazard Layer analysis for the EU Climate Risk Assessment System.
         
@@ -195,8 +194,7 @@ class RiskAssessment:
         logger.info("\n" + "="*40)
         logger.info("RELEVANCE LAYER ANALYSIS")
         logger.info("="*40)
-        
-        # Apply caching if enabled
+    
         try:
             cached_relevance_layer = cache_relevance_layer(self.relevance_layer)
             self.relevance_layer = cached_relevance_layer
@@ -211,54 +209,6 @@ class RiskAssessment:
         )
         
         logger.info(f"Relevance layer analysis completed - Generated {len(relevance_layers)} layers")
-
-def check_data_integrity(config: ProjectConfig) -> None:
-    """Check data integrity and sync with remote repository if needed."""
-    logger.info("Checking data integrity...")
-    
-    try:
-        # Load config settings
-        repo_id = config.config['huggingface_repo']
-        auto_download = config.config.get('auto_download', True)
-        
-        # Check local data files
-        try:
-            config.validate_files()
-            logger.info("Local data validation passed")
-        except FileNotFoundError as e:
-            logger.warning(f"Missing data files: {e}")
-            if auto_download:
-                logger.info("Downloading missing data...")
-                from eu_climate.utils.data_loading import download_data
-                download_data()
-                config.validate_files()  # Re-validate after download
-            else:
-                logger.error(f"Please download data from: https://huggingface.co/datasets/{repo_id}")
-                raise
-        
-        # Check for updates if possible
-        try:
-            from huggingface_hub import HfApi
-            api = HfApi()
-            repo_info = api.dataset_info(repo_id=repo_id)
-            logger.info(f"Remote data last modified: {repo_info.last_modified}")
-            
-            if auto_download:
-                # Simple check: if data directory is older than 1 day, consider update
-                data_age = (datetime.now() - datetime.fromtimestamp(config.data_dir.stat().st_mtime)).days
-                if data_age > 1:
-                    logger.info("Data might be outdated, updating...")
-                    from eu_climate.utils.data_loading import download_data
-                    download_data()
-                    
-        except Exception as e:
-            logger.debug(f"Could not check remote updates: {e}")
-            
-        logger.info("Data integrity check completed")
-        
-    except Exception as e:
-        logger.error(f"Data integrity check failed: {e}")
-        raise
 
 def main():
     """
@@ -284,25 +234,22 @@ def main():
     
     # Initialize caching system
     try:
-        cache_integrator = initialize_caching(config)
+        initialize_caching(config)
         logger.info("Caching system initialized")
     except Exception as e:
         logger.warning(f"Could not initialize caching: {e}")
         logger.info("Continuing without caching...")
     
     try:
-        # Run the analysis
-        risk_assessment.run_hazard_layer_analysis(config)
-        # risk_assessment.run_exposition(config)
-        # risk_assessment.run_relevance_layer_analysis(config)
+        #risk_assessment.run_hazard_layer_analysis(config)
+        risk_assessment.run_exposition(config)
+        risk_assessment.run_relevance_layer_analysis(config)
         
-        # Upload data after successful analysis (if enabled)
+        
         logger.info("\n" + "="*40)
         logger.info("DATA UPLOAD CHECK")
         logger.info("="*40)
         upload_data()
-        
-        # Print cache statistics if caching is enabled
         try:
             print_cache_status(config)
         except Exception as e:
