@@ -22,7 +22,7 @@ def setup_logging(name=__name__):
     # Configure the root logger only once
     if not logging.getLogger().handlers:
         logging.basicConfig(
-            level=logging.DEBUG,
+            level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.StreamHandler(sys.stdout),
