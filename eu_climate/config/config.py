@@ -76,11 +76,7 @@ class ProjectConfig:
         self.exposition_weights = self.config['exposition']
         
         # Store relevance weights
-        self.relevance_weights = self.config.get('relevance', {}).get('economic_datasets', {
-            'gdp': 0.4,
-            'freight_loading': 0.3,
-            'freight_unloading': 0.3
-        })
+        self.relevance_weights = self.config.get('relevance', {}).get('economic_datasets')
         
         # Store building parameters
         self.base_floor_height = self.config['building']['base_floor_height']
@@ -92,25 +88,20 @@ class ProjectConfig:
         
         # Store hazard layer parameters
         hazard_config = self.config.get('hazard', {})
-        self.river_zones = hazard_config.get('river_zones', {
-            'high_risk_distance_m': 50,
-            'high_risk_weight': 3.0,
-            'moderate_risk_distance_m': 100,
-            'moderate_risk_weight': 2.0,
-            'low_risk_distance_m': 250,
-            'low_risk_weight': 1.5
-        })
-        self.elevation_risk = hazard_config.get('elevation_risk', {
-            'max_safe_elevation_m': 10.0,
-            'risk_decay_factor': 2.0
-        })
         
+        self.river_zones = hazard_config.get('river_zones')
+        self.elevation_risk = hazard_config.get('elevation_risk')
+        
+        # Log loaded hazard configuration for debugging
+        logger.debug(f"Loaded river zones config: {self.river_zones}")
+        logger.debug(f"Loaded elevation risk config: {self.elevation_risk}")
+
         # Validate configuration
         self._validate_config()
         
-        logger.info(f"Project initialized with data directory: {self.data_dir}")
-        logger.info(f"Output directory: {self.output_dir}")
-        logger.info(f"Workspace root: {self.workspace_root}")
+        logger.debug(f"Project initialized with data directory: {self.data_dir}")
+        logger.debug(f"Output directory: {self.output_dir}")
+        logger.debug(f"Workspace root: {self.workspace_root}")
     
     def _set_resampling_method(self):
         """Convert resampling method string to Resampling enum value."""
@@ -139,7 +130,6 @@ class ProjectConfig:
     
     def _validate_config(self):
         """Validate configuration values."""
-        # Validate risk weights sum to 1.0
         weights = self.risk_weights
         total_weight = sum(weights.values())
         if not np.isclose(total_weight, 1.0):
