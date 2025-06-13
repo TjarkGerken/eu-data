@@ -1,12 +1,8 @@
 import os
-import yaml
 from pathlib import Path
 from huggingface_hub import HfApi, upload_folder, snapshot_download
-import shutil
-from typing import Dict, Any
 from dotenv import load_dotenv
 import logging
-from rasterio.enums import Resampling
 
 from eu_climate.config.config import ProjectConfig
 
@@ -63,41 +59,85 @@ def download_data() -> bool:
         return False
     
     try:
-        # Download the repository content
-        logger.info(f"Downloading data to {config.huggingface_folder}")
-        temp_download_path = config.huggingface_folder / Path("temp_download")
-
+        validate_env_vars()
+        
+        repo_id = config.config['huggingface_repo']
+        
+        api_token = os.getenv('HF_API_TOKEN')
+        if api_token:
+            api = HfApi(token=api_token)
+            logger.info("Using authenticated API for repository operations")
+        else:
+            api = HfApi()
+            logger.info("Using unauthenticated API (cleanup will be skipped)")
+        
+        if api_token:
+            logger.info("Cleaning up remote repository...")
+            try:
+                repo_files = api.list_repo_files(repo_id=repo_id, repo_type="dataset")
+                
+                files_to_delete = []
+                for file_path in repo_files:
+                    if file_path.startswith('data/') or file_path.startswith('output/'):
+                        files_to_delete.append(file_path)
+                
+                if files_to_delete:
+                    logger.info(f"Deleting {len(files_to_delete)} files from remote repository...")
+                    for file_path in files_to_delete:
+                        try:
+                            api.delete_file(
+                                path_in_repo=file_path,
+                                repo_id=repo_id,
+                                repo_type="dataset",
+                                commit_message=f"Remove {file_path} for cleanup"
+                            )
+                            logger.debug(f"Deleted: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"Could not delete {file_path}: {str(e)}")
+                    logger.info("Remote repository cleanup completed")
+                else:
+                    logger.info("No data or output folders found in remote repository")
+                    
+            except Exception as e:
+                logger.warning(f"Could not clean up remote repository: {str(e)}. Continuing with download...")
+        else:
+            logger.info("Skipping repository cleanup (no API token available)")
+        
+        config.huggingface_folder.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Downloading repository directly to {config.huggingface_folder}")
+        
         snapshot_download(
-            repo_id=config.config['huggingface_repo'],
+            repo_id=repo_id,
             repo_type="dataset",
-            local_dir=temp_download_path
+            local_dir=config.huggingface_folder,
+            local_dir_use_symlinks=False,
+            resume_download=True
         )
         
+        logger.info(f"Successfully downloaded repository to {config.huggingface_folder}")
         
-        directory_mappings = {  
-            "data": config.data_dir,
-            "output": config.output_dir
-        }
+        required_items_checks = [
+            (config.data_dir, "source data directory"),
+            (config.huggingface_folder / "README.md", "README.md file"),
+            (config.huggingface_folder / ".gitattributes", ".gitattributes file")
+        ]
         
-        for source_dir_name, target_path in directory_mappings.items():
-            source = temp_download_path / source_dir_name
-            target = Path(target_path)
-            
-            if source.exists():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if target.exists():
-                    shutil.rmtree(target)
-                shutil.move(str(source), str(target))
-                logger.info(f"Moved {source} to {target}")
+        all_items_present = True
+        for item_path, item_name in required_items_checks:
+            if item_path.exists():
+                logger.info(f"✓ {item_name} found at: {item_path}")
             else:
-                logger.warning(f"Source directory not found: {source}")
-        
-        # Clean up temporary download directory
-        if temp_download_path.exists():
-            shutil.rmtree(temp_download_path)
+                logger.warning(f"✗ {item_name} not found at: {item_path}")
+                if item_name == "source data directory":
+                    all_items_present = False
+        if all_items_present:
+            logger.info("Data download completed successfully!")
+            return True
+        else:
+            logger.error("Download completed but some required items are missing")
+            return False
             
-        return True
-    
     except Exception as e:
         logger.error(f"Error downloading data: {str(e)}")
         return False
@@ -155,8 +195,6 @@ def upload_data() -> bool:
         logger.info(f"Starting upload of {config.huggingface_folder} to {config.config['huggingface_repo']}")
         api = HfApi(token=api_token)
         
-        # Upload the entire huggingface folder contents
-        # We iterate through subdirectories to upload them separately
         for item in config.huggingface_folder.iterdir():
             if item.is_dir() and not item.name.startswith('.') and item.name != 'temp_download':
                 logger.info(f"Uploading directory: {item.name}")
