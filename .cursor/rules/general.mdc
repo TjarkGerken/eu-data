@@ -4,6 +4,7 @@ globs:
 alwaysApply: true
 ---
 DO NOT APOLOGIZE!
+DO NOT WRITE ADDITIONAL TEST FILES! E.g. you create a new function that normalises. Just let me test it and dont creat some weird additional files.
 Make very concise summaries.
 The repo contains additional milestones within it, the requests will focus fully on the code.
 This code is stored in eu_climate with the following structure:
