@@ -35,6 +35,8 @@ data:
     elevation_risk:
       max_safe_elevation_m: 10.0
       risk_decay_factor: 2.2
+    flood_risk:
+      max_safe_flood_risk: 0.3
   caching:
     enabled: false
     cache_dir: ".cache"
@@ -53,6 +55,7 @@ data:
     ghs_built_v_weight: 0.3
     population_weight: 0.7
   relevance:
+    min_economic_value: 0.05
     economic_datasets:
       gdp_weight: 0.4
       freight_loading_weight: 0.3
@@ -65,8 +68,8 @@ data:
   risk_assessment:
     n_risk_classes: 5
     weights:
-      hazard: 0.5
-      economic: 0.5
+      hazard: 0.7
+      economic: 0.3
     ghs_built_c_class_weights:
       1: 0.0 # open spaces, low vegetation
       2: 0.0 # open spaces, medium vegetation

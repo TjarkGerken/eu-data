@@ -49,3 +49,17 @@ source ./.venv/bin/activate
 pip install -r requirements.txt
 python -m eu_climate.main
 ```
+
+### Execution Commands
+
+```bash
+  python -m main --hazard                    # Run only hazard layer analysis
+  python -m main --exposition                # Run only exposition layer analysis  
+  python -m main --relevance                 # Run only relevance layer analysis
+  python -m main --risk                      # Run only risk layer analysis
+  python -m main --hazard --exposition       # Run hazard and exposition layers
+  python -m main --all                       # Run all layers (default behavior)
+  python -m main --verbose --risk            # Run risk layer with verbose logging
+  python -m main --no-cache --hazard         # Run hazard layer without caching
+  python -m main --no-upload --all           # Run all layers without data upload
+```
