@@ -308,20 +308,17 @@ class RelevanceLayer:
     def __init__(self, config: ProjectConfig):
         self.config = config
         
-        # Initialize components
         self.data_loader = EconomicDataLoader(config)
         self.nuts_mapper = NUTSDataMapper(config)
         self.transformer = RasterTransformer(
             target_crs=config.target_crs,
-            target_resolution=30.0,
             config=config
         )
+
         self.distributor = EconomicDistributor(config, self.transformer)
         
-        # Initialize exposition layer
         self.exposition_layer = ExpositionLayer(config)
         
-        # Initialize visualizer for unified styling
         self.visualizer = LayerVisualizer(config)
         
         logger.info("Initialized Relevance Layer")

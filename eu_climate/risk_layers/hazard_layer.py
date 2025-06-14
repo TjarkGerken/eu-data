@@ -16,8 +16,6 @@ from eu_climate.utils.visualization import LayerVisualizer
 from pathlib import Path
 
 
-
-# Set up logging for the hazard layer
 logger = setup_logging(__name__)
 
 @dataclass
@@ -61,21 +59,16 @@ class HazardLayer:
         self.river_nodes_path = self.config.river_nodes_path
         self.scenarios = SeaLevelScenario.get_default_scenarios()
         
-        # Initialize river network attributes
         self.river_network = None
         self.river_nodes = None
-        
-        # Initialize raster transformer
+
         self.transformer = RasterTransformer(
             target_crs=self.config.target_crs,
-            target_resolution=30.0,  # 30m resolution
             config=self.config
         )
         
-        # Initialize visualizer for unified styling
         self.visualizer = LayerVisualizer(self.config)
         
-        # Validate files exist
         for path in [self.dem_path, self.river_segments_path, self.river_nodes_path]:
             if not path.exists():
                 raise FileNotFoundError(f"Required file not found: {path}")
@@ -233,35 +226,28 @@ class HazardLayer:
             dtype=np.uint8
         )
         
-        # Combine masks to get valid study area (now includes land mask)
+        
         valid_study_area = (valid_land_mask & (nuts_mask == 1) & (land_mask == 1))
         
-        # Calculate elevation-based flood risk using normalized approach
         elevation_risk = self._calculate_elevation_flood_risk(dem_data, sea_level_rise, valid_study_area)
         
-        # Calculate river proximity risk enhancement
         river_risk_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
         
-        # Combine elevation and river risks
         combined_risk = self._combine_flood_risks(elevation_risk, river_risk_enhancement, valid_study_area)
         
-        # Apply spatial smoothing to create more realistic flood patterns
         smoothed_risk = ndimage.gaussian_filter(
             np.nan_to_num(combined_risk, nan=0),
             sigma=self.config.smoothing_sigma
         )
         
-        # Apply final unified normalization while preserving gradients
         final_risk = self._apply_final_normalization(smoothed_risk, valid_study_area)
         
-        # Calculate statistics using actual pixel areas from transform
-        pixel_width = abs(transform[0])  # Width of a pixel in meters
-        pixel_height_top = abs(transform[4])  # Height of a pixel at the top
-        pixel_height_bottom = abs(transform[4] + transform[5] * dem_data.shape[0])  # Height at the bottom
+        pixel_width = abs(transform[0])
+        pixel_height_top = abs(transform[4])
+        pixel_height_bottom = abs(transform[4] + transform[5] * dem_data.shape[0])
         pixel_height_avg = (pixel_height_top + pixel_height_bottom) / 2
         pixel_area_m2 = pixel_width * pixel_height_avg
         
-        # Calculate areas for different risk levels
         valid_pixels = np.int64(np.sum(valid_study_area))
         high_risk_pixels = np.int64(np.sum((final_risk > 0.7) & valid_study_area))
         moderate_risk_pixels = np.int64(np.sum((final_risk > 0.3) & (final_risk <= 0.7) & valid_study_area))
@@ -271,8 +257,7 @@ class HazardLayer:
         high_risk_area_km2 = (high_risk_pixels * pixel_area_m2) / 1_000_000.0
         moderate_risk_area_km2 = (moderate_risk_pixels * pixel_area_m2) / 1_000_000.0
         low_risk_area_km2 = (low_risk_pixels * pixel_area_m2) / 1_000_000.0
-        
-        # Calculate mean and max risk values
+            
         valid_risk_values = final_risk[valid_study_area]
         mean_risk = np.mean(valid_risk_values) if len(valid_risk_values) > 0 else 0.0
         max_risk = np.max(valid_risk_values) if len(valid_risk_values) > 0 else 0.0
@@ -398,7 +383,7 @@ class HazardLayer:
         adjusted_risk = risk * context_adjustment
         
         # Ensure realistic value distribution - avoid too many high values
-        final_risk = np.clip(adjusted_risk, 0.001, 0.95)  # Cap at 0.95 instead of 1.0
+        final_risk = np.clip(adjusted_risk, 0.001, 0.95)  
         
         # Log final risk statistics
         final_valid_risks = final_risk[valid_study_area]
