@@ -328,14 +328,11 @@ class RelevanceLayer:
         # Load economic datasets
         economic_data = self.data_loader.load_economic_datasets()
         
-        # Check if any datasets were loaded
         if not economic_data:
             raise ValueError("No economic datasets could be loaded. Please check data paths and files.")
         
-        # Load NUTS shapefile
         nuts_gdf = self.nuts_mapper.load_nuts_shapefile()
         
-        # Join data
         joined_gdf = self.nuts_mapper.join_economic_data(nuts_gdf, economic_data)
         
         return joined_gdf
@@ -433,10 +430,10 @@ class RelevanceLayer:
         return normalized
     
     def save_relevance_layers(self, relevance_layers: Dict[str, np.ndarray], 
-                            meta: dict, output_dir: Optional[Path] = None):
+                            meta: dict):
         """Save all relevance layers as separate GeoTIFF files."""
-        if output_dir is None:
-            output_dir = self.config.output_dir
+        
+        output_dir = self.config.output_dir / "relevance"
             
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -451,7 +448,8 @@ class RelevanceLayer:
         })
         
         for layer_name, data in relevance_layers.items():
-            output_path = output_dir / f"relevance_{layer_name}.tif"
+            output_path = output_dir / "tif" / f"relevance_{layer_name}.tif"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Remove existing file
             if output_path.exists():
@@ -466,11 +464,10 @@ class RelevanceLayer:
     def visualize_relevance_layers(self, relevance_layers: Dict[str, np.ndarray], 
                                  meta: dict = None,
                                  save_plots: bool = True,
-                                 plot_labels:bool = False,
-                                 output_dir: Optional[Path] = None):
+                                 plot_labels:bool = False):
         """Create and save visualization plots for each relevance layer using unified styling."""
-        if output_dir is None:
-            output_dir = self.config.output_dir
+        
+        output_dir = self.config.output_dir / "relevance"
             
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -606,8 +603,7 @@ class RelevanceLayer:
             return (0, width, 0, height)
     
     def run_relevance_analysis(self, visualize: bool = True, 
-                             export_individual_tifs: bool = True,
-                             output_dir: Optional[Path] = None) -> Dict[str, np.ndarray]:
+                             export_individual_tifs: bool = True) -> Dict[str, np.ndarray]:
         """Main execution flow for relevance layer analysis."""
         logger.info("Starting relevance layer analysis")
         
@@ -616,11 +612,11 @@ class RelevanceLayer:
         
         # Save all layers as TIFFs
         if export_individual_tifs:
-            self.save_relevance_layers(relevance_layers, meta, output_dir)
+            self.save_relevance_layers(relevance_layers, meta)
             
         # Create visualizations with metadata for proper coordinate alignment
         if visualize:
-            self.visualize_relevance_layers(relevance_layers, meta, output_dir=output_dir)
+            self.visualize_relevance_layers(relevance_layers, meta)
             
         logger.info("Completed relevance layer analysis")
         return relevance_layers

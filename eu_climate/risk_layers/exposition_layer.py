@@ -244,7 +244,7 @@ class ExpositionLayer:
 
     def visualize_exposition(self, exposition: np.ndarray, meta: dict, title: str = "Exposition Layer"):
         """Visualize the exposition index for each cell using unified styling."""
-        output_path = Path(self.config.output_dir) / 'exposition_layer.png'
+        output_path = Path(self.config.output_dir) / "exposition" / "exposition_layer.png"
         
         # Load land mask for proper water/land separation  
         land_mask = None
@@ -284,16 +284,18 @@ class ExpositionLayer:
             dst.write(data.astype(np.float32), 1)
         logger.info(f"Exposition layer exported to {out_path}")
 
-    def run_exposition(self, visualize: bool = False, export_path: str = None, create_png: bool = True):
+    def run_exposition(self, visualize: bool = False, create_png: bool = True):
         """Main execution flow for the exposition layer."""
         exposition, meta = self.calculate_exposition()
-        out_path = export_path or str(Path(self.config.output_dir) / 'exposition_layer.tif')
+        out_path = Path(self.config.output_dir) /"exposition" / "tif" / 'exposition_layer.tif'
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
         self.save_exposition_layer(exposition, meta, out_path)
         logger.info(f"Exposition layer saved to {out_path}")
         
         # Create PNG visualization (only once)
         if create_png or visualize:
-            png_path = Path(self.config.output_dir) / 'exposition_layer.png'
+            png_path = Path(self.config.output_dir) / "exposition" / 'exposition_layer.png'
             
             # Load land mask for proper water/land separation  
             land_mask = None
