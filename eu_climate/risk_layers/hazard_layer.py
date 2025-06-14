@@ -1296,7 +1296,7 @@ class HazardLayer:
         # Top bars (risk areas) - use scenario colors
         risk_bars = plt.bar(x_positions, risk_percentages, bar_width, 
                            bottom=safe_percentages, label='High Risk Areas (Risk > 0.3)', 
-                           color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+                           color="#e30613", alpha=0.8, edgecolor='black', linewidth=1)
         
         plt.title('Relative Flood Risk Distribution by Sea Level Rise Scenario\n(Percentage of Total Study Area)', 
                  fontsize=16, fontweight='bold', pad=20)

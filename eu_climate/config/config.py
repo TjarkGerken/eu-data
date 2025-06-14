@@ -183,6 +183,16 @@ class ProjectConfig:
         """Get path to land mass raster file."""
         return self.data_dir / self.config['file_paths']['land_mass_file']
     
+    @property
+    def max_safe_flood_risk(self) -> float:
+        """Get maximum safe flood risk threshold from config."""
+        return self.config['hazard']['flood_risk']['max_safe_flood_risk']
+    
+    @property
+    def min_economic_value(self) -> float:
+        """Get minimum economic value threshold from config."""
+        return self.config['relevance']['min_economic_value']
+    
     def validate_files(self) -> bool:
         """Validate that all required input files exist."""
         required_files = [

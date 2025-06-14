@@ -571,20 +571,12 @@ class LayerVisualizer:
         data_overlay = np.full_like(risk_data, np.nan, dtype=np.float32)
         data_overlay[netherlands_mask] = risk_data[netherlands_mask]
         
-        # Use a custom risk colormap that shows gradual risk progression
-        risk_cmap = LinearSegmentedColormap.from_list("risk_colors", [
-            (0.0, '#ffffff'),    # White for no risk
-            (0.2, '#ffffcc'),    # Very light yellow for very low risk
-            (0.4, '#fed976'),    # Light yellow for low risk  
-            (0.6, '#fd8d3c'),    # Orange for moderate risk
-            (0.8, '#e31a1c'),    # Red for high risk
-            (1.0, '#800026')     # Dark red for very high risk
-        ])
+        # Use a custom risk colormap that shows gradual risk 
         
         # Overlay risk data with proper visibility
         im = ax.imshow(
             data_overlay,
-            cmap=risk_cmap,
+            cmap=ScientificStyle.HAZARD_CMAP,
             aspect='equal',
             extent=extent,
             vmin=0, vmax=1,
@@ -627,28 +619,27 @@ class LayerVisualizer:
         
         plt.close()
 
-    def create_risk_summary_visualizations(self, risk_scenarios: Dict[str, Dict[str, np.ndarray]], 
+    def create_risk_summary_visualizations(self, risk_scenarios: Dict[str, np.ndarray], 
                                          meta: dict, land_mask: Optional[np.ndarray] = None,
                                          output_dir: Optional[Path] = None) -> None:
-        """Create summary visualizations for all risk scenarios."""
+        """Create summary visualizations for all risk scenarios using current GDP levels."""
         logger.info("Creating risk summary visualizations...")
         
         if output_dir is None:
             output_dir = Path(".")
         
         # Create individual scenario plots
-        for slr_scenario, economic_scenarios in risk_scenarios.items():
-            for econ_scenario, risk_data in economic_scenarios.items():
-                scenario_title = f"{slr_scenario} / {econ_scenario}"
-                output_path = output_dir / f"risk_summary_{slr_scenario}_{econ_scenario}.png"
-                
-                self.visualize_risk_layer(
-                    risk_data=risk_data,
-                    meta=meta,
-                    scenario_title=scenario_title,
-                    output_path=output_path,
-                    land_mask=land_mask
-                )
+        for scenario_name, risk_data in risk_scenarios.items():
+            scenario_title = f"{scenario_name} (Current GDP)"
+            output_path = output_dir / f"risk_summary_{scenario_name}.png"
+            
+            self.visualize_risk_layer(
+                risk_data=risk_data,
+                meta=meta,
+                scenario_title=scenario_title,
+                output_path=output_path,
+                land_mask=land_mask
+            )
         
         logger.info("Risk summary visualizations complete")
 

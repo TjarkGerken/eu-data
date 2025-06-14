@@ -20,23 +20,6 @@ from eu_climate.risk_layers.relevance_layer import RelevanceLayer
 
 logger = setup_logging(__name__)
 
-@dataclass
-class EconomicScenario:
-    """Configuration for economic scenarios."""
-    name: str
-    multiplier: float
-    description: str
-    
-    @classmethod
-    def get_default_scenarios(cls) -> List['EconomicScenario']:
-        """Returns the default set of economic scenarios."""
-        return [
-            cls("Current", 1.0, "Current GDP levels - baseline scenario"),
-            cls("Conservative", 1.2, "20% increase in economic activity"),
-            cls("Moderate", 1.5, "50% increase in economic activity"),
-            cls("Optimistic", 2.0, "100% increase in economic activity")
-        ]
-
 class RiskLayer:
     """
     Risk Layer Implementation
@@ -47,7 +30,7 @@ class RiskLayer:
     
     Key Features:
     - Integration of hazard and economic data
-    - Configurable scenario combinations
+    - Sea level rise scenario analysis
     - Regional risk aggregation
     - Standardized output structure
     - Unified visualization approach
@@ -60,7 +43,6 @@ class RiskLayer:
         self.relevance_layer = RelevanceLayer(config)
         
         self.sea_level_scenarios = SeaLevelScenario.get_default_scenarios()
-        self.economic_scenarios = EconomicScenario.get_default_scenarios()
         
         self.transformer = RasterTransformer(
             target_crs=self.config.target_crs,
@@ -169,18 +151,16 @@ class RiskLayer:
                      input_files=['dem_path', 'land_mass_path'],
                      config_attrs=['target_crs', 'target_resolution', 'risk_weights'])
     def process_risk_scenarios(self, 
-                             custom_sea_level_scenarios: Optional[List[SeaLevelScenario]] = None,
-                             custom_economic_scenarios: Optional[List[EconomicScenario]] = None) -> Dict[str, Dict[str, np.ndarray]]:
+                             custom_sea_level_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
-        Process all combinations of sea level rise and economic scenarios.
+        Process sea level rise scenarios with current GDP levels.
         
         Returns:
-            Dictionary with structure: {sea_level_scenario: {economic_scenario: risk_data}}
+            Dictionary with structure: {sea_level_scenario: risk_data}
         """
-        logger.info("Processing risk scenarios...")
+        logger.info("Processing risk scenarios with current GDP levels...")
         
         sea_level_scenarios = custom_sea_level_scenarios or self.sea_level_scenarios
-        economic_scenarios = custom_economic_scenarios or self.economic_scenarios
         
         land_mask, transform, crs = self.load_land_mask()
         
@@ -207,38 +187,33 @@ class RiskLayer:
         
         for slr_scenario in sea_level_scenarios:
             scenario_name = f"SLR-{slr_scenario.name}"
-            risk_scenarios[scenario_name] = {}
             
             hazard_data = hazard_results[slr_scenario.name]
             
-            for econ_scenario in economic_scenarios:
-                econ_name = f"GDP-{econ_scenario.name}"
-                logger.info(f"Calculating risk for {scenario_name}/{econ_name}")
-                
-                risk_data = self.calculate_integrated_risk(
-                    hazard_data=hazard_data,
-                    economic_data=economic_results,
-                    economic_multiplier=econ_scenario.multiplier,
-                    land_mask=land_mask
-                )
-                
-                risk_scenarios[scenario_name][econ_name] = risk_data
+            logger.info(f"Calculating risk for {scenario_name} with current GDP")
+            
+            risk_data = self.calculate_integrated_risk(
+                hazard_data=hazard_data,
+                economic_data=economic_results,
+                land_mask=land_mask
+            )
+            
+            risk_scenarios[scenario_name] = risk_data
         
-        logger.info(f"Processed {len(risk_scenarios)} sea level scenarios x {len(economic_scenarios)} economic scenarios")
+        logger.info(f"Processed {len(risk_scenarios)} sea level scenarios")
         return risk_scenarios
     
     def calculate_integrated_risk(self,
                                 hazard_data: np.ndarray,
                                 economic_data: Dict[str, np.ndarray],
-                                economic_multiplier: float,
                                 land_mask: np.ndarray) -> np.ndarray:
         """
-        Calculate integrated risk from hazard and economic data.
+        Calculate integrated risk from hazard and economic data using current GDP levels.
+        Uses filtered calculation that only applies economic risk where flood risk exists.
         
         Args:
             hazard_data: Hazard layer data (0-1 normalized)
             economic_data: Dictionary of economic layer data
-            economic_multiplier: Multiplier for economic scenario
             land_mask: Valid study area mask
             
         Returns:
@@ -247,6 +222,15 @@ class RiskLayer:
         weights = self.config.risk_weights
         hazard_weight = weights['hazard']
         economic_weight = weights['economic']
+        
+        # Get thresholds from config
+        max_safe_flood_risk = self.config.max_safe_flood_risk
+        min_economic_value = self.config.min_economic_value
+        logger.info(f"Using flood risk threshold: {max_safe_flood_risk}")
+        logger.info(f"Using minimum economic value threshold: {min_economic_value}")
+        
+        # Use current GDP levels (multiplier = 1.0)
+        economic_multiplier = 1.0
         
         # Check if economic_data is actually a dictionary of layers or a combined layer
         if isinstance(economic_data, dict) and all(isinstance(v, np.ndarray) for v in economic_data.values()):
@@ -271,21 +255,37 @@ class RiskLayer:
             )
             combined_economic = zoom(combined_economic, zoom_factors, order=1)
         
-        risk_data = (
-            hazard_weight * hazard_data + 
-            economic_weight * combined_economic
-        )
+        # Initialize risk data with zeros
+        risk_data = np.zeros_like(hazard_data, dtype=np.float32)
         
-        risk_data = risk_data * land_mask
+        # Create masks for filtered calculation
+        flood_risk_mask = hazard_data > max_safe_flood_risk
+        economic_relevance_mask = combined_economic > min_economic_value
+        land_valid_mask = land_mask > 0
         
-        valid_mask = (land_mask > 0) & (risk_data > 0)
-        if np.any(valid_mask):
-            risk_min = np.min(risk_data[valid_mask])
-            risk_max = np.max(risk_data[valid_mask])
+        # Combined mask: only calculate risk where there is both flood risk AND economic relevance
+        calculation_mask = flood_risk_mask & economic_relevance_mask & land_valid_mask
+        
+        # Apply weighted calculation only where both conditions are met
+        if np.any(calculation_mask):
+            risk_data[calculation_mask] = (
+                hazard_weight * hazard_data[calculation_mask] + 
+                economic_weight * combined_economic[calculation_mask]
+            )
+            
+            # Normalize risk data for areas where calculation was applied
+            risk_min = np.min(risk_data[calculation_mask])
+            risk_max = np.max(risk_data[calculation_mask])
             if risk_max > risk_min:
-                risk_data[valid_mask] = (risk_data[valid_mask] - risk_min) / (risk_max - risk_min)
+                risk_data[calculation_mask] = (risk_data[calculation_mask] - risk_min) / (risk_max - risk_min)
+            
+            logger.info(f"Economic risk calculated for {np.sum(calculation_mask)} cells")
+            logger.info(f"Flood risk cells: {np.sum(flood_risk_mask & land_valid_mask)}")
+            logger.info(f"Economic relevance cells: {np.sum(economic_relevance_mask & land_valid_mask)}")
+            logger.info(f"Combined risk cells: {np.sum(calculation_mask)}")
+        else:
+            logger.warning("No cells meet both flood risk and economic relevance criteria")
         
-        logger.info(f"Risk calculation complete. Valid cells: {np.sum(valid_mask)}")
         return risk_data
     
     def combine_economic_layers(self, 
@@ -322,7 +322,7 @@ class RiskLayer:
         return combined if combined is not None else np.zeros((100, 100))
     
     def export_risk_scenarios(self, 
-                            risk_scenarios: Dict[str, Dict[str, np.ndarray]],
+                            risk_scenarios: Dict[str, np.ndarray],
                             transform: rasterio.Affine,
                             crs: rasterio.crs.CRS,
                             land_mask: Optional[np.ndarray] = None) -> None:
@@ -335,25 +335,23 @@ class RiskLayer:
             'crs': crs
         }
         
-        for slr_scenario, economic_scenarios in risk_scenarios.items():
-            for econ_scenario, risk_data in economic_scenarios.items():
-                output_dir = self.config.output_dir / "risk" / slr_scenario / econ_scenario
-                output_dir.mkdir(parents=True, exist_ok=True)
-                
-                tif_path = output_dir / f"risk_{slr_scenario}_{econ_scenario}.tif"
-                
-                self.save_risk_raster(risk_data, transform, crs, tif_path)
-                
-                png_path = output_dir / f"risk_{slr_scenario}_{econ_scenario}.png"
-                scenario_title = f"{slr_scenario} / {econ_scenario}"
-                
-                self.visualizer.visualize_risk_layer(
-                    risk_data=risk_data,
-                    meta=meta,
-                    scenario_title=scenario_title,
-                    output_path=png_path,
-                    land_mask=land_mask
-                )
+        for scenario_name, risk_data in risk_scenarios.items():
+            output_dir = self.config.output_dir / "risk" / scenario_name
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            tif_path = output_dir / f"risk_{scenario_name}.tif"
+            
+            self.save_risk_raster(risk_data, transform, crs, tif_path)
+            
+            png_path = output_dir / f"risk_{scenario_name}.png"
+            
+            self.visualizer.visualize_risk_layer(
+                risk_data=risk_data,
+                meta=meta,
+                scenario_title=scenario_name,
+                output_path=png_path,
+                land_mask=land_mask
+            )
         
         logger.info("Risk scenario export complete")
     
@@ -382,41 +380,27 @@ class RiskLayer:
     def run_risk_assessment(self,
                           visualize: bool = True,
                           export_results: bool = True,
-                          custom_sea_level_scenarios: Optional[List[SeaLevelScenario]] = None,
-                          custom_economic_scenarios: Optional[List[EconomicScenario]] = None) -> Dict[str, Dict[str, np.ndarray]]:
+                          custom_sea_level_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
-        Run complete risk assessment process.
+        Run complete risk assessment process using current GDP levels.
         
         Args:
             visualize: Whether to create visualizations
             export_results: Whether to export results to files
             custom_sea_level_scenarios: Custom sea level scenarios
-            custom_economic_scenarios: Custom economic scenarios
             
         Returns:
             Risk scenario results
         """
-        logger.info("Starting risk assessment...")
+        logger.info("Starting risk assessment with current GDP levels...")
         
-        risk_scenarios = self.process_risk_scenarios(
-            custom_sea_level_scenarios,
-            custom_economic_scenarios
-        )
+        risk_scenarios = self.process_risk_scenarios(custom_sea_level_scenarios)
         
         if export_results or visualize:
             land_mask, transform, crs = self.load_land_mask()
             
             if export_results:
                 self.export_risk_scenarios(risk_scenarios, transform, crs, land_mask)
-            
-            if visualize:
-                meta = {'transform': transform, 'crs': crs}
-                self.visualizer.create_risk_summary_visualizations(
-                    risk_scenarios=risk_scenarios,
-                    meta=meta,
-                    land_mask=land_mask,
-                    output_dir=self.config.output_dir
-                )
         
         logger.info("Risk assessment complete")
         return risk_scenarios 
