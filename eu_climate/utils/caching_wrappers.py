@@ -314,29 +314,34 @@ class CacheAwareMethod:
     def __call__(self, func):
         """Apply caching to the decorated method."""
         
+        # Store decorator attributes in closure
+        decorator_input_files = self.input_files
+        decorator_config_attrs = self.config_attrs
+        decorator_cache_type = self.cache_type
+        
         @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            cache_manager = get_cache_manager(getattr(self, 'config', None))
+        def wrapper(instance, *args, **kwargs):
+            cache_manager = get_cache_manager(getattr(instance, 'config', None))
             
             if not cache_manager.enabled:
-                return func(self, *args, **kwargs)
+                return func(instance, *args, **kwargs)
                 
             # Generate cache key
             function_name = f"{func.__module__}.{func.__qualname__}"
             
             # Extract input files
             input_file_paths = []
-            for attr in self.input_files:
-                if hasattr(self, attr):
-                    file_path = getattr(self, attr)
+            for attr in decorator_input_files:
+                if hasattr(instance, attr):
+                    file_path = getattr(instance, attr)
                     if file_path:
                         input_file_paths.append(str(file_path))
                         
             # Extract config parameters
             config_params = {}
-            if hasattr(self, 'config'):
-                config = self.config
-                for attr in self.config_attrs:
+            if hasattr(instance, 'config'):
+                config = instance.config
+                for attr in decorator_config_attrs:
                     if hasattr(config, attr):
                         config_params[attr] = getattr(config, attr)
                         
@@ -348,15 +353,15 @@ class CacheAwareMethod:
             )
             
             # Try cache first
-            cached_result = cache_manager.get(cache_key, self.cache_type)
+            cached_result = cache_manager.get(cache_key, decorator_cache_type)
             if cached_result is not None:
                 logger.debug(f"Cache hit for {function_name}")
                 return cached_result
                 
             # Execute and cache
             logger.debug(f"Cache miss for {function_name}, executing...")
-            result = func(self, *args, **kwargs)
-            cache_manager.set(cache_key, result, self.cache_type)
+            result = func(instance, *args, **kwargs)
+            cache_manager.set(cache_key, result, decorator_cache_type)
             
             return result
             

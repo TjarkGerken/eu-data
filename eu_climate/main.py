@@ -229,7 +229,7 @@ class RiskAssessment:
         logger.info("EXPOSITION LAYER ANALYSIS")
         logger.info("="*40)
         exposition_layer = ExpositionLayer(config)
-        exposition_layer.run_exposition(visualize=False, export_path=None, create_png=True)
+        exposition_layer.run_exposition(visualize=False, create_png=True)
 
     def run_risk_assessment(self, config: ProjectConfig, 
                            run_hazard: bool = True,
@@ -316,8 +316,7 @@ class RiskAssessment:
         # Process relevance layer analysis
         relevance_layers = self.relevance_layer.run_relevance_analysis(
             visualize=True,
-            export_individual_tifs=True,
-            output_dir=config.output_dir
+            export_individual_tifs=True
         )
         
         logger.info(f"Relevance layer analysis completed - Generated {len(relevance_layers)} layers")

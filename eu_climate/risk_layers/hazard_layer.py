@@ -1000,7 +1000,7 @@ class HazardLayer:
                     fontsize=16, fontweight='bold', y=0.98)
         
         if save_plots:
-            output_path = self.config.output_dir / "hazard_layer_assessment.png"
+            output_path = self.config.output_dir /"hazard"/"hazard_layer_assessment.png"
             plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight')
             logger.info(f"Saved hazard assessment visualization to: {output_path}")
         # TODO: Remove this before pushing
@@ -1130,7 +1130,7 @@ class HazardLayer:
             }
             
             # Create output path for normalized risk
-            risk_png_path = self.config.output_dir / f"hazard_risk_{scenario_name.lower()}_scenario.png"
+            risk_png_path = self.config.output_dir / "hazard" / f"hazard_risk_{scenario_name.lower()}_scenario.png"
             
             # Use unified visualizer for normalized risk visualization
             self.visualizer.visualize_hazard_scenario(
@@ -1261,7 +1261,7 @@ class HazardLayer:
                    ha='center', fontsize=10, style='italic')
         
         # Save the chart
-        output_path = self.config.output_dir / "flood_risk_absolute_by_scenario.png"
+        output_path = self.config.output_dir / "hazard" / "flood_risk_absolute_by_scenario.png"
         plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight', facecolor='white')
         plt.close()
         
@@ -1340,7 +1340,7 @@ class HazardLayer:
                    ha='center', fontsize=10, style='italic')
         
         # Save the chart
-        output_path = self.config.output_dir / "flood_risk_relative_by_scenario.png"
+        output_path = self.config.output_dir / "hazard" / "flood_risk_relative_by_scenario.png"
         plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight', facecolor='white')
         plt.close()
         
@@ -1361,8 +1361,8 @@ class HazardLayer:
             crs = flood_data['crs']
             scenario = flood_data['scenario']
             
-            # Export normalized flood risk as GeoTIFF
-            risk_output_path = self.config.output_dir / f"flood_risk_{scenario_name.lower()}.tif"
+            risk_output_path = self.config.output_dir / "hazard" / "tif" / f"flood_risk_{scenario_name.lower()}.tif"
+            risk_output_path.parent.mkdir(parents=True, exist_ok=True)
             
             with rasterio.open(
                 risk_output_path,
@@ -1428,7 +1428,7 @@ class HazardLayer:
         
         # Save summary as CSV
         summary_df = pd.DataFrame(summary_stats)
-        summary_path = self.config.output_dir / "hazard_assessment_summary.csv"
+        summary_path = self.config.output_dir / "hazard" / "hazard_assessment_summary.csv"
         summary_df.to_csv(summary_path, index=False)
         logger.info(f"Exported summary statistics to: {summary_path}")
 

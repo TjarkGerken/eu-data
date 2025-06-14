@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Union
 import numpy as np
 import rasterio
 import rasterio.features
@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 import pandas as pd
 import os
+import re
 
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
@@ -62,7 +63,7 @@ class RiskLayer:
         all_files_exist = True
         
         for scenario in sea_level_scenarios:
-            hazard_file = output_dir / f"flood_risk_{scenario.name.lower()}.tif"
+            hazard_file = output_dir / "hazard" / "tif" / f"flood_risk_{scenario.name.lower()}.tif"
             
             if hazard_file.exists():
                 logger.info(f"Loading existing hazard data for {scenario.name} from {hazard_file}")
@@ -93,9 +94,9 @@ class RiskLayer:
         relevance_files = {}
         
         for variable in economic_variables:
-            relevance_files[variable] = output_dir / f"relevance_{variable}.tif"
+            relevance_files[variable] = output_dir / "relevance" / "tif" / f"relevance_{variable}.tif"
         
-        relevance_files['combined'] = output_dir / 'relevance_combined.tif'
+        relevance_files['combined'] = output_dir / "relevance" / "tif" / 'relevance_combined.tif'
         
         relevance_results = {}
         all_files_exist = True
@@ -158,13 +159,13 @@ class RiskLayer:
         Returns:
             Dictionary with structure: {sea_level_scenario: risk_data}
         """
+        logger.info("=== STARTING process_risk_scenarios ===")
         logger.info("Processing risk scenarios with current GDP levels...")
         
         sea_level_scenarios = custom_sea_level_scenarios or self.sea_level_scenarios
         
         land_mask, transform, crs = self.load_land_mask()
         
-        # Try to load existing hazard outputs first
         logger.info("Checking for existing hazard outputs...")
         hazard_results = self.load_existing_hazard_outputs(sea_level_scenarios)
         
@@ -172,7 +173,6 @@ class RiskLayer:
             logger.info("Regenerating hazard scenarios...")
             hazard_results = self.hazard_layer.process_scenarios(sea_level_scenarios)
         
-        # Try to load existing relevance outputs first
         logger.info("Checking for existing relevance outputs...")
         economic_results = self.load_existing_relevance_outputs()
         
@@ -180,32 +180,64 @@ class RiskLayer:
             logger.info("Regenerating economic layers...")
             economic_results = self.relevance_layer.run_relevance_analysis(
                 visualize=False, 
-                export_individual_tifs=False
+                export_individual_tifs=True
             )
+        
+        # Log what economic variables we have
+        logger.info(f"Available economic variables: {list(economic_results.keys())}")
+        
+        # Get the economic variables we want to process
+        economic_variables = [var for var in economic_results.keys() if var != 'combined']
+        
+        # Always include combined if it exists
+        if 'combined' in economic_results:
+            economic_variables.append('combined')
+        
+        # If no variables at all, something is wrong
+        if not economic_variables:
+            logger.error("No economic variables found at all!")
+            return {}
+        
+        logger.info(f"Economic variables to process: {economic_variables}")
         
         risk_scenarios = {}
         
         for slr_scenario in sea_level_scenarios:
-            scenario_name = f"SLR-{slr_scenario.name}"
+            # Include meter value in scenario name: SLR-0-Current, SLR-1-Conservative, etc.
+            scenario_name = f"SLR-{int(slr_scenario.rise_meters)}-{slr_scenario.name}"
             
             hazard_data = hazard_results[slr_scenario.name]
             
-            logger.info(f"Calculating risk for {scenario_name} with current GDP")
+            logger.info(f"Calculating risk for {scenario_name} with {len(economic_variables)} economic variables")
             
-            risk_data = self.calculate_integrated_risk(
-                hazard_data=hazard_data,
-                economic_data=economic_results,
-                land_mask=land_mask
-            )
-            
-            risk_scenarios[scenario_name] = risk_data
+            for economic_variable in economic_variables:
+                if economic_variable == 'combined':
+                    combined_scenario_name = f"{scenario_name}_COMBINED"
+                    # Use the pre-combined economic data directly
+                    economic_data_to_use = economic_results[economic_variable]
+                else:
+                    combined_scenario_name = f"{scenario_name}_{economic_variable.upper()}"
+                    # Use individual economic variable
+                    economic_data_to_use = economic_results[economic_variable]
+                
+                logger.info(f"Processing: {economic_variable} -> {combined_scenario_name}")
+                
+                risk_data = self.calculate_integrated_risk(
+                    hazard_data=hazard_data,
+                    economic_data=economic_data_to_use,
+                    land_mask=land_mask
+                )
+                
+                risk_scenarios[combined_scenario_name] = risk_data
+                logger.info(f"Calculated risk for {combined_scenario_name}")
         
-        logger.info(f"Processed {len(risk_scenarios)} sea level scenarios")
+        logger.info(f"Final risk scenarios keys: {list(risk_scenarios.keys())}")
+        logger.info(f"Processed {len(risk_scenarios)} risk scenario combinations")
         return risk_scenarios
     
     def calculate_integrated_risk(self,
                                 hazard_data: np.ndarray,
-                                economic_data: Dict[str, np.ndarray],
+                                economic_data: Union[Dict[str, np.ndarray], np.ndarray],
                                 land_mask: np.ndarray) -> np.ndarray:
         """
         Calculate integrated risk from hazard and economic data using current GDP levels.
@@ -213,7 +245,7 @@ class RiskLayer:
         
         Args:
             hazard_data: Hazard layer data (0-1 normalized)
-            economic_data: Dictionary of economic layer data
+            economic_data: Either a dictionary of economic layer data or a single combined numpy array
             land_mask: Valid study area mask
             
         Returns:
@@ -232,19 +264,17 @@ class RiskLayer:
         # Use current GDP levels (multiplier = 1.0)
         economic_multiplier = 1.0
         
-        # Check if economic_data is actually a dictionary of layers or a combined layer
-        if isinstance(economic_data, dict) and all(isinstance(v, np.ndarray) for v in economic_data.values()):
-            combined_economic = self.combine_economic_layers(
-                economic_data, 
-                economic_multiplier
-            )
+        # Handle different economic data formats
+        if isinstance(economic_data, np.ndarray):
+            # Pre-combined economic data (e.g., from relevance_combined.tif)
+            combined_economic = economic_data * economic_multiplier
+        elif isinstance(economic_data, dict) and len(economic_data) == 1:
+            # Single economic variable passed as dictionary
+            combined_economic = list(economic_data.values())[0] * economic_multiplier
         else:
-            # If it's already a single combined array, use it directly
-            if isinstance(economic_data, dict) and 'combined' in economic_data:
-                combined_economic = economic_data['combined'] * economic_multiplier
-            else:
-                logger.warning(f"Unexpected economic data format: {type(economic_data)}")
-                combined_economic = np.zeros_like(land_mask, dtype=np.float32) if isinstance(land_mask, np.ndarray) else np.zeros((100, 100))
+            logger.error(f"Unexpected economic data format: {type(economic_data)} with length {len(economic_data) if isinstance(economic_data, dict) else 'N/A'}")
+            logger.error("Economic data should be either a numpy array or a dictionary with exactly one variable")
+            combined_economic = np.zeros_like(land_mask, dtype=np.float32) if isinstance(land_mask, np.ndarray) else np.zeros((100, 100))
         
         if hazard_data.shape != combined_economic.shape:
             logger.info("Aligning economic data to hazard grid...")
@@ -288,39 +318,6 @@ class RiskLayer:
         
         return risk_data
     
-    def combine_economic_layers(self, 
-                              economic_data: Dict[str, np.ndarray],
-                              multiplier: float) -> np.ndarray:
-        """Combine multiple economic layers using configured weights."""
-        if not economic_data:
-            logger.warning("No economic data available, returning zeros")
-            return np.zeros((100, 100))  # Placeholder
-        
-        weights = self.config.relevance_weights or {}
-        combined = None
-        total_weight = 0
-        
-        for layer_name, data in economic_data.items():
-            weight_key = f"{layer_name}_weight"
-            weight = weights.get(weight_key, 1.0 / len(economic_data))
-            
-            scaled_data = data * multiplier * weight
-            
-            if combined is None:
-                combined = scaled_data
-            else:
-                if combined.shape != scaled_data.shape:
-                    logger.warning(f"Shape mismatch in economic layer {layer_name}")
-                    continue
-                combined += scaled_data
-            
-            total_weight += weight
-        
-        if combined is not None and total_weight > 0:
-            combined = combined / total_weight
-        
-        return combined if combined is not None else np.zeros((100, 100))
-    
     def export_risk_scenarios(self, 
                             risk_scenarios: Dict[str, np.ndarray],
                             transform: rasterio.Affine,
@@ -328,6 +325,7 @@ class RiskLayer:
                             land_mask: Optional[np.ndarray] = None) -> None:
         """Export risk scenarios to the specified directory structure."""
         logger.info("Exporting risk scenarios...")
+        logger.info(f"Received scenario names: {list(risk_scenarios.keys())}")
         
         # Create metadata dict for visualization
         meta = {
@@ -336,22 +334,56 @@ class RiskLayer:
         }
         
         for scenario_name, risk_data in risk_scenarios.items():
-            output_dir = self.config.output_dir / "risk" / scenario_name
+            # Parse scenario name to extract SLR scenario part
+            # Expected formats: "SLR-0-Current_GDP", "SLR-1-Conservative_FREIGHT_LOADING", etc.
+            # We need to extract just the SLR part: "SLR-0-Current", "SLR-1-Conservative", etc.
+            
+            # Use regex to match SLR pattern: SLR-{number}-{name}
+            # This will work with any custom scenarios
+            slr_pattern = r'^(SLR-\d+-[^_]+)'
+            match = re.match(slr_pattern, scenario_name)
+            
+            if match:
+                slr_part = match.group(1)
+                # Extract economic part (everything after SLR scenario + "_")
+                if len(scenario_name) > len(slr_part) and scenario_name[len(slr_part)] == '_':
+                    economic_part = scenario_name[len(slr_part) + 1:]
+                else:
+                    economic_part = None
+            else:
+                # Fallback if parsing fails
+                logger.warning(f"Could not parse scenario name: {scenario_name}")
+                slr_part = scenario_name
+                economic_part = "UNKNOWN"
+            
+            # Create clean title for visualization
+            if economic_part:
+                clean_scenario_title = f"{slr_part} - {economic_part.replace('_', ' ').title()}"
+            else:
+                clean_scenario_title = slr_part
+            
+            # Create simplified directory structure: risk/SLR-scenario/
+            output_dir = self.config.output_dir / "risk" / slr_part
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            tif_path = output_dir / f"risk_{scenario_name}.tif"
+            # TIFs go in tif subdirectory
+            tif_path = output_dir / "tif" / f"risk_{scenario_name}.tif" 
+            tif_path.parent.mkdir(parents=True, exist_ok=True)
             
             self.save_risk_raster(risk_data, transform, crs, tif_path)
             
+            # PNGs go directly in the scenario directory
             png_path = output_dir / f"risk_{scenario_name}.png"
             
             self.visualizer.visualize_risk_layer(
                 risk_data=risk_data,
                 meta=meta,
-                scenario_title=scenario_name,
+                scenario_title=f"{clean_scenario_title}",
                 output_path=png_path,
                 land_mask=land_mask
             )
+            
+            logger.info(f"Exported risk scenario: {scenario_name} -> {output_dir}")
         
         logger.info("Risk scenario export complete")
     
@@ -544,7 +576,7 @@ class RiskLayer:
         population_risk_scenarios = {}
         
         for slr_scenario in sea_level_scenarios:
-            scenario_name = f"SLR-{slr_scenario.name}"
+            scenario_name = f"SLR-{int(slr_scenario.rise_meters)}-{slr_scenario.name}"
             
             hazard_data = hazard_results[slr_scenario.name]
             
@@ -576,22 +608,28 @@ class RiskLayer:
         }
         
         for scenario_name, population_risk_data in population_risk_scenarios.items():
+            # Create simplified directory structure: risk/SLR-scenario/
             output_dir = self.config.output_dir / "risk" / scenario_name
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            tif_path = output_dir / f"population_risk_{scenario_name}.tif"
+            # TIFs go in tif subdirectory
+            tif_path = output_dir / "tif" / f"risk_{scenario_name}_POPULATION.tif"
+            tif_path.parent.mkdir(parents=True, exist_ok=True)
             
             self.save_risk_raster(population_risk_data, transform, crs, tif_path)
             
-            png_path = output_dir / f"population_risk_{scenario_name}.png"
+            # PNGs go directly in the scenario directory
+            png_path = output_dir / f"risk_{scenario_name}_POPULATION.png"
             
             self.visualizer.visualize_risk_layer(
                 risk_data=population_risk_data,
                 meta=meta,
-                scenario_title=f"Population Risk - {scenario_name}",
+                scenario_title=f"Population - {scenario_name}",
                 output_path=png_path,
                 land_mask=land_mask
             )
+            
+            logger.info(f"Exported population risk scenario: {scenario_name} -> {output_dir}")
         
         logger.info("Population risk scenario export complete")
     

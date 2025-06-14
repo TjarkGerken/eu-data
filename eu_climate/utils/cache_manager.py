@@ -38,17 +38,13 @@ class CacheManager:
     - Thread-safe operations
     """
     
-    def __init__(self, config=None, cache_dir: Optional[Path] = None):
+    def __init__(self, config=None):
         """Initialize the cache manager."""
         self.config = config
         
-        # Set up cache directory
-        if cache_dir:
-            self.cache_dir = Path(cache_dir)
-        elif config and hasattr(config, 'data_dir'):
-            self.cache_dir = config.data_dir.parent / '.cache' / 'eu_climate'
-        else:
-            self.cache_dir = Path('.cache') / 'eu_climate'
+
+        self.cache_dir = config.huggingface_folder / ".cache" / "eu_climate"
+        
             
         # Create cache subdirectories
         self.cache_dirs = {
