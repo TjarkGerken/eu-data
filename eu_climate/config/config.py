@@ -66,7 +66,7 @@ class ProjectConfig:
         self._set_resampling_method()
         self.smoothing_sigma = self.config['processing']['smoothing_sigma']
         self.target_crs = self.config['processing']['target_crs']
-        self.target_resolution = 30.0  # 30m resolution for all layers
+        self.target_resolution = self.config['processing']['target_resolution']
         
         # Store risk assessment parameters
         self.n_risk_classes = self.config['risk_assessment']['n_risk_classes']

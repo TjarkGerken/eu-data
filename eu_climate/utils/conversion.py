@@ -24,7 +24,7 @@ class RasterTransformer:
     Ensures consistent coordinate transformations and grid alignment across different layers.
     """
     
-    def __init__(self, target_crs: str = "EPSG:3035", target_resolution: float = 30.0, intermediate_crs: str = "ESRI:54009", config=None):
+    def __init__(self, target_crs: str = "EPSG:3035", intermediate_crs: str = "ESRI:54009", config=None):
         """
         Initialize the RasterTransformer.
         
@@ -35,7 +35,7 @@ class RasterTransformer:
             config: Configuration object for cache manager
         """
         self.target_crs = rasterio.crs.CRS.from_string(target_crs)
-        self.target_resolution = target_resolution
+        self.target_resolution = self.config.target_resolution
         self.intermediate_crs = rasterio.crs.CRS.from_string(intermediate_crs)
         self._cache_manager = get_cache_manager(config)
         
@@ -89,15 +89,11 @@ class RasterTransformer:
         Returns:
             Tuple of (transformed data, transform, CRS)
         """
-        # Check cache first
         if self._cache_manager and self._cache_manager.enabled:
-            # Generate cache key
             source_path = Path(source_path)
             
-            # Include file timestamp and size in cache key
             input_files = [str(source_path)]
             
-            # Parameters that affect the transformation
             parameters = {
                 'reference_bounds': reference_bounds,
                 'resampling_method': resampling_method,
@@ -113,28 +109,20 @@ class RasterTransformer:
                 {}
             )
             
-            # Try to get from cache
             cached_result = self._cache_manager.get(cache_key, 'raster_data')
             if cached_result is not None:
                 logger.info(f"Cache hit for raster transformation: {source_path}")
-                # Reconstruct the result from cached data
                 data, metadata = cached_result
-                # Reconstruct transform from metadata
                 transform_data = metadata['transform']
                 logger.debug(f"Cached transform_data: {transform_data}, type: {type(transform_data)}, length: {len(transform_data)}")
                 
-                # Handle different transform formats and convert to list of floats
                 if isinstance(transform_data, (list, tuple, np.ndarray)):
-                    # Convert to flat list and ensure all are floats
                     if hasattr(transform_data, 'flatten'):
-                        # It's a numpy array
                         transform_list = transform_data.flatten().tolist()
                     elif isinstance(transform_data, (list, tuple)):
-                        # It's already a list/tuple, but might be nested
                         transform_list = []
                         for item in transform_data:
                             if isinstance(item, (list, tuple, np.ndarray)):
-                                # Flatten nested structures
                                 if hasattr(item, 'flatten'):
                                     transform_list.extend(item.flatten().tolist())
                                 else:
@@ -144,7 +132,6 @@ class RasterTransformer:
                     else:
                         transform_list = list(transform_data)
                     
-                    # Ensure we have at least 6 numeric values
                     transform_floats = []
                     for item in transform_list:
                         try:
@@ -154,41 +141,33 @@ class RasterTransformer:
                             continue
                     
                     if len(transform_floats) >= 6:
-                        # Use the first 6 coefficients
                         transform = rasterio.Affine(*transform_floats[:6])
                     else:
                         logger.warning(f"Insufficient transform coefficients: {len(transform_floats)} < 6")
                         logger.info("Falling back to fresh transformation")
-                        # Fall back to fresh transformation
                         result = self._transform_raster_impl(source_path, reference_bounds, resampling_method)
                         return result
                 else:
                     logger.warning(f"Unexpected transform data type: {type(transform_data)}")
                     logger.info("Falling back to fresh transformation")
-                    # Fall back to fresh transformation
                     result = self._transform_raster_impl(source_path, reference_bounds, resampling_method)
                     return result
                     
-                # Reconstruct CRS
                 crs = rasterio.crs.CRS.from_string(metadata['crs'])
                 return data, transform, crs
                 
             logger.info(f"Cache miss for raster transformation: {source_path}")
         
-        # Perform the transformation
         result = self._transform_raster_impl(source_path, reference_bounds, resampling_method)
         
-        # Cache the result
         if self._cache_manager and self._cache_manager.enabled:
-            # Package the result for caching: (data, metadata)
             data, transform, crs = result
-            # Ensure transform coefficients are stored as a simple list of floats
             transform_coeffs = [
                 float(transform.a), float(transform.b), float(transform.c),
                 float(transform.d), float(transform.e), float(transform.f)
             ]
             metadata = {
-                'transform': transform_coeffs,  # Save the 6 affine coefficients as simple float list
+                'transform': transform_coeffs,
                 'crs': str(crs),
                 'shape': data.shape
             }
@@ -211,8 +190,7 @@ class RasterTransformer:
         """
         source_path = Path(source_path)
         logger.info(f"Transforming raster: {source_path}")
-        
-        # Convert resampling method string to Resampling enum
+    
         try:
             resampling = getattr(Resampling, resampling_method.lower())
         except AttributeError:
@@ -220,34 +198,26 @@ class RasterTransformer:
             resampling = Resampling.bilinear
         
         with rasterio.open(source_path) as src:
-            # Log original properties
             logger.info(f"Original CRS: {src.crs}")
             logger.info(f"Original bounds: {src.bounds}")
             logger.info(f"Original transform: {src.transform}")
             
-            # Read source data
             data = src.read(1)
             
-            # Handle nodata values
             if src.nodata is not None:
                 data = np.where(data == src.nodata, np.nan, data)
             
-            # If source is in EPSG:4326, use two-step transformation
             if src.crs == 'EPSG:4326':
-                # First transform to intermediate CRS
                 intermediate_bounds = rasterio.warp.transform_bounds(
                     src.crs, self.intermediate_crs, *src.bounds
                 )
                 
-                # Calculate intermediate transform
                 intermediate_transform, intermediate_width, intermediate_height = rasterio.warp.calculate_default_transform(
                     src.crs, self.intermediate_crs, src.width, src.height, *src.bounds
                 )
-                
-                # Create intermediate array
+
                 intermediate = np.empty((intermediate_height, intermediate_width), dtype=np.float32)
                 
-                # Transform to intermediate CRS
                 rasterio.warp.reproject(
                     source=data,
                     destination=intermediate,
@@ -258,7 +228,6 @@ class RasterTransformer:
                     resampling=resampling
                 )
                 
-                # Now transform from intermediate to target CRS
                 if reference_bounds is None:
                     target_bounds = rasterio.warp.transform_bounds(
                         self.intermediate_crs, self.target_crs, *intermediate_bounds
@@ -266,20 +235,16 @@ class RasterTransformer:
                 else:
                     target_bounds = reference_bounds
                 
-                # Calculate dimensions
                 width = int(np.ceil((target_bounds[2] - target_bounds[0]) / self.target_resolution))
                 height = int(np.ceil((target_bounds[3] - target_bounds[1]) / self.target_resolution))
                 
-                # Create target transform
                 dst_transform = rasterio.transform.from_origin(
                     target_bounds[0], target_bounds[3],
                     self.target_resolution, self.target_resolution
                 )
-                
-                # Create destination array
+
                 destination = np.empty((height, width), dtype=np.float32)
                 
-                # Final transformation
                 rasterio.warp.reproject(
                     source=intermediate,
                     destination=destination,
@@ -294,7 +259,6 @@ class RasterTransformer:
                 transform = dst_transform
                 
             else:
-                # Direct transformation for other CRS
                 if reference_bounds is None:
                     target_bounds = rasterio.warp.transform_bounds(
                         src.crs, self.target_crs, *src.bounds
@@ -302,20 +266,16 @@ class RasterTransformer:
                 else:
                     target_bounds = reference_bounds
                 
-                # Calculate dimensions
                 width = int(np.ceil((target_bounds[2] - target_bounds[0]) / self.target_resolution))
                 height = int(np.ceil((target_bounds[3] - target_bounds[1]) / self.target_resolution))
                 
-                # Create target transform
                 dst_transform = rasterio.transform.from_origin(
                     target_bounds[0], target_bounds[3],
                     self.target_resolution, self.target_resolution
                 )
                 
-                # Create destination array
                 destination = np.empty((height, width), dtype=np.float32)
                 
-                # Transform
                 rasterio.warp.reproject(
                     source=data,
                     destination=destination,
@@ -329,12 +289,10 @@ class RasterTransformer:
                 data = destination
                 transform = dst_transform
             
-            # Log transformed properties
             logger.info(f"Transformed CRS: {self.target_crs}")
             logger.info(f"Transformed bounds: {rasterio.transform.array_bounds(height, width, transform)}")
             logger.info(f"Transformed shape: {data.shape}")
             
-            # Validate data
             if np.all(np.isnan(data)):
                 raise ValueError("Transformed data contains only NaN values")
             

@@ -52,7 +52,6 @@ class ExpositionLayer:
         # Initialize raster transformer
         self.transformer = RasterTransformer(
             target_crs=self.config.target_crs,
-            target_resolution=30.0,  # 30m resolution
             config=self.config
         )
         

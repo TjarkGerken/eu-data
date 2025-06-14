@@ -21,19 +21,20 @@ data:
     land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
+    target_resolution: 30.0
     smoothing_sigma: 1.0
     target_crs: "EPSG:3035"
   hazard:
     river_zones:
-      high_risk_distance_m: 50 # Distance for significantly higher flood risk weighting
-      high_risk_weight: 1.15 # Weight multiplier for high risk zone
-      moderate_risk_distance_m: 100 # Distance for moderately higher flood risk weighting
-      moderate_risk_weight: 1.1 # Weight multiplier for moderate risk zone
-      low_risk_distance_m: 250 # Distance for slightly higher flood risk weighting
-      low_risk_weight: 1.05 # Weight multiplier for low risk zone
+      high_risk_distance_m: 50
+      high_risk_weight: 1.2
+      moderate_risk_distance_m: 200
+      moderate_risk_weight: 1.15
+      low_risk_distance_m: 500
+      low_risk_weight: 1.1
     elevation_risk:
-      max_safe_elevation_m: 10.0 # Maximum elevation above sea level rise considered completely safe
-      risk_decay_factor: 2.0 # Controls how quickly risk decreases with elevation above sea level rise
+      max_safe_elevation_m: 10.0
+      risk_decay_factor: 2.2
   caching:
     enabled: false
     cache_dir: ".cache"

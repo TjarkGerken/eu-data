@@ -241,9 +241,9 @@ def main():
         logger.info("Continuing without caching...")
     
     try:
-        #risk_assessment.run_hazard_layer_analysis(config)
-        risk_assessment.run_exposition(config)
-        risk_assessment.run_relevance_layer_analysis(config)
+        risk_assessment.run_hazard_layer_analysis(config)
+        # risk_assessment.run_exposition(config)
+        # risk_assessment.run_relevance_layer_analysis(config)
         
         
         logger.info("\n" + "="*40)
