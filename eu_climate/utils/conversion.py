@@ -35,7 +35,8 @@ class RasterTransformer:
             config: Configuration object for cache manager
         """
         self.target_crs = rasterio.crs.CRS.from_string(target_crs)
-        self.target_resolution = self.config.target_resolution
+        self.config = config
+        self.target_resolution = config.target_resolution if config else 30.0
         self.intermediate_crs = rasterio.crs.CRS.from_string(intermediate_crs)
         self._cache_manager = get_cache_manager(config)
         

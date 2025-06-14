@@ -495,10 +495,10 @@ class LayerVisualizer:
         data_overlay = np.full_like(data, np.nan, dtype=np.float32)
         data_overlay[netherlands_mask] = data[netherlands_mask]
         
-        # Overlay relevance data with reversed colormap (high values now purple/pink)
+        # Overlay relevance data
         im = ax.imshow(
             data_overlay,
-            cmap=ScientificStyle.RELEVANCE_CMAP,  # Now using reversed colormap
+            cmap=ScientificStyle.RELEVANCE_CMAP,
             aspect='equal',
             extent=extent,
             vmin=0, vmax=1,
@@ -510,21 +510,23 @@ class LayerVisualizer:
         if nuts_gdf is not None:
             self.add_nuts_overlay(ax, nuts_gdf)
         
-        # Styling
-        title_map = {
+        # Get proper layer title
+        layer_titles = {
             'gdp': 'GDP Economic Relevance',
-            'freight_loading': 'Freight Loading Economic Relevance', 
+            'freight_loading': 'Freight Loading Economic Relevance',
             'freight_unloading': 'Freight Unloading Economic Relevance',
             'combined': 'Combined Economic Relevance'
         }
         
-        title = title_map.get(layer_name, f'{layer_name.title()} Economic Relevance')
+        title = layer_titles.get(layer_name, f'{layer_name.title()} Relevance Layer')
+        
+        # Styling
         ax.set_title(title, fontsize=ScientificStyle.TITLE_SIZE, fontweight='bold', pad=20)
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
         
         # Add colorbar for relevance data
-        self.create_standard_colorbar(im, ax, 'Economic Relevance Index (0-1)')
+        self.create_standard_colorbar(im, ax, 'Relevance Index (0-1)')
         
         # Add zone legend
         import matplotlib.patches as mpatches
@@ -542,11 +544,113 @@ class LayerVisualizer:
         plt.tight_layout()
         
         if output_path:
-            plt.savefig(output_path, dpi=ScientificStyle.DPI, bbox_inches='tight',
+            plt.savefig(output_path, dpi=ScientificStyle.DPI, bbox_inches='tight', 
                        facecolor='white', edgecolor='none')
             logger.info(f"Saved {layer_name} relevance visualization to {output_path}")
         
         plt.close()
+
+    def visualize_risk_layer(self, risk_data: np.ndarray, meta: dict,
+                           scenario_title: str, output_path: Optional[Path] = None,
+                           land_mask: Optional[np.ndarray] = None) -> None:
+        """Create standardized risk layer visualization with proper zone separation and color mapping."""
+        fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
+        
+        extent = self.get_raster_extent(risk_data, meta)
+        
+        # Create zone classification for background
+        zones = self.create_zone_classification(risk_data.shape, meta['transform'], land_mask)
+        
+        # Display base zones first
+        zone_cmap = ScientificStyle.create_zone_colormap()
+        ax.imshow(zones, cmap=zone_cmap, aspect='equal', extent=extent, 
+                 vmin=ScientificStyle.WATER_VALUE, vmax=ScientificStyle.LAND_BASE_VALUE, alpha=1.0)
+        
+        # Create data overlay only for Netherlands land areas
+        netherlands_mask = (zones == ScientificStyle.LAND_BASE_VALUE) & (~np.isnan(risk_data)) & (risk_data > 0)
+        data_overlay = np.full_like(risk_data, np.nan, dtype=np.float32)
+        data_overlay[netherlands_mask] = risk_data[netherlands_mask]
+        
+        # Use a custom risk colormap that shows gradual risk progression
+        risk_cmap = LinearSegmentedColormap.from_list("risk_colors", [
+            (0.0, '#ffffff'),    # White for no risk
+            (0.2, '#ffffcc'),    # Very light yellow for very low risk
+            (0.4, '#fed976'),    # Light yellow for low risk  
+            (0.6, '#fd8d3c'),    # Orange for moderate risk
+            (0.8, '#e31a1c'),    # Red for high risk
+            (1.0, '#800026')     # Dark red for very high risk
+        ])
+        
+        # Overlay risk data with proper visibility
+        im = ax.imshow(
+            data_overlay,
+            cmap=risk_cmap,
+            aspect='equal',
+            extent=extent,
+            vmin=0, vmax=1,
+            alpha=0.9
+        )
+        
+        # Add NUTS overlay
+        nuts_gdf = self.get_nuts_boundaries("L3")
+        if nuts_gdf is not None:
+            self.add_nuts_overlay(ax, nuts_gdf)
+        
+        # Styling
+        ax.set_title(f"Risk Assessment: {scenario_title}", 
+                    fontsize=ScientificStyle.TITLE_SIZE, fontweight='bold', pad=20)
+        ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
+        ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
+        
+        # Add colorbar for risk data
+        self.create_standard_colorbar(im, ax, 'Risk Index (0-1)')
+        
+        # Add zone legend
+        import matplotlib.patches as mpatches
+        legend_patches = [
+            mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
+            mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
+        ]
+        ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
+        
+        # Add statistics for Netherlands areas only
+        if np.any(netherlands_mask):
+            netherlands_data = data_overlay[netherlands_mask]
+            self.add_statistics_box(ax, netherlands_data, 'upper left')
+        
+        plt.tight_layout()
+        
+        if output_path:
+            plt.savefig(output_path, dpi=ScientificStyle.DPI, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
+            logger.info(f"Saved risk visualization to {output_path}")
+        
+        plt.close()
+
+    def create_risk_summary_visualizations(self, risk_scenarios: Dict[str, Dict[str, np.ndarray]], 
+                                         meta: dict, land_mask: Optional[np.ndarray] = None,
+                                         output_dir: Optional[Path] = None) -> None:
+        """Create summary visualizations for all risk scenarios."""
+        logger.info("Creating risk summary visualizations...")
+        
+        if output_dir is None:
+            output_dir = Path(".")
+        
+        # Create individual scenario plots
+        for slr_scenario, economic_scenarios in risk_scenarios.items():
+            for econ_scenario, risk_data in economic_scenarios.items():
+                scenario_title = f"{slr_scenario} / {econ_scenario}"
+                output_path = output_dir / f"risk_summary_{slr_scenario}_{econ_scenario}.png"
+                
+                self.visualize_risk_layer(
+                    risk_data=risk_data,
+                    meta=meta,
+                    scenario_title=scenario_title,
+                    output_path=output_path,
+                    land_mask=land_mask
+                )
+        
+        logger.info("Risk summary visualizations complete")
 
     def create_zone_classification(self, data_shape: Tuple[int, int], transform: dict, 
                                   land_mask: Optional[np.ndarray] = None) -> np.ndarray:

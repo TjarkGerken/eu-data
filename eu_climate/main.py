@@ -23,6 +23,7 @@ import sys
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.risk_layers.relevance_layer import RelevanceLayer
+from eu_climate.risk_layers.risk_layer import RiskLayer
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.data_loading import check_data_integrity, get_config, upload_data, validate_env_vars
@@ -48,7 +49,7 @@ from dotenv import load_dotenv
 # Set up logging for the main module
 logger = setup_logging(__name__)
 
-class RiskLayer(Enum):
+class AssessmentLayer(Enum):
     """Enumeration for the three risk assessment layers."""
     HAZARD = "hazard"
     EXPOSITION = "exposition"  
@@ -76,6 +77,7 @@ class RiskAssessment:
         self.hazard_layer = HazardLayer(config)
         self.exposition_layer = ExpositionLayer(config)
         self.relevance_layer = RelevanceLayer(config)
+        self.risk_layer = RiskLayer(config)
         
         self._apply_caching()
         
@@ -133,25 +135,21 @@ class RiskAssessment:
         logger.info("\n" + "="*40)
         logger.info("RISK ASSESSMENT INTEGRATION")
         logger.info("="*40)
-        risk_assessment = RiskAssessment(config)
-        # Prepare data for risk assessment
-        risk_assessment.prepare_data()
         
-        # Calculate integrated risk
-        risk_indices = risk_assessment.calculate_integrated_risk()
+        risk_layer = RiskLayer(config)
         
-        # Visualize risk assessment
-        risk_assessment.visualize_risk_assessment(save_plots=True)
-        
-        # Export results
-        risk_assessment.export_results()
+        # Run complete risk assessment with all scenario combinations
+        risk_scenarios = risk_layer.run_risk_assessment(
+            visualize=visualize,
+            export_results=True
+        )
         
         logger.info("\n" + "="*60)
         logger.info("ANALYSIS COMPLETE")
         logger.info("="*60)
         logger.info(f"Results saved to: {config.output_dir}")
 
-        return risk_indices
+        return risk_scenarios
         
     def run_hazard_layer_analysis(self, config: ProjectConfig) -> None:
         """
@@ -174,14 +172,18 @@ class RiskAssessment:
                 hazard_layer = cached_layers['hazard']
         except Exception as e:
             logger.warning(f"Could not apply caching to hazard layer: {e}")
+
+        slr_scenarios = [
+            SeaLevelScenario("Current", 0.0, "Current sea level - todays scenario"),
+            SeaLevelScenario("Conservative", 1.0, "1m sea level rise - conservative scenario"),
+            SeaLevelScenario("Moderate", 2.0, "2m sea level rise - moderate scenario"),
+            SeaLevelScenario("Severe", 3.0, "3m sea level rise - severe scenario")
+        ]
         
-        # Process default scenarios (1m, 2m, 3m sea level rise)
-        flood_extents = hazard_layer.process_scenarios()
+        flood_extents = hazard_layer.process_scenarios(slr_scenarios)
         
-        # Create visualizations
         # hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
         
-        # Export results
         hazard_layer.export_results(flood_extents)
     
     def run_relevance_layer_analysis(self, config: ProjectConfig) -> None:
@@ -209,6 +211,38 @@ class RiskAssessment:
         )
         
         logger.info(f"Relevance layer analysis completed - Generated {len(relevance_layers)} layers")
+    
+    def run_risk_layer_analysis(self, config: ProjectConfig) -> Dict[str, Dict[str, np.ndarray]]:
+        """
+        Run the Risk Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+            
+        Returns:
+            Dictionary of risk scenarios
+        """
+        logger.info("\n" + "="*40)  
+        logger.info("RISK LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        try:
+            risk_layer = RiskLayer(config)
+            
+            # Run complete risk assessment
+            risk_scenarios = risk_layer.run_risk_assessment(
+                visualize=True,
+                export_results=True
+            )
+            
+            logger.info(f"Risk layer analysis completed successfully")
+            logger.info(f"Processed {len(risk_scenarios)} sea level scenarios")
+            
+            return risk_scenarios
+            
+        except Exception as e:
+            logger.error(f"Could not execute risk layer analysis: {e}")
+            raise e
 
 def main():
     """
@@ -241,9 +275,10 @@ def main():
         logger.info("Continuing without caching...")
     
     try:
-        risk_assessment.run_hazard_layer_analysis(config)
+        # risk_assessment.run_hazard_layer_analysis(config)
         # risk_assessment.run_exposition(config)
         # risk_assessment.run_relevance_layer_analysis(config)
+        risk_assessment.run_risk_layer_analysis(config)
         
         
         logger.info("\n" + "="*40)
