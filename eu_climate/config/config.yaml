@@ -51,9 +51,9 @@ data:
       cache_operations: true
       cache_statistics: true
   exposition:
-    ghs_built_c_weight: 0.7
-    ghs_built_v_weight: 0.3
-    population_weight: 0.7
+    ghs_built_c_weight: 0.25
+    ghs_built_v_weight: 0.75
+    population_weight: 0.5
   relevance:
     min_economic_value: 0.05
     economic_datasets:

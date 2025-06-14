@@ -51,11 +51,12 @@ from dotenv import load_dotenv
 logger = setup_logging(__name__)
 
 class AssessmentLayer(Enum):
-    """Enumeration for the four risk assessment layers."""
+    """Enumeration for the risk assessment layers."""
     HAZARD = "hazard"
     EXPOSITION = "exposition"  
     RELEVANCE = "relevance"
     RISK = "risk"
+    POPULATION = "population"
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -73,6 +74,7 @@ Examples:
   python -m main --exposition                # Run only exposition layer analysis  
   python -m main --relevance                 # Run only relevance layer analysis
   python -m main --risk                      # Run only risk layer analysis
+  python -m main --population                # Run only population risk layer analysis
   python -m main --hazard --exposition       # Run hazard and exposition layers
   python -m main --all                       # Run all layers (default behavior)
   python -m main --verbose --risk            # Run risk layer with verbose logging
@@ -101,9 +103,13 @@ Examples:
                            action='store_true',
                            help='Process Risk Layer (integrated risk assessment)')
     
+    layer_group.add_argument('--population', 
+                           action='store_true',
+                           help='Process Population Risk Layer (population-based risk assessment)')
+    
     layer_group.add_argument('--all', 
                            action='store_true',
-                           help='Process all layers (hazard, exposition, relevance, risk)')
+                           help='Process all layers (hazard, exposition, relevance, risk, population)')
     
     # Configuration arguments
     config_group = parser.add_argument_group('Configuration Options',
@@ -144,7 +150,7 @@ Examples:
     args = parser.parse_args()
     
     # Validate arguments
-    if not any([args.hazard, args.exposition, args.relevance, args.risk, args.all]):
+    if not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.all]):
         # If no specific layers are chosen, default to --all
         logger.info("No specific layers selected, defaulting to --all")
         args.all = True
@@ -155,6 +161,7 @@ Examples:
         args.exposition = True  
         args.relevance = True
         args.risk = True
+        args.population = True
     
     return args
 
@@ -347,6 +354,38 @@ class RiskAssessment:
             logger.error(f"Could not execute risk layer analysis: {e}")
             raise e
 
+    def run_population_risk_layer_analysis(self, config: ProjectConfig) -> Dict[str, np.ndarray]:
+        """
+        Run the Population Risk Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+            
+        Returns:
+            Dictionary of population risk scenarios
+        """
+        logger.info("\n" + "="*40)  
+        logger.info("POPULATION RISK LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        try:
+            risk_layer = RiskLayer(config)
+            
+            # Run complete population risk assessment
+            population_risk_scenarios = risk_layer.run_population_risk_assessment(
+                visualize=True,
+                export_results=True
+            )
+            
+            logger.info(f"Population risk layer analysis completed successfully")
+            logger.info(f"Processed {len(population_risk_scenarios)} sea level scenarios")
+            
+            return population_risk_scenarios
+            
+        except Exception as e:
+            logger.error(f"Could not execute population risk layer analysis: {e}")
+            raise e
+
 def main():
     """
     Main execution function for the EU Climate Risk Assessment System.
@@ -375,6 +414,8 @@ def main():
         selected_layers.append("Relevance")
     if args.risk:
         selected_layers.append("Risk")
+    if args.population:
+        selected_layers.append("Population Risk")
     
     logger.info(f"Selected layers: {', '.join(selected_layers)}")
     if args.no_cache:
@@ -444,6 +485,13 @@ def main():
             logger.info(f"{'='*50}")
             risk_scenarios = risk_assessment.run_risk_layer_analysis(config)
             logger.info(f"Risk analysis completed with {len(risk_scenarios)} scenarios")
+        
+        if args.population:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING POPULATION RISK LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            population_risk_scenarios = risk_assessment.run_population_risk_layer_analysis(config)
+            logger.info(f"Population risk analysis completed with {len(population_risk_scenarios)} scenarios")
         
         # Data upload (unless disabled)
         if not args.no_upload:
