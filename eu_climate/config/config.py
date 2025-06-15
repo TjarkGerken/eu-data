@@ -198,6 +198,11 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['gadm_l2_file']
     
     @property
+    def port_path(self) -> Path:
+        """Get path to port shapefile."""
+        return self.data_dir / self.config['file_paths']['port_file']
+    
+    @property
     def nuts_l0_file_path(self) -> str:
         """Get path to NUTS L0 file."""
         return self.config['file_paths']['nuts_files']['l0']
@@ -240,7 +245,8 @@ class ProjectConfig:
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
             (self.data_dir / self.hrst_file_path, "HRST Data"),
             (self.ghs_duc_path, "GHS DUC Excel"),
-            (self.gadm_l2_path, "GADM L2 Shapefile")
+            (self.gadm_l2_path, "GADM L2 Shapefile"),
+            (self.port_path, "Port Shapefile")
         ]
         
         missing_files = []

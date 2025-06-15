@@ -102,6 +102,9 @@ class ScientificStyle:
     
     SAFE_LAND_COLOR = '#27ae60'  # Green
     FLOOD_RISK_COLOR = '#e74c3c'  # Red
+
+    PORT_COLOR = 'orange'
+    PORT_BUFFER_COLOR = 'darkorange'  
     
     # Statistics box styling
     STATS_BOX_PROPS = {
@@ -198,6 +201,53 @@ class LayerVisualizer:
             logger.warning(f"Could not load NUTS {level} boundaries: {e}")
             return None
     
+    def get_port_boundaries(self) -> Optional[gpd.GeoDataFrame]:
+        """Load port boundaries for overlay visualization, clipped to study area."""
+        if not self.config.port_path.exists():
+            logger.warning(f"Port boundaries not found: {self.config.port_path}")
+            return None
+            
+        try:
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            port_gdf = gpd.read_file(self.config.port_path)
+            
+            if port_gdf.crs != target_crs:
+                port_gdf = port_gdf.to_crs(target_crs)
+                
+            logger.info(f"Loaded port boundaries: {len(port_gdf)} ports")
+            
+            # Load NUTS-L3 boundaries to define study area
+            nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+            try:
+                nuts_gdf = gpd.read_file(nuts_l3_path)
+                logger.info(f"Loaded NUTS-L3 boundaries for port clipping: {len(nuts_gdf)} regions")
+                
+                # Ensure NUTS is in target CRS
+                if nuts_gdf.crs != target_crs:
+                    nuts_gdf = nuts_gdf.to_crs(target_crs)
+                
+                # Create study area boundary (union of all NUTS regions)
+                study_area = nuts_gdf.geometry.unary_union
+                
+                # Clip ports to study area (keep ports that intersect with study area)
+                ports_in_study_area = port_gdf[port_gdf.geometry.intersects(study_area)]
+                logger.info(f"Clipped ports for visualization: {len(ports_in_study_area)} ports within Netherlands boundaries (from {len(port_gdf)} total)")
+                
+                if len(ports_in_study_area) == 0:
+                    logger.warning("No ports found within the study area boundaries for visualization")
+                    return None
+                
+                return ports_in_study_area
+                
+            except Exception as e:
+                logger.warning(f"Could not load NUTS boundaries for port clipping in visualization: {e}")
+                logger.warning("Using all ports for visualization (no clipping)")
+                return port_gdf
+            
+        except Exception as e:
+            logger.warning(f"Could not load port boundaries: {e}")
+            return None
+    
     def get_raster_extent(self, data: np.ndarray, meta: dict) -> Tuple[float, float, float, float]:
         """Calculate raster extent for proper coordinate alignment."""
         if 'transform' in meta:
@@ -224,6 +274,70 @@ class LayerVisualizer:
                 alpha=ScientificStyle.NUTS_BOUNDARY_ALPHA,
                 zorder=10
             )
+    
+    def add_port_overlay(self, ax, port_gdf: Optional[gpd.GeoDataFrame], show_buffer: bool = False):
+        """Add port boundaries as overlay with distinct styling and proper precedence."""
+        if port_gdf is not None:
+            # Get port configuration for buffer distance
+            port_config = self.config.exposition_weights.get('port_multipliers', {})
+            buffer_distance = port_config.get('port_buffer_distance_m', 250)
+            
+            # Show buffer zones if requested
+            if show_buffer:
+                # Create buffer zones
+                port_buffers = port_gdf.copy()
+                port_buffers['geometry'] = port_gdf.geometry.buffer(buffer_distance)
+                
+                # Remove overlaps between buffer zones by dissolving them
+                from shapely.ops import unary_union
+                dissolved_buffers = unary_union(port_buffers.geometry.tolist())
+                
+                # Convert back to GeoDataFrame for plotting
+                if hasattr(dissolved_buffers, 'geoms'):
+                    # Multiple polygons
+                    buffer_geometries = list(dissolved_buffers.geoms)
+                else:
+                    # Single polygon
+                    buffer_geometries = [dissolved_buffers]
+                
+                clean_buffers = gpd.GeoDataFrame(
+                    geometry=buffer_geometries, 
+                    crs=port_gdf.crs
+                )
+                
+                # Remove areas that overlap with actual port polygons
+                port_union = unary_union(port_gdf.geometry.tolist())
+                clean_buffers['geometry'] = clean_buffers.geometry.difference(port_union)
+                
+                # Remove empty geometries
+                clean_buffers = clean_buffers[~clean_buffers.geometry.is_empty]
+                
+                if len(clean_buffers) > 0:
+                    # Plot cleaned buffer zones
+                    clean_buffers.plot(
+                        ax=ax,
+                        facecolor=ScientificStyle.PORT_BUFFER_COLOR,
+                        edgecolor="black",
+                        alpha=0.5,
+                        linewidth=0.1,
+                        zorder=15,
+                        label=f'Port Buffer Zones {buffer_distance}m'
+                    )
+                    logger.info(f"Plotted {len(clean_buffers)} non-overlapping buffer zones")
+                else:
+                    logger.info("No buffer zones to display after removing overlaps")
+            
+            # Plot port polygons with prominent styling (these take precedence)
+            port_gdf.plot(
+                ax=ax,
+                facecolor=ScientificStyle.PORT_COLOR,
+                edgecolor="black",
+                alpha=0.7,
+                linewidth=0.1,
+                zorder=20,
+                label='Port Areas'
+            )
+            logger.info(f"Plotted {len(port_gdf)} port polygons with precedence over buffers")
     
     def add_statistics_box(self, ax, data: np.ndarray, position: str = 'upper right'):
         """Add statistics box with consistent styling."""
@@ -268,7 +382,9 @@ class LayerVisualizer:
     def visualize_exposition_layer(self, data: np.ndarray, meta: dict, 
                                  output_path: Optional[Path] = None,
                                  title: str = "Exposition Layer",
-                                 land_mask: Optional[np.ndarray] = None) -> None:
+                                 land_mask: Optional[np.ndarray] = None,
+                                 show_ports: bool = False,
+                                 show_port_buffers: bool = False) -> None:
         """Create standardized exposition layer visualization with proper zone separation."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
@@ -297,25 +413,41 @@ class LayerVisualizer:
             alpha=0.85
         )
         
-        # Add NUTS overlay
         nuts_gdf = self.get_nuts_boundaries("L3")
         if nuts_gdf is not None:
             self.add_nuts_overlay(ax, nuts_gdf)
         
-        # Styling
+        if show_ports:
+            port_gdf = self.get_port_boundaries()
+            if port_gdf is not None:
+                self.add_port_overlay(ax, port_gdf, show_buffer=show_port_buffers)
+        
         ax.set_title(title, fontsize=ScientificStyle.TITLE_SIZE, fontweight='bold', pad=20)
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
         
-        # Add colorbar for exposition data
         self.create_standard_colorbar(im, ax, 'Exposition Index (0-1)')
         
-        # Add zone legend
         import matplotlib.patches as mpatches
         legend_patches = [
             mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
             mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
         ]
+        
+        # Add port legend entries if ports are shown
+        if show_ports:
+            legend_patches.extend([
+                mpatches.Patch(color=ScientificStyle.PORT_COLOR, alpha=0.5, label='Port Areas')
+            ])
+            if show_port_buffers:
+                # Get actual buffer distance from config
+                port_config = self.config.exposition_weights.get('port_multipliers', {})
+                buffer_distance = port_config.get('port_buffer_distance_m', 250)
+                legend_patches.append(
+                    mpatches.Patch(color=ScientificStyle.PORT_BUFFER_COLOR, alpha=0.3, 
+                                 label=f'Port Buffer Zones ({buffer_distance}m)')
+                )
+        
         ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
         
         # Add statistics for Netherlands areas only
@@ -693,4 +825,85 @@ def create_flood_composite_colormap():
         ScientificStyle.SAFE_LAND_COLOR,       # Safe land
         ScientificStyle.FLOOD_RISK_COLOR       # Flood risk
     ]
-    return ListedColormap(colors), BoundaryNorm([0, 1, 2, 3, 4], len(colors)) 
+    return ListedColormap(colors), BoundaryNorm([0, 1, 2, 3, 4], len(colors))
+
+
+def demonstrate_port_visualization(config: ProjectConfig, exposition_data: np.ndarray, meta: dict):
+    """
+    Demonstration function showing different port overlay options for exposition visualization.
+    
+    Args:
+        config: Project configuration
+        exposition_data: Exposition layer data
+        meta: Raster metadata
+        
+    Usage Examples:
+        # Basic exposition without ports
+        run_exposition(visualize=True, show_ports=False)
+        
+        # Show only port areas (polygons)
+        run_exposition(visualize=True, show_ports=True, show_port_buffers=False)
+        
+        # Show both port areas and buffer zones
+        run_exposition(visualize=True, show_ports=True, show_port_buffers=True)
+    """
+    visualizer = LayerVisualizer(config)
+    output_dir = Path(config.output_dir) / "exposition" / "port_demos"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Load land mask for proper visualization
+    land_mask = None
+    try:
+        with rasterio.open(config.land_mass_path) as src:
+            if meta and 'transform' in meta:
+                land_mask, _ = rasterio.warp.reproject(
+                    source=src.read(1),
+                    destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=meta['transform'],
+                    dst_crs=meta['crs'],
+                    resampling=rasterio.enums.Resampling.nearest
+                )
+                land_mask = (land_mask > 0).astype(np.uint8)
+    except Exception as e:
+        logger.warning(f"Could not load land mask for demonstration: {e}")
+    
+    # 1. Basic exposition (no ports)
+    visualizer.visualize_exposition_layer(
+        data=exposition_data,
+        meta=meta,
+        output_path=output_dir / "exposition_no_ports.png",
+        title="Exposition Layer (No Port Overlay)",
+        land_mask=land_mask,
+        show_ports=False,
+        show_port_buffers=False
+    )
+    
+    # 2. With port polygons only
+    visualizer.visualize_exposition_layer(
+        data=exposition_data,
+        meta=meta,
+        output_path=output_dir / "exposition_with_ports.png",
+        title="Exposition Layer (With Port Areas)",
+        land_mask=land_mask,
+        show_ports=True,
+        show_port_buffers=False
+    )
+    
+    # 3. With port polygons and buffer zones
+    visualizer.visualize_exposition_layer(
+        data=exposition_data,
+        meta=meta,
+        output_path=output_dir / "exposition_with_ports_and_buffers.png",
+        title="Exposition Layer (With Ports and Buffer Zones)",
+        land_mask=land_mask,
+        show_ports=True,
+        show_port_buffers=True
+    )
+    
+    logger.info(f"Port visualization demonstrations saved to {output_dir}")
+    logger.info("To use port overlays in your exposition analysis:")
+    logger.info("  exposition_layer.run_exposition(visualize=True, show_ports=True, show_port_buffers=True)")
+    
+    return output_dir 
