@@ -107,8 +107,8 @@ class ScientificStyle:
     SAFE_LAND_COLOR = '#27ae60'  # Green
     FLOOD_RISK_COLOR = '#e74c3c'  # Red
 
-    PORT_COLOR = 'orange'
-    PORT_BUFFER_COLOR = 'darkorange'  
+    PORT_COLOR = 'violet'
+    PORT_BUFFER_COLOR = 'yellow'  
     
     # Statistics box styling
     STATS_BOX_PROPS = {

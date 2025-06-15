@@ -398,10 +398,7 @@ class ExpositionLayer:
         
         return port_raster, meta
     
-    def normalize_data(self):
-        """Normalize the data to a unified scale of 0-1."""
-        pass
-    
+
     def load_and_preprocess_raster(self, path: str) -> Tuple[np.ndarray, dict]:
         """Load and preprocess a single raster to target resolution and CRS using NUTS-L3 bounds."""
         logger.info(f"Loading raster: {path}")
@@ -785,7 +782,7 @@ class ExpositionLayer:
             logger.info(f"Default exposition layer PNG saved to {png_path}")
         
         # Create all economic-specific exposition layers
-        self.save_economic_exposition_layers()
+        # self.save_economic_exposition_layers()
 
     def run_exposition_with_all_economic_layers(self, visualize: bool = False, create_png: bool = True, show_ports: bool = False, show_port_buffers: bool = False):
         """Run exposition layer creation including all economic-specific layers."""
