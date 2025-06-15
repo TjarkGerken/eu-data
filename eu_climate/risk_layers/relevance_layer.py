@@ -3,19 +3,14 @@ import rasterio.features
 import rasterio.warp
 import geopandas as gpd
 import pandas as pd
-from scipy import ndimage
-from typing import Optional, Tuple, Dict, List
+from typing import Tuple, Dict
 import numpy as np
-from rasterio.enums import Resampling
 from pathlib import Path
-import logging
-import matplotlib.pyplot as plt
 import os
 
 from eu_climate.config.config import ProjectConfig
-from eu_climate.utils.utils import setup_logging, suppress_warnings
+from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
-from eu_climate.utils.caching_wrappers import CacheAwareMethod, cache_calculation_method, cache_raster_method, cache_result_method
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 
@@ -30,7 +25,7 @@ class EconomicDataLoader:
         self.data_dir = config.data_dir
         
     def load_economic_datasets(self) -> Dict[str, pd.DataFrame]:
-        """Load all three economic datasets and standardize format."""
+        """Load all economic datasets and standardize format."""
         datasets = {}
         
         # GDP dataset
@@ -59,6 +54,15 @@ class EconomicDataLoader:
             datasets['freight_unloading'] = self._process_freight_data(unloading_df)
         else:
             logger.error(f"Freight unloading dataset not found: {unloading_path}")
+            
+        # HRST dataset
+        hrst_path = self.data_dir / getattr(self.config, 'hrst_file_path', 'L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv')
+        if hrst_path.exists():
+            logger.info(f"Loading HRST dataset from {hrst_path}")
+            hrst_df = pd.read_csv(hrst_path)
+            datasets['hrst'] = self._process_hrst_data(hrst_df)
+        else:
+            logger.error(f"HRST dataset not found: {hrst_path}")
             
         return datasets
     
@@ -113,18 +117,46 @@ class EconomicDataLoader:
         
         logger.info(f"Processed freight data: {len(aggregated)} regions for year {latest_year}")
         return aggregated
+    
+    def _process_hrst_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Process HRST dataset to extract NUTS L2 values."""
+        # Filter for Netherlands and NUTS L2 (4 character codes starting with NL)
+        nl_data = df[df['geo'].str.startswith('NL') & df['geo'].str.len().eq(4)]
+        
+        # Get latest available year
+        latest_year = nl_data['TIME_PERIOD'].max()
+        latest_data = nl_data[nl_data['TIME_PERIOD'] == latest_year]
+        
+        # Clean and standardize
+        processed = latest_data[['geo', 'OBS_VALUE', 'unit', 'Geopolitical entity (reporting)']].copy()
+        processed.columns = ['nuts_code', 'hrst_value', 'unit', 'region']
+        processed['hrst_value'] = pd.to_numeric(processed['hrst_value'], errors='coerce')
+        
+        if processed.isna().any().any():
+            logger.warning("NAN values in HRST data")
+            len_before = len(processed)
+            processed = processed.dropna()
+            len_after = len(processed)
+            logger.warning(f"Dropped {len_before - len_after} NAN values in HRST data")
+        
+        logger.info(f"Processed HRST data: {len(processed)} regions for year {latest_year}")
+        return processed
 
 
 class NUTSDataMapper:
-    """Handles mapping economic data to NUTS L3 geometries."""
+    """Handles mapping economic data to NUTS geometries at different levels."""
     
     def __init__(self, config: ProjectConfig):
         self.config = config
         
-    def load_nuts_shapefile(self) -> gpd.GeoDataFrame:
-        """Load and prepare NUTS L3 shapefile."""
-        nuts_path = self.config.data_dir / "NUTS-L3-NL.shp"
-        logger.info(f"Loading NUTS L3 shapefile from {nuts_path}")
+    def load_nuts_shapefile(self, nuts_level: str) -> gpd.GeoDataFrame:
+        """Load and prepare NUTS shapefile for specified level."""
+        nuts_filename = getattr(self.config, f'nuts_{nuts_level}_file_path', None)
+        if nuts_filename is None:
+            raise ValueError(f"NUTS {nuts_level.upper()} file path not found in config")
+            
+        nuts_path = self.config.data_dir / nuts_filename
+        logger.info(f"Loading NUTS {nuts_level.upper()} shapefile from {nuts_path}")
         
         nuts_gdf = gpd.read_file(nuts_path)
         
@@ -134,56 +166,63 @@ class NUTSDataMapper:
             nuts_gdf = nuts_gdf.to_crs(target_crs)
             logger.info(f"Transformed NUTS shapefile to {target_crs}")
             
-        logger.info(f"Loaded {len(nuts_gdf)} NUTS L3 regions")
+        logger.info(f"Loaded {len(nuts_gdf)} NUTS {nuts_level.upper()} regions")
         return nuts_gdf
     
-    def join_economic_data(self, nuts_gdf: gpd.GeoDataFrame, 
-                          economic_data: Dict[str, pd.DataFrame]) -> gpd.GeoDataFrame:
-        """Join economic datasets with NUTS geometries."""
-        result_gdf = nuts_gdf.copy()
+    def join_economic_data(self, nuts_gdfs: Dict[str, gpd.GeoDataFrame], 
+                          economic_data: Dict[str, pd.DataFrame]) -> Dict[str, gpd.GeoDataFrame]:
+        """Join economic datasets with NUTS geometries at appropriate levels."""
+        result_gdfs = {}
         
-        # Determine NUTS code column in shapefile
-        nuts_code_col = None
-
         loading_nuts_mapping_path = os.path.join(self.config.data_dir, "Mapping_NL_NUTS_2021_2024.xlsx")
+        mapping_df = pd.read_excel(loading_nuts_mapping_path) if os.path.exists(loading_nuts_mapping_path) else None
 
-        mapping_df = pd.read_excel(loading_nuts_mapping_path)
-
-
-        for col in ['NUTS_ID', 'nuts_id', 'geo', 'GEOCODE']:
-            if col in result_gdf.columns:
-                nuts_code_col = col
-                break
-        
-
-        if nuts_code_col is None:
-            raise ValueError("Could not find NUTS code column in shapefile")
-            
-        logger.info(f"Using NUTS code column: {nuts_code_col}")
-        
-        # Join each economic dataset with proper column naming
+        # Process each dataset with its corresponding NUTS level
         for dataset_name, df in economic_data.items():
-            logger.info(f"Joining {dataset_name} data")
+            # Get dataset configuration
+            dataset_config = self.config.economic_datasets.get(dataset_name, {})
+            nuts_level = dataset_config.get('nuts_level', 'l3')
             
-            # Create a copy and rename the value column to be dataset-specific
+            if nuts_level not in nuts_gdfs:
+                logger.warning(f"NUTS level {nuts_level} not available for dataset {dataset_name}")
+                continue
+                
+            nuts_gdf = nuts_gdfs[nuts_level].copy()
+            logger.info(f"Joining {dataset_name} data with NUTS {nuts_level.upper()}")
+            
+            # Determine NUTS code column in shapefile
+            nuts_code_col = None
+            for col in ['NUTS_ID', 'nuts_id', 'geo', 'GEOCODE']:
+                if col in nuts_gdf.columns:
+                    nuts_code_col = col
+                    break
+            
+            if nuts_code_col is None:
+                raise ValueError(f"Could not find NUTS code column in {nuts_level} shapefile")
+                
+            logger.info(f"Using NUTS code column: {nuts_code_col}")
+            
+            # Create a copy and standardize the value column name
             df_renamed = df.copy()
             
-            if 'gdp_value' in df_renamed.columns:
-                pass
-            elif 'freight_value' in df_renamed.columns:
+            # Standardize value column naming
+            value_cols = [col for col in df_renamed.columns if col.endswith('_value')]
+            if value_cols:
+                original_value_col = value_cols[0]
                 df_renamed = df_renamed.rename(columns={
-                    'freight_value': f'{dataset_name}_value'
+                    original_value_col: f'{dataset_name}_value'
                 })
-
-            for idx, row in df_renamed.iterrows():
-                if row['nuts_code'] in mapping_df[2021].values:
-                    mapping_idx = mapping_df.index[mapping_df[2021] == row['nuts_code']].tolist()
-                    if mapping_idx:
-                        df_renamed.at[idx, 'nuts_code'] = mapping_df.at[mapping_idx[0], 2024]
-
- 
+            
+            # Apply NUTS mapping if available and needed (mainly for L3 data)
+            if mapping_df is not None and nuts_level == 'l3':
+                for idx, row in df_renamed.iterrows():
+                    if row['nuts_code'] in mapping_df[2021].values:
+                        mapping_idx = mapping_df.index[mapping_df[2021] == row['nuts_code']].tolist()
+                        if mapping_idx:
+                            df_renamed.at[idx, 'nuts_code'] = mapping_df.at[mapping_idx[0], 2024]
+            
             # Perform the merge
-            result_gdf = result_gdf.merge(
+            merged_gdf = nuts_gdf.merge(
                 df_renamed, 
                 left_on=nuts_code_col, 
                 right_on='nuts_code', 
@@ -191,17 +230,16 @@ class NUTSDataMapper:
                 suffixes=('', f'_{dataset_name}')
             )
             
-        # Fill missing values with 0 for all economic columns
-        economic_columns = [col for col in result_gdf.columns if col.endswith('_value')]
-        result_gdf[economic_columns] = result_gdf[economic_columns].fillna(0)
+            # Fill missing values with 0 for economic columns
+            economic_columns = [col for col in merged_gdf.columns if col.endswith('_value')]
+            merged_gdf[economic_columns] = merged_gdf[economic_columns].fillna(0)
+            
+            result_gdfs[dataset_name] = merged_gdf
+            
+            logger.info(f"Joined {dataset_name} data: {len(economic_columns)} variables")
+            logger.debug(f"Economic columns for {dataset_name}: {economic_columns}")
         
-        logger.info(f"Joined economic data for {len(economic_columns)} variables")
-        
-        # Debug: print column info
-        logger.debug(f"Final columns: {list(result_gdf.columns)}")
-        logger.debug(f"Economic columns: {economic_columns}")
-        
-        return result_gdf
+        return result_gdfs
 
 
 class EconomicDistributor:
@@ -323,26 +361,37 @@ class RelevanceLayer:
         
         logger.info("Initialized Relevance Layer")
     
-    def load_and_process_economic_data(self) -> gpd.GeoDataFrame:
-        """Load economic datasets and join with NUTS geometries."""
+    def load_and_process_economic_data(self) -> Dict[str, gpd.GeoDataFrame]:
+        """Load economic datasets and join with NUTS geometries at appropriate levels."""
         # Load economic datasets
         economic_data = self.data_loader.load_economic_datasets()
         
         if not economic_data:
             raise ValueError("No economic datasets could be loaded. Please check data paths and files.")
         
-        nuts_gdf = self.nuts_mapper.load_nuts_shapefile()
+        # Determine which NUTS levels are needed
+        required_nuts_levels = set()
+        for dataset_name in economic_data.keys():
+            dataset_config = getattr(self.config, 'economic_datasets', {}).get(dataset_name, {})
+            nuts_level = dataset_config.get('nuts_level', 'l3')
+            required_nuts_levels.add(nuts_level)
         
-        joined_gdf = self.nuts_mapper.join_economic_data(nuts_gdf, economic_data)
+        # Load NUTS shapefiles for required levels
+        nuts_gdfs = {}
+        for nuts_level in required_nuts_levels:
+            nuts_gdfs[nuts_level] = self.nuts_mapper.load_nuts_shapefile(nuts_level)
         
-        return joined_gdf
+        # Join economic data with appropriate NUTS levels
+        joined_gdfs = self.nuts_mapper.join_economic_data(nuts_gdfs, economic_data)
+        
+        return joined_gdfs
     
     def calculate_relevance(self) -> Tuple[Dict[str, np.ndarray], dict]:
         """Calculate economic relevance layers for each dataset."""
         logger.info("Calculating economic relevance layers")
         
         # Load and process economic data
-        nuts_economic_gdf = self.load_and_process_economic_data()
+        nuts_economic_gdfs = self.load_and_process_economic_data()
         
         # Get exposition layer (now properly masked to study area)
         exposition_data, exposition_meta = self.exposition_layer.calculate_exposition()
@@ -350,23 +399,25 @@ class RelevanceLayer:
                    f"Min: {np.nanmin(exposition_data)}, Max: {np.nanmax(exposition_data)}, "
                    f"Non-zero pixels: {np.sum(exposition_data > 0)}")
         
-        # Determine which economic variables are available from the loaded data
-        available_economic_columns = [col for col in nuts_economic_gdf.columns if col.endswith('_value')]
-        economic_variables = [col.replace('_value', '') for col in available_economic_columns]
-        
-        if not economic_variables:
-            raise ValueError("No economic variables found in processed data")
-        
-        logger.info(f"Processing {len(economic_variables)} economic variables: {economic_variables}")
-        
+        # Process each dataset separately since they may have different NUTS levels
         relevance_layers = {}
         
-        for variable in economic_variables:
-            logger.info(f"Processing {variable}")
+        for dataset_name, nuts_gdf in nuts_economic_gdfs.items():
+            logger.info(f"Processing {dataset_name} dataset")
+            
+            # Get available economic columns for this dataset
+            available_economic_columns = [col for col in nuts_gdf.columns if col.endswith('_value')]
+            
+            if not available_economic_columns:
+                logger.warning(f"No economic columns found for {dataset_name}")
+                continue
+            
+            # Extract the variable name (should match dataset_name)
+            variable = dataset_name
             
             # Rasterize NUTS regions with economic values using exposition metadata
             economic_raster, raster_meta = self.distributor.rasterize_nuts_regions(
-                nuts_economic_gdf, exposition_meta, variable
+                nuts_gdf, exposition_meta, variable
             )
             
             # Distribute using exposition layer (which is now properly masked)
@@ -379,14 +430,20 @@ class RelevanceLayer:
             
             relevance_layers[variable] = normalized_raster
             
-        # Calculate combined relevance layer with dynamic weights
-        weights = getattr(self.config, 'relevance_weights', {})
+        if not relevance_layers:
+            raise ValueError("No relevance layers could be calculated")
+            
+        logger.info(f"Processed {len(relevance_layers)} economic variables: {list(relevance_layers.keys())}")
         
-        # If no weights specified or weights don't match variables, use equal weights
-        if not weights or not all(var in weights for var in economic_variables):
-            equal_weight = 1.0 / len(economic_variables)
-            weights = {var: equal_weight for var in economic_variables}
-            logger.info(f"Using equal weights for variables: {weights}")
+        # Calculate combined relevance layer with configured weights
+        economic_datasets_config = getattr(self.config, 'economic_datasets', {})
+        weights = {}
+        
+        for variable in relevance_layers.keys():
+            dataset_config = economic_datasets_config.get(variable, {})
+            weights[variable] = dataset_config.get('weight', 1.0 / len(relevance_layers))
+        
+        logger.info(f"Using weights for variables: {weights}")
         
         combined_relevance = np.zeros_like(list(relevance_layers.values())[0])
         total_weight = 0

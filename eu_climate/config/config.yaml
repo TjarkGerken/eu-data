@@ -19,6 +19,7 @@ data:
     river_segments_file: "ClippedRiverSegments.shp"
     river_nodes_file: "ClippedRiverNodes.shp"
     land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
+    hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv"
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
     target_resolution: 30.0
@@ -57,14 +58,27 @@ data:
   relevance:
     min_economic_value: 0.05
     economic_datasets:
-      gdp_weight: 0.4
-      freight_loading_weight: 0.3
-      freight_unloading_weight: 0.3
-    nuts_level: "L3"
+      gdp:
+        weight: 0.25
+        nuts_level: "l3"
+        file_key: "gdp"
+      freight_loading:
+        weight: 0.25
+        nuts_level: "l3"
+        file_key: "freight_loading"
+      freight_unloading:
+        weight: 0.25
+        nuts_level: "l3"
+        file_key: "freight_unloading"
+      hrst:
+        weight: 0.25
+        nuts_level: "l2"
+        file_key: "hrst"
     economic_variables:
       - "gdp"
       - "freight_loading"
       - "freight_unloading"
+      - "hrst"
   risk_assessment:
     n_risk_classes: 5
     weights:
