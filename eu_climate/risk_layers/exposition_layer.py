@@ -556,12 +556,12 @@ class ExpositionLayer:
             weights['ghs_built_v_weight'] * norm_built_v +
             weights['population_weight'] * norm_population
         )
-        logger.info(f"Base exposition - Min: {np.nanmin(base_exposition):.4f}, Max: {np.nanmax(base_exposition):.4f}, Mean: {np.nanmean(base_exposition):.4f}")
+        logger.info(f"Base exposition - Min: {np.nanmin(exposition):.4f}, Max: {np.nanmax(exposition):.4f}, Mean: {np.nanmean(exposition):.4f}")
         
         # Apply urbanisation and port multipliers
         # Combine multipliers: areas with both get cumulative effect, others get individual effect
         combined_multiplier = urbanisation_multiplier * port_multiplier
-        exposition = base_exposition * combined_multiplier
+        exposition = exposition * combined_multiplier
         logger.info(f"Final exposition with urbanisation and port multipliers - Min: {np.nanmin(exposition):.4f}, Max: {np.nanmax(exposition):.4f}, Mean: {np.nanmean(exposition):.4f}")
         
         # Log multiplier effect breakdown
