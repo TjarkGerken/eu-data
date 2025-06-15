@@ -736,7 +736,7 @@ class ExpositionLayer:
             
             logger.info(f"Saved {economic_identifier} exposition layer PNG to {png_path}")
 
-    def run_exposition(self, visualize: bool = False, create_png: bool = True):
+    def run_exposition(self, visualize: bool = False, create_png: bool = True, show_ports: bool = False, show_port_buffers: bool = False):
         """Main execution flow for the exposition layer."""
         # Create default exposition layer
         exposition, meta = self.calculate_exposition()
@@ -787,10 +787,10 @@ class ExpositionLayer:
         # Create all economic-specific exposition layers
         self.save_economic_exposition_layers()
 
-    def run_exposition_with_all_economic_layers(self, visualize: bool = False, create_png: bool = True):
+    def run_exposition_with_all_economic_layers(self, visualize: bool = False, create_png: bool = True, show_ports: bool = False, show_port_buffers: bool = False):
         """Run exposition layer creation including all economic-specific layers."""
         logger.info("Creating default exposition layer and all economic-specific exposition layers")
-        self.run_exposition(visualize=visualize, create_png=create_png)
+        self.run_exposition(visualize=visualize, create_png=create_png, show_ports=show_ports, show_port_buffers= show_port_buffers)
 
     def _apply_study_area_mask(self, exposition: np.ndarray, transform: rasterio.Affine, shape: Tuple[int, int]) -> np.ndarray:
         """Apply study area mask using NUTS boundaries and land mass data."""
