@@ -19,6 +19,8 @@ data:
     river_nodes_file: "ClippedRiverNodes.shp"
     land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
     hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv"
+    ghs_duc_file: "degree_of_urbanisation/GHS_DUC_NL_Extract.xlsx"
+    gadm_l2_file: "NL-GADM-L2/gadm41_NLD_2.shp"
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
     target_resolution: 30.0
@@ -54,6 +56,14 @@ data:
     ghs_built_c_weight: 0.25
     ghs_built_v_weight: 0.75
     population_weight: 0.5
+    urbanisation_multipliers:
+      urban_threshold: 0.6
+      semi_urban_threshold: 0.4
+      urban_multiplier: 1.5
+      semi_urban_multiplier: 1.25
+      rural_multiplier: 1.0
+      urban_weight: 0.7
+      semi_urban_weight: 0.3
   relevance:
     min_economic_value: 0.05
     economic_datasets:
