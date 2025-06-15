@@ -229,7 +229,7 @@ class RiskAssessment:
         logger.info("EXPOSITION LAYER ANALYSIS")
         logger.info("="*40)
         exposition_layer = ExpositionLayer(config)
-        exposition_layer.run_exposition(visualize=False, create_png=True)
+        exposition_layer.run_exposition(visualize=False, create_png=True, show_ports=True, show_port_buffers=True)
 
     def run_risk_assessment(self, config: ProjectConfig, 
                            run_hazard: bool = True,
