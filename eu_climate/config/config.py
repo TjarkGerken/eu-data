@@ -232,6 +232,15 @@ class ProjectConfig:
         """Get minimum economic value threshold from config."""
         return self.config['relevance']['min_economic_value']
     
+    @property
+    def economic_exposition_weights(self) -> Dict[str, Dict[str, float]]:
+        """Get exposition weights for each economic dataset."""
+        economic_weights = {}
+        for dataset_name, dataset_config in self.economic_datasets.items():
+            if 'exposition_weights' in dataset_config:
+                economic_weights[dataset_name] = dataset_config['exposition_weights']
+        return economic_weights
+    
     def validate_files(self) -> bool:
         """Validate that all required input files exist."""
         required_files = [
