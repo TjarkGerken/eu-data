@@ -3,7 +3,7 @@ import rasterio.features
 import rasterio.warp
 import geopandas as gpd
 from scipy import ndimage
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 import numpy as np
 from rasterio.enums import Resampling
 from pathlib import Path
@@ -456,7 +456,11 @@ class ExpositionLayer:
         return norm
 
     def calculate_exposition(self) -> Tuple[np.ndarray, dict]:
-        """Calculate the final exposition layer using weighted combination including urbanisation factor."""
+        """Calculate the final exposition layer using weighted combination."""
+        return self.calculate_exposition_with_weights(self.config.exposition_weights)
+
+    def calculate_exposition_with_weights(self, weights: Dict[str, float]) -> Tuple[np.ndarray, dict]:
+        """Calculate exposition layer using custom weights."""
         # Load and preprocess rasters
         ghs_built_c, meta = self.load_and_preprocess_raster(self.ghs_built_c_path)
         logger.info(f"GHS Built-C after preprocessing - Min: {np.nanmin(ghs_built_c)}, Max: {np.nanmax(ghs_built_c)}, Mean: {np.nanmean(ghs_built_c)}")
@@ -546,12 +550,11 @@ class ExpositionLayer:
             logger.error("One or more normalized layers contain only zeros!")
             raise ValueError("Invalid normalized data: one or more layers contain only zeros")
         
-        # Calculate base exposition (without urbanisation)
-        w = self.config.exposition_weights
-        base_exposition = (
-            w['ghs_built_c_weight'] * norm_built_c +
-            w['ghs_built_v_weight'] * norm_built_v +
-            w['population_weight'] * norm_population
+        # Weighted sum using provided weights
+        exposition = (
+            weights['ghs_built_c_weight'] * norm_built_c +
+            weights['ghs_built_v_weight'] * norm_built_v +
+            weights['population_weight'] * norm_population
         )
         logger.info(f"Base exposition - Min: {np.nanmin(base_exposition):.4f}, Max: {np.nanmax(base_exposition):.4f}, Mean: {np.nanmean(base_exposition):.4f}")
         
@@ -667,16 +670,83 @@ class ExpositionLayer:
             dst.write(data.astype(np.float32), 1)
         logger.info(f"Exposition layer exported to {out_path}")
 
-    def run_exposition(self, visualize: bool = False, create_png: bool = True, show_ports: bool = False, show_port_buffers: bool = False):
+    def create_economic_exposition_layer(self, economic_identifier: str, weights: Dict[str, float]) -> Tuple[np.ndarray, dict]:
+        """Create an exposition layer for a specific economic dataset using custom weights."""
+        logger.info(f"Creating exposition layer for {economic_identifier} with weights: {weights}")
+        return self.calculate_exposition_with_weights(weights)
+
+    def save_economic_exposition_layers(self):
+        """Create and save all economic-specific exposition layers based on config."""
+        logger.info("Creating economic-specific exposition layers")
+        
+        # Get economic exposition weights from config
+        economic_weights = self.config.economic_exposition_weights
+        
+        for economic_identifier, weights in economic_weights.items():
+            logger.info(f"Processing exposition layer for {economic_identifier}")
+            
+            # Create exposition layer with custom weights
+            exposition_data, meta = self.create_economic_exposition_layer(economic_identifier, weights)
+            
+            # Define output paths
+            tif_output_dir = Path(self.config.output_dir) / "exposition" / "tif"
+            png_output_dir = Path(self.config.output_dir) / "exposition"
+            tif_output_dir.mkdir(parents=True, exist_ok=True)
+            png_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save TIF file
+            tif_path = tif_output_dir / f"exposition_{economic_identifier}.tif"
+            self.save_exposition_layer(exposition_data, meta, str(tif_path))
+            logger.info(f"Saved {economic_identifier} exposition layer TIF to {tif_path}")
+            
+            # Create PNG visualization
+            png_path = png_output_dir / f"exposition_{economic_identifier}.png"
+            
+            # Load land mask for proper water/land separation  
+            land_mask = None
+            try:
+                with rasterio.open(self.config.land_mass_path) as src:
+                    # Transform land mask to match exposition layer resolution and extent
+                    if meta and 'transform' in meta:
+                        land_mask, _ = rasterio.warp.reproject(
+                            source=src.read(1),
+                            destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                            src_transform=src.transform,
+                            src_crs=src.crs,
+                            dst_transform=meta['transform'],
+                            dst_crs=meta['crs'],
+                            resampling=rasterio.enums.Resampling.nearest
+                        )
+                        # Ensure proper data type (1=land, 0=water)
+                        land_mask = (land_mask > 0).astype(np.uint8)
+                        logger.info(f"Loaded and transformed land mask for {economic_identifier} exposition visualization")
+                    else:
+                        logger.warning("No metadata available for land mask transformation")
+            except Exception as e:
+                logger.warning(f"Could not load land mask for {economic_identifier} exposition visualization: {e}")
+            
+            # Create visualization with economic identifier in title
+            self.visualizer.visualize_exposition_layer(
+                data=exposition_data,
+                meta=meta,
+                output_path=png_path,
+                title=f"Exposition Layer - {economic_identifier.upper()}",
+                land_mask=land_mask
+            )
+            
+            logger.info(f"Saved {economic_identifier} exposition layer PNG to {png_path}")
+
+    def run_exposition(self, visualize: bool = False, create_png: bool = True):
         """Main execution flow for the exposition layer."""
+        # Create default exposition layer
         exposition, meta = self.calculate_exposition()
         out_path = Path(self.config.output_dir) /"exposition" / "tif" / 'exposition_layer.tif'
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.save_exposition_layer(exposition, meta, out_path)
-        logger.info(f"Exposition layer saved to {out_path}")
+        logger.info(f"Default exposition layer saved to {out_path}")
         
-        # Create PNG visualization (only once)
+        # Create PNG visualization for default layer
         if create_png or visualize:
             png_path = Path(self.config.output_dir) / "exposition" / 'exposition_layer.png'
             
@@ -697,11 +767,11 @@ class ExpositionLayer:
                         )
                         # Ensure proper data type (1=land, 0=water)
                         land_mask = (land_mask > 0).astype(np.uint8)
-                        logger.info("Loaded and transformed land mask for exposition PNG")
+                        logger.info("Loaded and transformed land mask for default exposition PNG")
                     else:
                         logger.warning("No metadata available for land mask transformation")
             except Exception as e:
-                logger.warning(f"Could not load land mask for exposition PNG: {e}")
+                logger.warning(f"Could not load land mask for default exposition PNG: {e}")
             
             self.visualizer.visualize_exposition_layer(
                 data=exposition,
@@ -712,7 +782,15 @@ class ExpositionLayer:
                 show_ports=show_ports,
                 show_port_buffers=show_port_buffers
             )
-            logger.info(f"Exposition layer PNG saved to {png_path}")
+            logger.info(f"Default exposition layer PNG saved to {png_path}")
+        
+        # Create all economic-specific exposition layers
+        self.save_economic_exposition_layers()
+
+    def run_exposition_with_all_economic_layers(self, visualize: bool = False, create_png: bool = True):
+        """Run exposition layer creation including all economic-specific layers."""
+        logger.info("Creating default exposition layer and all economic-specific exposition layers")
+        self.run_exposition(visualize=visualize, create_png=create_png)
 
     def _apply_study_area_mask(self, exposition: np.ndarray, transform: rasterio.Affine, shape: Tuple[int, int]) -> np.ndarray:
         """Apply study area mask using NUTS boundaries and land mass data."""
@@ -792,3 +870,38 @@ class ExpositionLayer:
             logger.warning(f"Could not apply study area mask: {str(e)}")
             logger.warning("Proceeding with unmasked exposition layer")
             return exposition
+
+    def ensure_economic_exposition_layer_exists(self, economic_identifier: str) -> Path:
+        """
+        Ensure that the economic exposition layer exists for the given identifier.
+        If it doesn't exist, create it using the weights from config.
+        
+        Returns:
+            Path to the exposition layer TIF file
+        """
+        tif_path = Path(self.config.output_dir) / "exposition" / "tif" / f"exposition_{economic_identifier}.tif"
+        
+        if tif_path.exists():
+            logger.info(f"Economic exposition layer for {economic_identifier} already exists at {tif_path}")
+            return tif_path
+        
+        logger.info(f"Economic exposition layer for {economic_identifier} does not exist, creating it...")
+        
+        # Get weights for this economic dataset
+        economic_weights = self.config.economic_exposition_weights
+        if economic_identifier not in economic_weights:
+            raise ValueError(f"No exposition weights found for economic identifier: {economic_identifier}")
+        
+        weights = economic_weights[economic_identifier]
+        
+        # Create the exposition layer
+        exposition_data, meta = self.create_economic_exposition_layer(economic_identifier, weights)
+        
+        # Ensure output directory exists
+        tif_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save the TIF file
+        self.save_exposition_layer(exposition_data, meta, str(tif_path))
+        logger.info(f"Created and saved economic exposition layer for {economic_identifier} at {tif_path}")
+        
+        return tif_path

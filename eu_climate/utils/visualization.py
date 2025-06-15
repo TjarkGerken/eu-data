@@ -59,6 +59,10 @@ hazard_risk_colors = [
     (1.0, '#9f040e'),  
 ]
 
+risk_colors = ['#ffffff', '#ffffcc', '#feb24c', '#fd8d3c', '#fc4e2a', '#e31a1c', '#b10026', '#800026']
+risk_cmap = LinearSegmentedColormap.from_list('raw_flood_risk', risk_colors, N=256)
+
+
 # Neue Colormap erzeugen
 exposition_cmap = LinearSegmentedColormap.from_list("exposition_colors", exposition_colors)
 economic_cmap = LinearSegmentedColormap.from_list("economic_risk_colors", economic_risk_colors)
@@ -69,7 +73,7 @@ class ScientificStyle:
     
     # Color schemes for different data types
     ELEVATION_CMAP = 'terrain'
-    HAZARD_CMAP = hazard_cmap
+    HAZARD_CMAP = risk_cmap
     EXPOSITION_CMAP = exposition_cmap
     RELEVANCE_CMAP = exposition_cmap  
     ECONOMIC_RISK_CMAP = economic_cmap
@@ -516,17 +520,7 @@ class LayerVisualizer:
         # Create masked elevation data for proper visualization
         dem_for_vis = np.full_like(dem_data, np.nan, dtype=np.float32)
         dem_for_vis[netherlands_mask] = dem_data[netherlands_mask]
-        
-        # Overlay elevation data with transparency
-        # im_dem = ax.imshow(
-        #     dem_for_vis,
-        #     cmap=ScientificStyle.ELEVATION_CMAP,
-        #     aspect='equal',
-        #     extent=extent,
-        #     alpha=0.7,
-        #     vmin=elevation_min, vmax=elevation_max
-        # )
-        
+                
         # Overlay flood risk areas on Netherlands land only
         flood_overlay = np.full_like(flood_mask, np.nan, dtype=np.float32)
         flood_overlay[netherlands_mask & (flood_mask > 0)] = flood_mask[netherlands_mask & (flood_mask > 0)]
@@ -549,11 +543,6 @@ class LayerVisualizer:
         ax.set_title(title, fontsize=ScientificStyle.TITLE_SIZE, fontweight='bold', pad=20)
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
-        
-        # Add dual colorbars
-        # Elevation colorbar
-        # cbar_dem = self.create_standard_colorbar(im_dem, ax, 'Elevation (m)', shrink=0.6)
-        # cbar_dem.ax.set_position([0.92, 0.15, 0.02, 0.3])
         
         # Flood risk colorbar (only if there are flooded areas)
         if np.any(flood_mask > 0):
