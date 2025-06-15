@@ -1,12 +1,11 @@
+from datetime import datetime
 import os
-import yaml
 from pathlib import Path
 from huggingface_hub import HfApi, upload_folder, snapshot_download
-import shutil
-from typing import Dict, Any
 from dotenv import load_dotenv
 import logging
-from rasterio.enums import Resampling
+
+from eu_climate.config.config import ProjectConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +15,8 @@ REQUIRED_ENV_VARS = {
 
 def validate_env_vars() -> None:
     """Validate that all required environment variables are set."""
-    # Try multiple possible .env locations
     possible_env_paths = [
-        Path("code/config/.env"),
-        Path("config/.env"),
         Path(__file__).parent.parent / "config" / ".env",
-        Path(".env")  # Fallback to root directory
     ]
     
     env_loaded = False
@@ -46,106 +41,175 @@ def validate_env_vars() -> None:
             logger.warning(f"- {var}")
         logger.warning("Some functionality may be limited.")
 
-def get_config() -> dict:
-    """
-    Load configuration from YAML file.
-    
-    Returns:
-        dict: Configuration dictionary
-    """
-    # Try multiple possible config locations
-    possible_paths = [
-        Path("code/config/data_config.yaml"),
-        Path("config/data_config.yaml"),
-        Path(__file__).parent.parent / "config" / "data_config.yaml"
-    ]
-    
-    for config_path in possible_paths:
-        if config_path.exists():
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f).get('data', {})
-                if not config:
-                    raise ValueError("Invalid configuration file: 'data' section is missing")
-                return config
-    
-    raise FileNotFoundError(
-        "Configuration file not found! Ensure code/config/data_config.yaml exists."
-    )
+def get_config() -> ProjectConfig:
+    config = ProjectConfig()
+    return config
 
-def check_data_availability() -> bool:
-    """Check if required data directories exist and contain files."""
-    config = get_config()
-    data_dir = Path(config['data_paths']['local_data_dir'])
-    output_dir = Path(config['data_paths']['local_output_dir'])
-    
-    return data_dir.exists() and output_dir.exists()
+
 
 def download_data() -> bool:
     """Download data from Hugging Face if auto_download is enabled."""
     config = get_config()
     
-    if not config.get('auto_download', False):
+    if not config.config.get('auto_download', False):
         logger.info("Auto-download is disabled. Please download the data manually from:")
-        logger.info(f"https://huggingface.co/datasets/{config['huggingface_repo']}")
+        logger.info(f"https://huggingface.co/datasets/{config.config['huggingface_repo']}")
         logger.info("and place it in the following directories:")
-        logger.info(f"- {config['data_paths']['local_data_dir']}")
-        logger.info(f"- {config['data_paths']['local_output_dir']}")
+        logger.info(f"- {config.data_dir}")
+        logger.info(f"- {config.output_dir}")
         return False
     
     try:
-        # Download the repository content
+        validate_env_vars()
+        
+        repo_id = config.config['huggingface_repo']
+        
+        api_token = os.getenv('HF_API_TOKEN')
+        if api_token:
+            api = HfApi(token=api_token)
+            logger.info("Using authenticated API for repository operations")
+        else:
+            api = HfApi()
+            logger.info("Using unauthenticated API (cleanup will be skipped)")
+        
+        if api_token:
+            logger.info("Cleaning up remote repository...")
+            try:
+                repo_files = api.list_repo_files(repo_id=repo_id, repo_type="dataset")
+                
+                files_to_delete = []
+                for file_path in repo_files:
+                    if file_path.startswith('data/') or file_path.startswith('output/'):
+                        files_to_delete.append(file_path)
+                
+                if files_to_delete:
+                    logger.info(f"Deleting {len(files_to_delete)} files from remote repository...")
+                    for file_path in files_to_delete:
+                        try:
+                            api.delete_file(
+                                path_in_repo=file_path,
+                                repo_id=repo_id,
+                                repo_type="dataset",
+                                commit_message=f"Remove {file_path} for cleanup"
+                            )
+                            logger.debug(f"Deleted: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"Could not delete {file_path}: {str(e)}")
+                    logger.info("Remote repository cleanup completed")
+                else:
+                    logger.info("No data or output folders found in remote repository")
+                    
+            except Exception as e:
+                logger.warning(f"Could not clean up remote repository: {str(e)}. Continuing with download...")
+        else:
+            logger.info("Skipping repository cleanup (no API token available)")
+        
+        config.huggingface_folder.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Downloading repository directly to {config.huggingface_folder}")
+        
         snapshot_download(
-            repo_id=config['huggingface_repo'],
+            repo_id=repo_id,
             repo_type="dataset",
-            local_dir="temp_download"
+            local_dir=config.huggingface_folder,
+            local_dir_use_symlinks=False,
+            resume_download=True,
+            token=api_token
         )
         
-        # Move the required directories to their destinations
-        for dir_name, target_path in config['data_paths'].items():
-            source = Path("temp_download") / Path(target_path).name
-            target = Path(target_path)
-            
-            if source.exists():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if target.exists():
-                    shutil.rmtree(target)
-                shutil.move(str(source), str(target))
+        logger.info(f"Successfully downloaded repository to {config.huggingface_folder}")
         
-        # Clean up temporary download directory
-        if Path("temp_download").exists():
-            shutil.rmtree("temp_download")
+        required_items_checks = [
+            (config.data_dir, "source data directory"),
+            (config.huggingface_folder / "README.md", "README.md file"),
+            (config.huggingface_folder / ".gitattributes", ".gitattributes file")
+        ]
+        
+        all_items_present = True
+        for item_path, item_name in required_items_checks:
+            if item_path.exists():
+                logger.info(f"✓ {item_name} found at: {item_path}")
+            else:
+                logger.warning(f"✗ {item_name} not found at: {item_path}")
+                if item_name == "source data directory":
+                    all_items_present = False
+        if all_items_present:
+            logger.info("Data download completed successfully!")
+            return True
+        else:
+            logger.error("Download completed but some required items are missing")
+            return False
             
-        return True
-    
     except Exception as e:
         logger.error(f"Error downloading data: {str(e)}")
         return False
 
-def upload_data() -> bool:
-    """Upload data to Hugging Face if enabled."""
+
+
+def check_data_availability() -> bool:
+    """Check if required data directories and key files exist."""
     config = get_config()
     
-    if not config['upload']['enabled']:
-        logger.info("Data upload is disabled.")
+    data_dir = config.data_dir
+    output_dir = config.output_dir
+    
+    if not data_dir.exists():
+        logger.info(f"Data directory not found: {data_dir}")
         return False
     
-    if not config['upload']['api_token']:
-        logger.error("Hugging Face API token is required for upload.")
+    # Check for some key files to ensure data is properly downloaded
+    key_files = [
+        data_dir / config.config['file_paths']['dem_file'],
+        data_dir / config.config['file_paths']['population_file']
+    ]
+    
+    for file_path in key_files:
+        if not file_path.exists():
+            logger.info(f"Key data file missing: {file_path}")
+            return False
+    
+    logger.info("Required data files found locally")
+    return True
+
+def upload_data() -> bool:
+    """Upload all contents from the huggingface folder to Hugging Face repository."""
+    # First, ensure environment variables are loaded
+    validate_env_vars()
+    
+    config = get_config()
+    
+    # Check if upload is enabled
+    if not config.config.get('upload', {}).get('enabled', False):
+        logger.info("Data upload is disabled in configuration.")
+        return False
+    
+    # Get API token from environment variables only
+    api_token = os.getenv('HF_API_TOKEN')
+    if not api_token:
+        logger.error("Hugging Face API token is required for upload. Set HF_API_TOKEN environment variable.")
+        return False
+    
+    if not config.huggingface_folder.exists():
+        logger.error(f"Hugging Face folder not found: {config.huggingface_folder}")
         return False
     
     try:
-        api = HfApi(token=config['upload']['api_token'])
+        logger.info(f"Starting upload of {config.huggingface_folder} to {config.config['huggingface_repo']}")
+        api = HfApi(token=api_token)
         
-        # Upload each directory
-        for dir_path in config['data_paths'].values():
-            if Path(dir_path).exists():
+        for item in config.huggingface_folder.iterdir():
+            if item.is_dir() and not item.name.startswith('.') and item.name != 'temp_download':
+                logger.info(f"Uploading directory: {item.name}")
                 upload_folder(
-                    folder_path=dir_path,
-                    repo_id=config['huggingface_repo'],
+                    folder_path=str(item),
+                    repo_id=config.config['huggingface_repo'],
                     repo_type="dataset",
-                    path_in_repo=Path(dir_path).name
+                    path_in_repo=item.name,
+                    token=api_token
                 )
-        logger.info("Data upload completed successfully")
+                logger.info(f"Successfully uploaded {item.name}")
+        
+        logger.info("All data upload completed successfully")
         return True
     
     except Exception as e:
@@ -160,3 +224,56 @@ def ensure_data_availability() -> bool:
             logger.error("Unable to download data automatically.")
             return False
     return True
+
+
+def check_data_integrity(config: ProjectConfig) -> None:
+    """Check data integrity and sync with remote repository if needed."""
+    logger.info("Checking data integrity...")
+    
+    try:
+        # Load config settings
+        repo_id = config.config['huggingface_repo']
+        auto_download = config.config.get('auto_download', True)
+        
+        # Check local data files
+        try:
+            config.validate_files()
+            logger.info("Local data validation passed")
+        except FileNotFoundError as e:
+            logger.warning(f"Missing data files: {e}")
+            if auto_download:
+                logger.info("Downloading missing data...")
+                from eu_climate.utils.data_loading import download_data
+                download_data()
+                config.validate_files()  # Re-validate after download
+            else:
+                logger.error(f"Please download data from: https://huggingface.co/datasets/{repo_id}")
+                raise
+        
+        # Check for updates if possible
+        try:
+            from huggingface_hub import HfApi
+            api_token = os.getenv('HF_API_TOKEN')
+            if api_token:
+                api = HfApi(token=api_token)
+            else:
+                api = HfApi()
+            repo_info = api.dataset_info(repo_id=repo_id)
+            logger.info(f"Remote data last modified: {repo_info.last_modified}")
+            
+            if auto_download:
+                # Simple check: if data directory is older than 1 day, consider update
+                data_age = (datetime.now() - datetime.fromtimestamp(config.data_dir.stat().st_mtime)).days
+                if data_age > 1:
+                    logger.info("Data might be outdated, updating...")
+                    from eu_climate.utils.data_loading import download_data
+                    download_data()
+                    
+        except Exception as e:
+            logger.debug(f"Could not check remote updates: {e}")
+            
+        logger.info("Data integrity check completed")
+        
+    except Exception as e:
+        logger.error(f"Data integrity check failed: {e}")
+        raise

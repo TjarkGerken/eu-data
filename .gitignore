@@ -1,4 +1,6 @@
 .venv/
+/venv/
+.cache/
 .vscode/
 .DS_Store
 .env
@@ -8,5 +10,5 @@
 **/__pycache__/**
 /**/data
 /**/output
+/**/.output
 /**/temp_download
-/.cursor/rules

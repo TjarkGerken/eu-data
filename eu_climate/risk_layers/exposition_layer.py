@@ -14,6 +14,7 @@ import os
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.conversion import RasterTransformer
+from eu_climate.utils.visualization import LayerVisualizer
 
 
 # Set up logging for the exposition layer
@@ -51,8 +52,11 @@ class ExpositionLayer:
         # Initialize raster transformer
         self.transformer = RasterTransformer(
             target_crs=self.config.target_crs,
-            target_resolution=30.0  # 30m resolution
+            config=self.config
         )
+        
+        # Initialize visualizer
+        self.visualizer = LayerVisualizer(self.config)
         
         logger.info(f"Initialized Exposition Layer")
         
@@ -76,12 +80,12 @@ class ExpositionLayer:
         pass
     
     def load_and_preprocess_raster(self, path: str) -> Tuple[np.ndarray, dict]:
-        """Load and preprocess a single raster to target resolution and CRS."""
+        """Load and preprocess a single raster to target resolution and CRS using NUTS-L3 bounds."""
         logger.info(f"Loading raster: {path}")
         
-        # Get reference bounds from NUTS-L0
-        nuts_l0_path = self.config.data_dir / "NUTS-L0-NL.shp"
-        reference_bounds = self.transformer.get_reference_bounds(nuts_l0_path)
+        # Get reference bounds from NUTS-L3 instead of NUTS-L0 for consistency with relevance layer
+        nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+        reference_bounds = self.transformer.get_reference_bounds(nuts_l3_path)
         
         # Transform raster
         data, transform, crs = self.transformer.transform_raster(
@@ -202,6 +206,10 @@ class ExpositionLayer:
             if np.all(exposition == 0):
                 logger.error("Smoothed exposition layer contains only zeros!")
                 raise ValueError("Invalid smoothed exposition layer: contains only zeros")
+        
+        # Apply study area mask to limit data to relevant landmass
+        exposition = self._apply_study_area_mask(exposition, reference_transform, reference_shape)
+        logger.info(f"Exposition after study area masking - Min: {np.nanmin(exposition)}, Max: {np.nanmax(exposition)}, Mean: {np.nanmean(exposition)}")
             
         return exposition, meta
 
@@ -234,14 +242,40 @@ class ExpositionLayer:
             dst.write(data.astype(np.float32), 1)
             logger.info(f"Successfully wrote data to {out_path}")
 
-    def visualize_exposition(self, exposition: np.ndarray, title: str = "Exposition Layer"):
-        """Visualize the exposition index for each cell."""
-        plt.figure(figsize=(10, 8))
-        im = plt.imshow(exposition, cmap='viridis')
-        plt.colorbar(im, label='Exposition Index')
-        plt.title(title)
-        plt.axis('off')
-        plt.show()
+    def visualize_exposition(self, exposition: np.ndarray, meta: dict, title: str = "Exposition Layer"):
+        """Visualize the exposition index for each cell using unified styling."""
+        output_path = Path(self.config.output_dir) / "exposition" / "exposition_layer.png"
+        
+        # Load land mask for proper water/land separation  
+        land_mask = None
+        try:
+            with rasterio.open(self.config.land_mass_path) as src:
+                # Transform land mask to match exposition layer resolution and extent
+                if meta and 'transform' in meta:
+                    land_mask, _ = rasterio.warp.reproject(
+                        source=src.read(1),
+                        destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=meta['transform'],
+                        dst_crs=meta['crs'],
+                        resampling=rasterio.enums.Resampling.nearest
+                    )
+                    # Ensure proper data type (1=land, 0=water)
+                    land_mask = (land_mask > 0).astype(np.uint8)
+                    logger.info("Loaded and transformed land mask for exposition visualization")
+                else:
+                    logger.warning("No metadata available for land mask transformation")
+        except Exception as e:
+            logger.warning(f"Could not load land mask for exposition visualization: {e}")
+        
+        self.visualizer.visualize_exposition_layer(
+            data=exposition,
+            meta=meta,
+            output_path=output_path,
+            title=title,
+            land_mask=land_mask
+        )
 
     def export_exposition(self, data: np.ndarray, meta: dict, out_path: str):
         """Export the exposition index for each cell to a specified GeoTIFF path."""
@@ -250,13 +284,134 @@ class ExpositionLayer:
             dst.write(data.astype(np.float32), 1)
         logger.info(f"Exposition layer exported to {out_path}")
 
-    def run_exposition(self, visualize: bool = False, export_path: str = None):
+    def run_exposition(self, visualize: bool = False, create_png: bool = True):
         """Main execution flow for the exposition layer."""
         exposition, meta = self.calculate_exposition()
-        out_path = export_path or str(Path(self.config.local_output_dir) / 'exposition_layer.tif')
+        out_path = Path(self.config.output_dir) /"exposition" / "tif" / 'exposition_layer.tif'
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
         self.save_exposition_layer(exposition, meta, out_path)
         logger.info(f"Exposition layer saved to {out_path}")
-        if visualize:
-            self.visualize_exposition(exposition)
-        if export_path:
-            self.export_exposition(exposition, meta, export_path)
+        
+        # Create PNG visualization (only once)
+        if create_png or visualize:
+            png_path = Path(self.config.output_dir) / "exposition" / 'exposition_layer.png'
+            
+            # Load land mask for proper water/land separation  
+            land_mask = None
+            try:
+                with rasterio.open(self.config.land_mass_path) as src:
+                    # Transform land mask to match exposition layer resolution and extent
+                    if meta and 'transform' in meta:
+                        land_mask, _ = rasterio.warp.reproject(
+                            source=src.read(1),
+                            destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                            src_transform=src.transform,
+                            src_crs=src.crs,
+                            dst_transform=meta['transform'],
+                            dst_crs=meta['crs'],
+                            resampling=rasterio.enums.Resampling.nearest
+                        )
+                        # Ensure proper data type (1=land, 0=water)
+                        land_mask = (land_mask > 0).astype(np.uint8)
+                        logger.info("Loaded and transformed land mask for exposition PNG")
+                    else:
+                        logger.warning("No metadata available for land mask transformation")
+            except Exception as e:
+                logger.warning(f"Could not load land mask for exposition PNG: {e}")
+            
+            self.visualizer.visualize_exposition_layer(
+                data=exposition,
+                meta=meta,
+                output_path=png_path,
+                title="Exposition Layer",
+                land_mask=land_mask
+            )
+            logger.info(f"Exposition layer PNG saved to {png_path}")
+
+    def _apply_study_area_mask(self, exposition: np.ndarray, transform: rasterio.Affine, shape: Tuple[int, int]) -> np.ndarray:
+        """Apply study area mask using NUTS boundaries and land mass data."""
+        logger.info("Applying study area mask to exposition layer...")
+        
+        try:
+            # Load NUTS-L3 boundaries for study area definition
+            nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+            nuts_gdf = gpd.read_file(nuts_l3_path)
+            
+            # Ensure NUTS is in target CRS
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            if nuts_gdf.crs != target_crs:
+                nuts_gdf = nuts_gdf.to_crs(target_crs)
+            
+            # Create NUTS mask
+            nuts_mask = rasterio.features.rasterize(
+                [(geom, 1) for geom in nuts_gdf.geometry],
+                out_shape=shape,
+                transform=transform,
+                dtype=np.uint8
+            )
+            logger.info(f"Created NUTS mask: {np.sum(nuts_mask)} pixels within NUTS boundaries")
+            
+            # Load and align land mass data
+            land_mass_data, land_transform, _ = self.transformer.transform_raster(
+                self.config.land_mass_path,
+                reference_bounds=self.transformer.get_reference_bounds(nuts_l3_path),
+                resampling_method=self.config.resampling_method
+            )
+            
+            # Ensure land mass data is aligned with exposition layer
+            if not self.transformer.validate_alignment(land_mass_data, land_transform, exposition, transform):
+                land_mass_data = self.transformer.ensure_alignment(
+                    land_mass_data, land_transform, transform, shape,
+                    self.config.resampling_method
+                )
+            
+            # Create land mask (1=land, 0=water/no data)
+            land_mask = (land_mass_data > 0).astype(np.uint8)
+            logger.info(f"Created land mask: {np.sum(land_mask)} pixels identified as land")
+            
+            # Combine masks: only areas that are both within NUTS and on land
+            combined_mask = (nuts_mask == 1) & (land_mask == 1)
+            logger.info(f"Combined study area mask: {np.sum(combined_mask)} pixels in relevant study area")
+            
+            # Apply mask to exposition layer
+            masked_exposition = exposition.copy()
+            masked_exposition[~combined_mask] = 0.0
+            
+            # Log masking statistics
+            original_nonzero = np.sum(exposition > 0)
+            masked_nonzero = np.sum(masked_exposition > 0)
+            logger.info(f"Masking removed {original_nonzero - masked_nonzero} non-zero pixels "
+                       f"({(original_nonzero - masked_nonzero) / original_nonzero * 100:.1f}% reduction)")
+            
+            # Renormalize values within study area to full 0-1 range
+            study_area_values = masked_exposition[combined_mask]
+            valid_values = study_area_values[study_area_values > 0]
+            
+            if len(valid_values) > 0:
+                min_val = np.min(valid_values)
+                max_val = np.max(valid_values)
+                logger.info(f"Study area values before renormalization - Min: {min_val:.4f}, Max: {max_val:.4f}")
+                
+                if max_val > min_val:
+                    # Renormalize only the valid values within study area to 0-1 range
+                    renormalized_exposition = masked_exposition.copy()
+                    valid_mask = combined_mask & (masked_exposition > 0)
+                    renormalized_exposition[valid_mask] = (masked_exposition[valid_mask] - min_val) / (max_val - min_val)
+                    
+                    # Verify renormalization
+                    final_values = renormalized_exposition[valid_mask]
+                    logger.info(f"Study area values after renormalization - Min: {np.min(final_values):.4f}, Max: {np.max(final_values):.4f}")
+                    
+                    return renormalized_exposition
+                else:
+                    logger.warning("No variation in study area values - cannot renormalize")
+                    return masked_exposition
+            else:
+                logger.warning("No valid values found in study area")
+                return masked_exposition
+            
+        except Exception as e:
+            logger.warning(f"Could not apply study area mask: {str(e)}")
+            logger.warning("Proceeding with unmasked exposition layer")
+            return exposition

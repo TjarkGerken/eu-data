@@ -1,0 +1,93 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Never Nester Rule
+
+> Avoid deep nesting in control flow. Use early returns and function extraction to improve clarity.
+
+IF YOU FIND ANY INCOMPLIANCE WITH THIS RULE IN EXISTING CODE UPDATE IT.
+
+## 📌 Description
+
+Never nest more than **3 levels** deep. Nesting increases cognitive load and hides the "happy path" under layers of logic.
+
+This rule promotes two techniques:
+- **Inversion**: flip conditions and use early returns
+- **Extraction**: pull deeply nested logic into helper functions
+
+## ✅ Enforce This
+
+- Limit code to **max 3 levels** of indentation inside a function.
+- Flatten logic by **inverting conditionals** and using **early returns**.
+- Extract complex branches into **dedicated helper functions**.
+
+---
+
+### 🔁 Before: Too Nested (❌)
+```python
+def process():
+    if request:
+        if request.valid:
+            if request.user.is_active:
+                do_the_thing()
+```
+
+🧼 After: Inverted and Flattened (✅)
+```python
+def process():
+    if not request:
+        return
+    if not request.valid:
+        return
+    if not request.user.is_active:
+        return
+    do_the_thing()
+```
+
+🪓 Extraction Example
+Before:
+````
+def handle_download():
+    if status == "in_progress":
+        if error:
+            if retriable:
+                retry()
+            else:
+                log_failure()
+```
+
+After:
+```python
+def handle_download():
+    if status == "in_progress":
+        handle_in_progress()
+
+def handle_in_progress():
+    if error:
+        handle_error()
+```
+
+💡 Why This Matters
+Reduces the mental stack needed to read code.
+
+Keeps the happy path obvious and top-level.
+
+Encourages single-responsibility functions.
+
+"If you need more than three levels of indentation, you're screwed anyway." - Linux Kernel Style Guide
+
+🔍 Red Flags
+More than 3 nested if/for/while blocks in a single function.
+
+Huge functions doing too many things.
+
+Deeply indented else/elif chains.
+
+🛠️ Fix It By
+Using early returns (guard clauses).
+
+Applying the extract function pattern.
+
+Breaking logic into smaller, composable pieces.
