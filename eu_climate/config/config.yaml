@@ -15,7 +15,6 @@ data:
       l1: "NUTS-L1-NL.shp"
       l2: "NUTS-L2-NL.shp"
       l3: "NUTS-L3-NL.shp"
-    relevant_area_file: "RelevantArea.shp"
     river_segments_file: "ClippedRiverSegments.shp"
     river_nodes_file: "ClippedRiverNodes.shp"
     land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
