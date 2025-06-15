@@ -165,10 +165,7 @@ class ProjectConfig:
             for level, path in self.config['file_paths']['nuts_files'].items()
         }
     
-    @property
-    def relevant_area_path(self) -> Path:
-        """Get path to relevant area shapefile."""
-        return self.data_dir / self.config['file_paths']['relevant_area_file']
+
     
     @property
     def river_segments_path(self) -> Path:
@@ -189,6 +186,16 @@ class ProjectConfig:
     def hrst_file_path(self) -> str:
         """Get path to HRST file."""
         return self.config['file_paths']['hrst_file']
+    
+    @property
+    def ghs_duc_path(self) -> Path:
+        """Get path to GHS DUC Excel file."""
+        return self.data_dir / self.config['file_paths']['ghs_duc_file']
+    
+    @property
+    def gadm_l2_path(self) -> Path:
+        """Get path to GADM Level 2 shapefile."""
+        return self.data_dir / self.config['file_paths']['gadm_l2_file']
     
     @property
     def nuts_l0_file_path(self) -> str:
@@ -231,8 +238,9 @@ class ProjectConfig:
             (self.river_nodes_path, "River Nodes"),
             (self.land_mass_path, "Land Mass"),
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
-            (self.relevant_area_path, "Relevant Area"),
-            (self.data_dir / self.hrst_file_path, "HRST Data")
+            (self.data_dir / self.hrst_file_path, "HRST Data"),
+            (self.ghs_duc_path, "GHS DUC Excel"),
+            (self.gadm_l2_path, "GADM L2 Shapefile")
         ]
         
         missing_files = []
