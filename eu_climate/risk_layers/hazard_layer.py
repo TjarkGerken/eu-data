@@ -377,13 +377,11 @@ class HazardLayer:
         # Lower elevations within study area get slight risk boost
         # Higher elevations get slight risk reduction
         context_adjustment = 1.0 + 0.2 * (1.0 - study_percentile) - 0.1 * study_percentile
-        context_adjustment = np.clip(context_adjustment, 0.5, 1.5)
+        # context_adjustment = np.clip(context_adjustment, 0.5, 1.5)
         
         # Apply context adjustment
-        adjusted_risk = risk * context_adjustment
+        final_risk = risk * context_adjustment
         
-        # Ensure realistic value distribution - avoid too many high values
-        final_risk = np.clip(adjusted_risk, 0.001, 0.95)  
         
         # Log final risk statistics
         final_valid_risks = final_risk[valid_study_area]
@@ -513,12 +511,12 @@ class HazardLayer:
         
         # Apply very soft upper bound to prevent extreme outliers while preserving gradients
         # This replaces the hard np.clip(0, 1) with a more nuanced approach
-        max_reasonable_risk = 1.2  # Allow some values above 1.0 for better gradient preservation
-        combined_risk = np.where(
-            combined_risk > max_reasonable_risk,
-            max_reasonable_risk * (1 - np.exp(-(combined_risk - max_reasonable_risk) / 0.3)),
-            combined_risk
-        )
+        # max_reasonable_risk = 1.2  # Allow some values above 1.0 for better gradient preservation
+        # combined_risk = np.where(
+        #     combined_risk > max_reasonable_risk,
+        #     max_reasonable_risk * (1 - np.exp(-(combined_risk - max_reasonable_risk) / 0.3)),
+        #     combined_risk
+        # )
         
         # Final statistics
         final_valid_risk = combined_risk[valid_study_area]
