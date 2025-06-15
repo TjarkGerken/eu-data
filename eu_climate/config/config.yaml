@@ -1,0 +1,109 @@
+data:
+  auto_download: true
+  huggingface_repo: "TjarkGerken/eu-data"
+  data_paths:
+    local_data_dir: "data"
+    source_data_dir: "source"
+    local_output_dir: ".output"
+  file_paths:
+    dem_file: "ClippedCopernicusHeightProfile.tif"
+    ghs_built_c_file: "GHS_BUILT_C/GHS_BUILT_C.vrt"
+    ghs_built_v_file: "Clipped_GHS_Built-V-100m/Clipped_GHS_Built-V-100m.vrt"
+    population_file: "Clipped_GHS_POP_3ss/Clipped_GHS_POP_3ss.vrt"
+    nuts_files:
+      l0: "NUTS-L0-NL.shp"
+      l1: "NUTS-L1-NL.shp"
+      l2: "NUTS-L2-NL.shp"
+      l3: "NUTS-L3-NL.shp"
+    river_segments_file: "ClippedRiverSegments.shp"
+    river_nodes_file: "ClippedRiverNodes.shp"
+    land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
+    hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv"
+  processing:
+    resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
+    target_resolution: 30.0
+    smoothing_sigma: 1.0
+    target_crs: "EPSG:3035"
+  hazard:
+    river_zones:
+      high_risk_distance_m: 50
+      high_risk_weight: 1.2
+      moderate_risk_distance_m: 200
+      moderate_risk_weight: 1.15
+      low_risk_distance_m: 500
+      low_risk_weight: 1.1
+    elevation_risk:
+      max_safe_elevation_m: 10.0
+      risk_decay_factor: 2.2
+    flood_risk:
+      max_safe_flood_risk: 0.3
+  caching:
+    enabled: false
+    cache_dir: ".cache"
+    max_cache_size_gb: 10
+    auto_cleanup: true
+    max_age_days: 7
+    cache_strategies:
+      raster_data: "persistent"
+      calculations: "persistent"
+      final_results: "persistent"
+    logging:
+      cache_operations: true
+      cache_statistics: true
+  exposition:
+    ghs_built_c_weight: 0.25
+    ghs_built_v_weight: 0.75
+    population_weight: 0.5
+  relevance:
+    min_economic_value: 0.05
+    economic_datasets:
+      gdp:
+        weight: 0.25
+        nuts_level: "l3"
+        file_key: "gdp"
+      freight_loading:
+        weight: 0.25
+        nuts_level: "l3"
+        file_key: "freight_loading"
+      freight_unloading:
+        weight: 0.25
+        nuts_level: "l3"
+        file_key: "freight_unloading"
+      hrst:
+        weight: 0.25
+        nuts_level: "l2"
+        file_key: "hrst"
+    economic_variables:
+      - "gdp"
+      - "freight_loading"
+      - "freight_unloading"
+      - "hrst"
+  risk_assessment:
+    n_risk_classes: 5
+    weights:
+      hazard: 0.7
+      economic: 0.3
+    ghs_built_c_class_weights:
+      1: 0.0 # open spaces, low vegetation
+      2: 0.0 # open spaces, medium vegetation
+      3: 0.0 # open spaces, high vegetation
+      4: 0.0 # water surfaces
+      5: 0.5 # road surfaces
+      11: 0.6 # residential, <=3m
+      12: 0.7 # residential, 3-6m
+      13: 0.8 # residential, 6-15m
+      14: 0.8 # residential, 15-30m
+      15: 0.8 # residential, >30m
+      21: 0.6 # non-residential, <=3m
+      22: 0.7 # non-residential, 3-6m
+      23: 0.8 # non-residential, 6-15m
+      24: 0.8 # non-residential, 15-30m
+      25: 0.8 # non-residential, >30m
+  visualization:
+    figure_size: [15, 10]
+    dpi: 300
+  upload:
+    enabled: true
+  building:
+    base_floor_height: 3
+    max_floors: 30

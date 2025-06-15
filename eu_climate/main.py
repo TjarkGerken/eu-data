@@ -4,7 +4,7 @@ EU Climate Risk Assessment System
 =================================
 
 A comprehensive geospatial analysis tool for assessing climate risks in European regions.
-This system implements a three-layer approach: Hazard, Exposition, and Risk.
+This system implements a four-layer approach: Hazard, Exposition, Relevance, and Risk.
 
 Technical Implementation:
 - Robust and reproducible data processing pipeline
@@ -19,11 +19,17 @@ Version: 1.0.0
 """
 
 import os
+import sys
+import argparse
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
+from eu_climate.risk_layers.relevance_layer import RelevanceLayer
+from eu_climate.risk_layers.risk_layer import RiskLayer
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
-from eu_climate.utils.data_loading import get_config
+from eu_climate.utils.data_loading import check_data_integrity, get_config, upload_data, validate_env_vars
+from eu_climate.utils.cache_utils import initialize_caching, create_cached_layers, print_cache_status
+from eu_climate.utils.caching_wrappers import cache_relevance_layer
 import numpy as np
 import rasterio
 import rasterio.mask
@@ -32,19 +38,132 @@ import rasterio.warp
 from rasterio.enums import Resampling
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 from sklearn.preprocessing import MinMaxScaler
+import subprocess
+from datetime import datetime
+from huggingface_hub import HfApi
+from dotenv import load_dotenv
 
 # Set up logging for the main module
 logger = setup_logging(__name__)
 
-class RiskLayer(Enum):
-    """Enumeration for the three risk assessment layers."""
+class AssessmentLayer(Enum):
+    """Enumeration for the risk assessment layers."""
     HAZARD = "hazard"
     EXPOSITION = "exposition"  
+    RELEVANCE = "relevance"
     RISK = "risk"
+    POPULATION = "population"
+
+def parse_arguments() -> argparse.Namespace:
+    """
+    Parse command line arguments for controlling which risk layers to process.
+    
+    Returns:
+        Parsed arguments namespace
+    """
+    parser = argparse.ArgumentParser(
+        description="EU Climate Risk Assessment System - Control which layers to process",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python -m main --hazard                    # Run only hazard layer analysis
+  python -m main --exposition                # Run only exposition layer analysis  
+  python -m main --relevance                 # Run only relevance layer analysis
+  python -m main --risk                      # Run only risk layer analysis
+  python -m main --population                # Run only population risk layer analysis
+  python -m main --hazard --exposition       # Run hazard and exposition layers
+  python -m main --all                       # Run all layers (default behavior)
+  python -m main --verbose --risk            # Run risk layer with verbose logging
+  python -m main --no-cache --hazard         # Run hazard layer without caching
+  python -m main --no-upload --all           # Run all layers without data upload
+        """
+    )
+    
+    # Layer selection arguments
+    layer_group = parser.add_argument_group('Layer Selection', 
+                                           'Choose which risk assessment layers to process')
+    
+    layer_group.add_argument('--hazard', 
+                           action='store_true',
+                           help='Process Hazard Layer (sea level rise scenarios)')
+    
+    layer_group.add_argument('--exposition', 
+                           action='store_true',
+                           help='Process Exposition Layer (building density, population)')
+    
+    layer_group.add_argument('--relevance', 
+                           action='store_true',
+                           help='Process Relevance Layer (economic factors, GDP)')
+    
+    layer_group.add_argument('--risk', 
+                           action='store_true',
+                           help='Process Risk Layer (integrated risk assessment)')
+    
+    layer_group.add_argument('--population', 
+                           action='store_true',
+                           help='Process Population Risk Layer (population-based risk assessment)')
+    
+    layer_group.add_argument('--all', 
+                           action='store_true',
+                           help='Process all layers (hazard, exposition, relevance, risk, population)')
+    
+    # Configuration arguments
+    config_group = parser.add_argument_group('Configuration Options',
+                                           'Control execution behavior and output')
+    
+    config_group.add_argument('--verbose', '-v',
+                            action='store_true',
+                            help='Enable verbose logging output')
+    
+    config_group.add_argument('--no-cache',
+                            action='store_true',
+                            help='Disable caching system')
+    
+    config_group.add_argument('--no-upload',
+                            action='store_true',
+                            help='Skip data upload to Hugging Face')
+    
+    config_group.add_argument('--no-visualize',
+                            action='store_true',
+                            help='Skip visualization generation')
+    
+    config_group.add_argument('--output-dir',
+                            type=str,
+                            help='Custom output directory for results')
+    
+    # Quality control arguments
+    quality_group = parser.add_argument_group('Quality Control',
+                                            'Data validation and integrity checks')
+    
+    quality_group.add_argument('--skip-integrity-check',
+                             action='store_true',
+                             help='Skip data integrity validation')
+    
+    quality_group.add_argument('--force-regenerate',
+                             action='store_true',
+                             help='Force regeneration of all outputs (ignore existing files)')
+    
+    args = parser.parse_args()
+    
+    # Validate arguments
+    if not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.all]):
+        # If no specific layers are chosen, default to --all
+        logger.info("No specific layers selected, defaulting to --all")
+        args.all = True
+    
+    # If --all is specified, enable all individual layers
+    if args.all:
+        args.hazard = True
+        args.exposition = True  
+        args.relevance = True
+        args.risk = True
+        args.population = True
+    
+    return args
 
 class RiskAssessment:
     """
@@ -57,18 +176,20 @@ class RiskAssessment:
     2. Exposition (building density, population, economic factors)
     3. Risk (combined assessment with weighted factors)
     
-    Features:
-    - Multi-factor risk calculation
-    - Scenario-based assessment
-    - Spatial risk classification
-    - Result visualization and export
+
     """
     
     def __init__(self, config: ProjectConfig):
         """Initialize Risk Assessment with configuration."""
         self.config = config
+        
+        # Create layer instances
         self.hazard_layer = HazardLayer(config)
         self.exposition_layer = ExpositionLayer(config)
+        self.relevance_layer = RelevanceLayer(config)
+        self.risk_layer = RiskLayer(config)
+        
+        self._apply_caching()
         
         # Results storage
         self.risk_indices = {}
@@ -76,182 +197,46 @@ class RiskAssessment:
         
         logger.info("Initialized Risk Assessment System")
         
-    def prepare_data(self) -> None:
-        """Prepare all necessary data from both layers."""
-        # Load and process hazard data
-        logger.info("Preparing hazard data...")
-        dem_data, transform, crs = self.hazard_layer.load_and_prepare_dem()
-        dem_shape = dem_data.shape
-        
-        # Set reference grid for exposition layer
-        self.exposition_layer.set_reference_grid(transform, crs, dem_shape)
-        
-        # Load and process exposition data
-        logger.info("Preparing exposition data...")
-        self.exposition_layer.load_building_data()
-        self.exposition_layer.load_population_data()
-        
-    def calculate_integrated_risk(self, 
-                                scenarios: Optional[List[SeaLevelScenario]] = None,
-                                hazard_weight: float = 0.4,
-                                exposition_weight: float = 0.4,
-                                economic_weight: float = 0.2) -> Dict[str, np.ndarray]:
-        """
-        Calculate integrated risk assessment for given scenarios.
-        
-        Args:
-            scenarios: List of sea level scenarios to assess
-            hazard_weight: Weight for hazard factors
-            exposition_weight: Weight for exposition factors
-            economic_weight: Weight for economic factors
-            
-        Returns:
-            Dictionary mapping scenario names to risk indices
-        """
-        if scenarios is None:
-            scenarios = SeaLevelScenario.get_default_scenarios()
-            
-        # Process hazard scenarios
-        flood_extents = self.hazard_layer.process_scenarios(scenarios)
-        
-        # Calculate exposition index
-        exposure_index = self.exposition_layer.calculate_exposure_index()
-        
-        # Process economic exposure
-        economic_exposure = self.exposition_layer.process_economic_exposure()
-        
-        # Calculate risk for each scenario
-        for scenario in scenarios:
-            logger.info(f"Calculating risk for scenario: {scenario.name}")
-            
-            # Get flood extent for this scenario
-            flood_extent = flood_extents[scenario.name]
-            
-            # Normalize flood extent
-            norm_flood = flood_extent.astype(float)
-            
-            # Calculate combined risk index
-            risk_index = (
-                hazard_weight * norm_flood +
-                exposition_weight * exposure_index +
-                economic_weight * economic_exposure
+    def _apply_caching(self):
+        """Apply caching to layer instances if enabled."""
+        try:
+            # Create cached versions of the layers
+            cached_layers = create_cached_layers(
+                hazard_layer=self.hazard_layer,
+                exposition_layer=self.exposition_layer,
+                relevance_layer=self.relevance_layer,
+                risk_assessment=self,
+                config=self.config
             )
             
-            # Store results
-            self.risk_indices[scenario.name] = risk_index
-            
-            # Classify risk levels
-            risk_classes = self._classify_risk_levels(risk_index)
-            self.risk_classifications[scenario.name] = risk_classes
-            
-            # Log statistics
-            self._log_risk_statistics(scenario.name, risk_index, risk_classes)
-            
-        return self.risk_indices
-    
-    def _classify_risk_levels(self, risk_index: np.ndarray, n_classes: int = 5) -> np.ndarray:
-        """Classify risk index into discrete risk levels."""
-        # Use sklearn's MinMaxScaler for robust normalization
-        scaler = MinMaxScaler()
-        normalized_risk = scaler.fit_transform(risk_index.reshape(-1, 1))
-        
-        # Create risk classes
-        risk_classes = np.digitize(
-            normalized_risk,
-            bins=np.linspace(0, 1, n_classes+1)[1:-1]
-        )
-        
-        return risk_classes.reshape(risk_index.shape)
-    
-    def _log_risk_statistics(self, scenario_name: str, 
-                           risk_index: np.ndarray,
-                           risk_classes: np.ndarray) -> None:
-        """Log risk assessment statistics."""
-        logger.info(f"Risk Assessment Statistics for {scenario_name}:")
-        logger.info(f"  Mean risk index: {np.nanmean(risk_index):.3f}")
-        logger.info(f"  Max risk index: {np.nanmax(risk_index):.3f}")
-        
-        # Calculate area percentages for each risk class
-        total_valid = np.sum(~np.isnan(risk_index))
-        for class_idx in range(1, 6):
-            class_percentage = np.sum(risk_classes == class_idx) / total_valid * 100
-            logger.info(f"  Risk Class {class_idx}: {class_percentage:.1f}% of area")
-    
-    def visualize_risk_assessment(self, save_plots: bool = True) -> None:
-        """Create visualizations of risk assessment results."""
-        if not self.risk_indices:
-            raise ValueError("No risk assessment results to visualize")
-            
-        for scenario_name, risk_index in self.risk_indices.items():
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=self.config.figure_size)
-            
-            # Plot risk index
-            im1 = ax1.imshow(risk_index, cmap='RdYlBu_r')
-            ax1.set_title(f'Risk Index - {scenario_name}')
-            plt.colorbar(im1, ax=ax1)
-            
-            # Plot risk classification
-            risk_classes = self.risk_classifications[scenario_name]
-            im2 = ax2.imshow(risk_classes, cmap='RdYlBu_r', vmin=1, vmax=5)
-            ax2.set_title(f'Risk Classification - {scenario_name}')
-            plt.colorbar(im2, ax=ax2, ticks=[1, 2, 3, 4, 5])
-            
-            if save_plots:
-                output_path = self.config.output_dir / f"risk_assessment_{scenario_name}.png"
-                plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight')
-                logger.info(f"Saved visualization to {output_path}")
-            
-            plt.close()
-    
-    def export_results(self) -> None:
-        """Export risk assessment results to GeoTIFF files."""
-        if not self.risk_indices:
-            raise ValueError("No risk assessment results to export")
-            
-        for scenario_name, risk_index in self.risk_indices.items():
-            # Export risk index
-            risk_path = self.config.output_dir / f"risk_index_{scenario_name}.tif"
-            with rasterio.open(
-                risk_path,
-                'w',
-                driver='GTiff',
-                height=risk_index.shape[0],
-                width=risk_index.shape[1],
-                count=1,
-                dtype=risk_index.dtype,
-                crs=self.hazard_layer.crs,
-                transform=self.hazard_layer.transform
-            ) as dst:
-                dst.write(risk_index, 1)
-            
-            # Export risk classification
-            class_path = self.config.output_dir / f"risk_classes_{scenario_name}.tif"
-            risk_classes = self.risk_classifications[scenario_name]
-            with rasterio.open(
-                class_path,
-                'w',
-                driver='GTiff',
-                height=risk_classes.shape[0],
-                width=risk_classes.shape[1],
-                count=1,
-                dtype=risk_classes.dtype,
-                crs=self.hazard_layer.crs,
-                transform=self.hazard_layer.transform
-            ) as dst:
-                dst.write(risk_classes, 1)
+            # Replace instances with cached versions
+            if 'hazard' in cached_layers:
+                self.hazard_layer = cached_layers['hazard']
+            if 'exposition' in cached_layers:
+                self.exposition_layer = cached_layers['exposition']
+            if 'relevance' in cached_layers:
+                self.relevance_layer = cached_layers['relevance']
                 
-        logger.info(f"Exported risk assessment results to {self.config.output_dir}")
-
+            logger.info("Caching applied to risk assessment layers")
+            
+        except Exception as e:
+            logger.warning(f"Could not apply caching: {e}")
+            logger.info("Continuing without caching...")
 
     def run_exposition(self, config:ProjectConfig) -> None:
-        # Future layers (placeholders)
+
         logger.info("="*40)
         logger.info("EXPOSITION LAYER ANALYSIS")
         logger.info("="*40)
         exposition_layer = ExpositionLayer(config)
-        exposition_layer.run_exposition(visualize=True, export_path=str(config.output_dir / 'exposition_layer.tif'))
+        exposition_layer.run_exposition(visualize=False, create_png=True)
 
-    def run_risk_assessment(self, config: ProjectConfig) -> None:
+    def run_risk_assessment(self, config: ProjectConfig, 
+                           run_hazard: bool = True,
+                           run_exposition: bool = True, 
+                           run_relevance: bool = True,
+                           create_png_outputs: bool = True,
+                           visualize: bool = False) -> Dict[str, Any]:
         """
         Run the complete risk assessment process.
         This includes preparing data, calculating risk indices,
@@ -260,27 +245,23 @@ class RiskAssessment:
         logger.info("\n" + "="*40)
         logger.info("RISK ASSESSMENT INTEGRATION")
         logger.info("="*40)
-        risk_assessment = RiskAssessment(config)
-        # Prepare data for risk assessment
-        risk_assessment.prepare_data()
         
-        # Calculate integrated risk
-        risk_indices = risk_assessment.calculate_integrated_risk()
+        risk_layer = RiskLayer(config)
         
-        # Visualize risk assessment
-        risk_assessment.visualize_risk_assessment(save_plots=True)
-        
-        # Export results
-        risk_assessment.export_results()
+        # Run complete risk assessment with all scenario combinations
+        risk_scenarios = risk_layer.run_risk_assessment(
+            visualize=visualize,
+            export_results=True
+        )
         
         logger.info("\n" + "="*60)
         logger.info("ANALYSIS COMPLETE")
         logger.info("="*60)
         logger.info(f"Results saved to: {config.output_dir}")
 
+        return risk_scenarios
         
-    @staticmethod
-    def run_hazard_layer_analysis(config: ProjectConfig) -> None:
+    def run_hazard_layer_analysis(self, config: ProjectConfig) -> None:
         """
         Run the Hazard Layer analysis for the EU Climate Risk Assessment System.
         
@@ -291,40 +272,252 @@ class RiskAssessment:
         logger.info("HAZARD LAYER ANALYSIS")
         logger.info("="*40)
         
+        # Create hazard layer instance
         hazard_layer = HazardLayer(config)
         
-        # Process default scenarios (1m, 2m, 3m sea level rise)
-        flood_extents = hazard_layer.process_scenarios()
+        # Apply caching if enabled
+        try:
+            cached_layers = create_cached_layers(hazard_layer=hazard_layer, config=config)
+            if 'hazard' in cached_layers:
+                hazard_layer = cached_layers['hazard']
+        except Exception as e:
+            logger.warning(f"Could not apply caching to hazard layer: {e}")
+
+        slr_scenarios = [
+            SeaLevelScenario("Current", 0.0, "Current sea level - todays scenario"),
+            SeaLevelScenario("Conservative", 1.0, "1m sea level rise - conservative scenario"),
+            SeaLevelScenario("Moderate", 2.0, "2m sea level rise - moderate scenario"),
+            SeaLevelScenario("Severe", 3.0, "3m sea level rise - severe scenario")
+        ]
         
-        # Create visualizations
-        hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
+        flood_extents = hazard_layer.process_scenarios(slr_scenarios)
         
-        # Export results
+        # hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
+        
         hazard_layer.export_results(flood_extents)
+    
+    def run_relevance_layer_analysis(self, config: ProjectConfig) -> None:
+        """
+        Run the Relevance Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+        """
+        logger.info("\n" + "="*40)
+        logger.info("RELEVANCE LAYER ANALYSIS")
+        logger.info("="*40)
+    
+        try:
+            cached_relevance_layer = cache_relevance_layer(self.relevance_layer)
+            self.relevance_layer = cached_relevance_layer
+        except Exception as e:
+            logger.warning(f"Could not apply caching to relevance layer: {e}")
+        
+        # Process relevance layer analysis
+        relevance_layers = self.relevance_layer.run_relevance_analysis(
+            visualize=True,
+            export_individual_tifs=True
+        )
+        
+        logger.info(f"Relevance layer analysis completed - Generated {len(relevance_layers)} layers")
+    
+    def run_risk_layer_analysis(self, config: ProjectConfig) -> Dict[str, Dict[str, np.ndarray]]:
+        """
+        Run the Risk Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+            
+        Returns:
+            Dictionary of risk scenarios
+        """
+        logger.info("\n" + "="*40)  
+        logger.info("RISK LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        try:
+            risk_layer = RiskLayer(config)
+            
+            # Run complete risk assessment
+            risk_scenarios = risk_layer.run_risk_assessment(
+                visualize=True,
+                export_results=True
+            )
+            
+            logger.info(f"Risk layer analysis completed successfully")
+            logger.info(f"Processed {len(risk_scenarios)} sea level scenarios")
+            
+            return risk_scenarios
+            
+        except Exception as e:
+            logger.error(f"Could not execute risk layer analysis: {e}")
+            raise e
 
-
-
+    def run_population_risk_layer_analysis(self, config: ProjectConfig) -> Dict[str, np.ndarray]:
+        """
+        Run the Population Risk Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+            
+        Returns:
+            Dictionary of population risk scenarios
+        """
+        logger.info("\n" + "="*40)  
+        logger.info("POPULATION RISK LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        try:
+            risk_layer = RiskLayer(config)
+            
+            # Run complete population risk assessment
+            population_risk_scenarios = risk_layer.run_population_risk_assessment(
+                visualize=True,
+                export_results=True
+            )
+            
+            logger.info(f"Population risk layer analysis completed successfully")
+            logger.info(f"Processed {len(population_risk_scenarios)} sea level scenarios")
+            
+            return population_risk_scenarios
+            
+        except Exception as e:
+            logger.error(f"Could not execute population risk layer analysis: {e}")
+            raise e
 
 def main():
     """
     Main execution function for the EU Climate Risk Assessment System.
     """
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Configure logging level based on verbose flag
+    if args.verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.info("Verbose logging enabled")
+    
     suppress_warnings()
     logger.info("=" * 60)
     logger.info("EU CLIMATE RISK ASSESSMENT SYSTEM")
     logger.info("=" * 60)
     
+    # Log selected layers
+    selected_layers = []
+    if args.hazard:
+        selected_layers.append("Hazard")
+    if args.exposition:
+        selected_layers.append("Exposition")
+    if args.relevance:
+        selected_layers.append("Relevance")
+    if args.risk:
+        selected_layers.append("Risk")
+    if args.population:
+        selected_layers.append("Population Risk")
+    
+    logger.info(f"Selected layers: {', '.join(selected_layers)}")
+    if args.no_cache:
+        logger.info("Caching disabled")
+    if args.no_upload:
+        logger.info("Data upload disabled")
+    if args.no_visualize:
+        logger.info("Visualization disabled")
+    
     # Initialize project configuration
     config = ProjectConfig()
+    
+    # Override output directory if specified
+    if args.output_dir:
+        config.output_dir = Path(args.output_dir)
+        config.output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Using custom output directory: {config.output_dir}")
+    
     logger.info(f"Project initialized with data directory: {config.data_dir}")
     
+    # Perform data integrity check (unless skipped)
+    if not args.skip_integrity_check:
+        logger.info("\n" + "="*40)
+        logger.info("DATA INTEGRITY CHECK")
+        logger.info("="*40)
+        check_data_integrity(config)
+    else:
+        logger.info("Skipping data integrity check")
+    
+    # Create RiskAssessment instance
+    risk_assessment = RiskAssessment(config)
+    
+    # Initialize caching system (unless disabled)
+    if not args.no_cache:
+        try:
+            initialize_caching(config)
+            logger.info("Caching system initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize caching: {e}")
+            logger.info("Continuing without caching...")
+    else:
+        logger.info("Caching system disabled")
+    
     try:
-        RiskAssessment(config).run_hazard_layer_analysis(config)
-        # RiskAssessment(config).run_exposition(config)
-
+        # Execute selected layers in logical dependency order
+        if args.hazard:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING HAZARD LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            risk_assessment.run_hazard_layer_analysis(config)
+            
+        if args.exposition:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING EXPOSITION LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            risk_assessment.run_exposition(config)
+            
+        if args.relevance:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING RELEVANCE LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            risk_assessment.run_relevance_layer_analysis(config)
+            
+        if args.risk:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING RISK LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            risk_scenarios = risk_assessment.run_risk_layer_analysis(config)
+            logger.info(f"Risk analysis completed with {len(risk_scenarios)} scenarios")
+        
+        if args.population:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING POPULATION RISK LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            population_risk_scenarios = risk_assessment.run_population_risk_layer_analysis(config)
+            logger.info(f"Population risk analysis completed with {len(population_risk_scenarios)} scenarios")
+        
+        # Data upload (unless disabled)
+        if not args.no_upload:
+            logger.info("\n" + "="*40)
+            logger.info("DATA UPLOAD CHECK")
+            logger.info("="*40)
+            upload_data()
+        else:
+            logger.info("Skipping data upload")
+        
+        # Print cache statistics (unless caching is disabled)
+        if not args.no_cache:
+            try:
+                print_cache_status(config)
+            except Exception as e:
+                logger.debug(f"Could not print cache statistics: {e}")
+        
+        logger.info(f"\n{'='*60}")
+        logger.info("EXECUTION COMPLETED SUCCESSFULLY")
+        logger.info(f"{'='*60}")
+        logger.info(f"Results saved to: {config.output_dir}")
         
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
+        if args.verbose:
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
         raise
 
 if __name__ == "__main__":

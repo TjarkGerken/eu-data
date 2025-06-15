@@ -1,0 +1,31 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36" version="27.1.4">
+  <diagram name="Page-1" id="_WqoCgKNAinb1gvDCYPS">
+    <mxGraphModel dx="719" dy="453" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="Cgj52XhedzBcrm3x_p5U-3" value="Niederlande Verortung" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="50" width="540" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="Cgj52XhedzBcrm3x_p5U-4" value="SLR Diagram" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="180" width="540" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="Cgj52XhedzBcrm3x_p5U-5" value="Niederlande ökonomische Relevanz @ Leon" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="110" width="540" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="Cgj52XhedzBcrm3x_p5U-6" value="Exposition Layer / Erklärung der Downsampling Methode&amp;nbsp;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="250" width="540" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="Cgj52XhedzBcrm3x_p5U-7" value="Freight Loading (Diff)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="310" width="540" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="Cgj52XhedzBcrm3x_p5U-8" value="GDP" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="370" width="540" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="Cgj52XhedzBcrm3x_p5U-9" value="GDP" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="440" width="260" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
