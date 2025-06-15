@@ -54,7 +54,7 @@ python -m eu_climate.main
 
 ```bash
   python -m main --hazard                    # Run only hazard layer analysis
-  python -m main --exposition                # Run only exposition layer analysis  
+  python -m main --exposition                # Run only exposition layer analysis
   python -m main --relevance                 # Run only relevance layer analysis
   python -m main --risk                      # Run only risk layer analysis
   python -m main --hazard --exposition       # Run hazard and exposition layers
@@ -63,3 +63,21 @@ python -m eu_climate.main
   python -m main --no-cache --hazard         # Run hazard layer without caching
   python -m main --no-upload --all           # Run all layers without data upload
 ```
+
+# Datasets
+
+What data is used:
+
+Degree of Urbanisation https://human-settlement.emergency.copernicus.eu/download.php?ds=DUC
+GADM Shapefiles: https://gadm.org/download_world.html
+HRSThttps://ec.europa.eu/eurostat/databrowser/view/hrst_st_rcat/default/table?lang=en
+
+Freight Loading: https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table?lang=en&category=reg.reg_tran.reg_road
+Freight Unloading: https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table?lang=en&category=reg.reg_tran.reg_road
+GHS built-up volume (R2023): https://human-settlement.emergency.copernicus.eu/download.php?ds=builtV
+Land fraction per pixel as derived from Sentinel2 data composite and OpenStreetMap (OSM) data. (R2022): https://human-settlement.emergency.copernicus.eu/download.php?ds=land
+GHS built-up characteristics (R2023) https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
+GHS Popuation: https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
+NUTS L0-L3: https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics
+Copernicus DEM: https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/copernicus
+Ports: https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks
