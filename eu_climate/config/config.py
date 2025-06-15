@@ -75,8 +75,10 @@ class ProjectConfig:
         # Store exposition weights
         self.exposition_weights = self.config['exposition']
         
-        # Store relevance weights
-        self.relevance_weights = self.config.get('relevance', {}).get('economic_datasets')
+        # Store relevance configuration
+        relevance_config = self.config.get('relevance', {})
+        self.relevance_weights = relevance_config.get('economic_datasets')
+        self.economic_datasets = relevance_config.get('economic_datasets', {})
         
         # Store building parameters
         self.base_floor_height = self.config['building']['base_floor_height']
@@ -184,6 +186,31 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['land_mass_file']
     
     @property
+    def hrst_file_path(self) -> str:
+        """Get path to HRST file."""
+        return self.config['file_paths']['hrst_file']
+    
+    @property
+    def nuts_l0_file_path(self) -> str:
+        """Get path to NUTS L0 file."""
+        return self.config['file_paths']['nuts_files']['l0']
+        
+    @property
+    def nuts_l1_file_path(self) -> str:
+        """Get path to NUTS L1 file."""
+        return self.config['file_paths']['nuts_files']['l1']
+        
+    @property
+    def nuts_l2_file_path(self) -> str:
+        """Get path to NUTS L2 file."""
+        return self.config['file_paths']['nuts_files']['l2']
+        
+    @property
+    def nuts_l3_file_path(self) -> str:
+        """Get path to NUTS L3 file."""
+        return self.config['file_paths']['nuts_files']['l3']
+    
+    @property
     def max_safe_flood_risk(self) -> float:
         """Get maximum safe flood risk threshold from config."""
         return self.config['hazard']['flood_risk']['max_safe_flood_risk']
@@ -204,7 +231,8 @@ class ProjectConfig:
             (self.river_nodes_path, "River Nodes"),
             (self.land_mass_path, "Land Mass"),
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
-            (self.relevant_area_path, "Relevant Area")
+            (self.relevant_area_path, "Relevant Area"),
+            (self.data_dir / self.hrst_file_path, "HRST Data")
         ]
         
         missing_files = []

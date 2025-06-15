@@ -166,7 +166,9 @@ class CachingLayerWrapper:
         
         @functools.wraps(original_method)
         def cached_wrapper(*args, **kwargs):
+            # Always check if caching is enabled first
             if not self._cache_manager.enabled:
+                logger.info(f"Cache disabled for {self._layer_type}.{method_name}, executing...")
                 return original_method(*args, **kwargs)
                 
             # Generate cache key
