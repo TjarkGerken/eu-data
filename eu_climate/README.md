@@ -80,4 +80,5 @@ GHS built-up characteristics (R2023) https://human-settlement.emergency.copernic
 GHS Popuation: https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
 NUTS L0-L3: https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics
 Copernicus DEM: https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/copernicus
-Ports: https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks
+Ports: https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks und selberweiterverarbeitet
+European Coastline: https://www.eea.europa.eu/data-and-maps/data/eea-coastline-for-analysis-1/gis-data/europe-coastline-shapefile

@@ -94,9 +94,13 @@ class ProjectConfig:
         self.river_zones = hazard_config.get('river_zones')
         self.elevation_risk = hazard_config.get('elevation_risk')
         
+        # Store coastline risk parameters
+        self.coastline_risk = hazard_config.get('coastline_risk', {})
+        
         # Log loaded hazard configuration for debugging
         logger.debug(f"Loaded river zones config: {self.river_zones}")
         logger.debug(f"Loaded elevation risk config: {self.elevation_risk}")
+        logger.debug(f"Loaded coastline risk config: {self.coastline_risk}")
 
         # Validate configuration
         self._validate_config()
@@ -203,6 +207,11 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['port_file']
     
     @property
+    def coastline_path(self) -> Path:
+        """Get path to coastline shapefile."""
+        return self.data_dir / self.config['file_paths']['coastline_file']
+    
+    @property
     def nuts_l0_file_path(self) -> str:
         """Get path to NUTS L0 file."""
         return self.config['file_paths']['nuts_files']['l0']
@@ -251,6 +260,7 @@ class ProjectConfig:
             (self.river_segments_path, "River Segments"),
             (self.river_nodes_path, "River Nodes"),
             (self.land_mass_path, "Land Mass"),
+            (self.coastline_path, "Coastline"),
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
             (self.data_dir / self.hrst_file_path, "HRST Data"),
             (self.ghs_duc_path, "GHS DUC Excel"),

@@ -22,6 +22,7 @@ data:
     ghs_duc_file: "degree_of_urbanisation/GHS_DUC_NL_Extract.xlsx"
     gadm_l2_file: "NL-GADM-L2/gadm41_NLD_2.shp"
     port_file: "Port/PORT_RG_2009.shp"
+    coastline_file: "EEA_Coastline_Polyline_Shape/Europe_coastline_raw_rev2017.shp"
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
     target_resolution: 30.0
@@ -40,6 +41,9 @@ data:
       risk_decay_factor: 2.2
     flood_risk:
       max_safe_flood_risk: 0.3
+    coastline_risk:
+      coastline_multiplier: 2
+      coastline_distance_m: 5000
   caching:
     enabled: false
     cache_dir: ".cache"
@@ -66,8 +70,8 @@ data:
       urban_weight: 0.7
       semi_urban_weight: 0.3
     port_multipliers:
-      port_polygon_multiplier: 1.8
-      port_buffer_multiplier: 1.3
+      port_polygon_multiplier: 2.5
+      port_buffer_multiplier: 1.5
       port_buffer_distance_m: 500
 
   relevance:
