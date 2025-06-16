@@ -172,9 +172,9 @@ class ProjectConfig:
 
     
     @property
-    def river_segments_path(self) -> Path:
-        """Get path to river segments shapefile."""
-        return self.data_dir / self.config['file_paths']['river_segments_file']
+    def river_polygons_path(self) -> Path:
+        """Get path to river polygons shapefile."""
+        return self.data_dir / self.config['file_paths']['river_polygons_file']
     
     @property
     def river_nodes_path(self) -> Path:
@@ -257,7 +257,7 @@ class ProjectConfig:
             (self.ghs_built_c_path, "GHS Built C"),
             (self.ghs_built_v_path, "GHS Built V"),
             (self.population_path, "Population Density"),
-            (self.river_segments_path, "River Segments"),
+            (self.river_polygons_path, "River Polygons"),
             (self.river_nodes_path, "River Nodes"),
             (self.land_mass_path, "Land Mass"),
             (self.coastline_path, "Coastline"),

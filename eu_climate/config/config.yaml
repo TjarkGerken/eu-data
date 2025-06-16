@@ -15,7 +15,7 @@ data:
       l1: "NUTS-L1-NL.shp"
       l2: "NUTS-L2-NL.shp"
       l3: "NUTS-L3-NL.shp"
-    river_segments_file: "ClippedRiverSegments.shp"
+    river_polygons_file: "Hydrographie-Watercourse/Watercourse-Polygon.shp"
     river_nodes_file: "ClippedRiverNodes.shp"
     land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
     hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv"
@@ -31,13 +31,13 @@ data:
   hazard:
     river_zones:
       high_risk_distance_m: 50
-      high_risk_weight: 1.2
+      high_risk_weight: 1.15
       moderate_risk_distance_m: 200
-      moderate_risk_weight: 1.15
+      moderate_risk_weight: 1.1
       low_risk_distance_m: 500
-      low_risk_weight: 1.1
+      low_risk_weight: 1.05
     elevation_risk:
-      max_safe_elevation_m: 10.0
+      max_safe_elevation_m: 20.0
       risk_decay_factor: 2.2
     flood_risk:
       max_safe_flood_risk: 0.3
