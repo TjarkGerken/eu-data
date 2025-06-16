@@ -37,8 +37,8 @@ data:
       low_risk_distance_m: 500
       low_risk_weight: 1.05
     elevation_risk:
-      max_safe_elevation_m: 20.0
-      risk_decay_factor: 2.2
+      max_safe_elevation_m: 25.0
+      risk_decay_factor: 4
     flood_risk:
       max_safe_flood_risk: 0.3
     coastline_risk:
