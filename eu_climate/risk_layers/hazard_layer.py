@@ -13,6 +13,7 @@ from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
+from eu_climate.utils.normalise_data import AdvancedDataNormalizer, NormalizationStrategy
 from pathlib import Path
 
 
@@ -68,6 +69,9 @@ class HazardLayer:
         )
         
         self.visualizer = LayerVisualizer(self.config)
+        
+        # Initialize sophisticated normalizer for hazard data
+        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.HAZARD_SOPHISTICATED)
         
         for path in [self.dem_path, self.river_segments_path, self.river_nodes_path]:
             if not path.exists():
@@ -242,7 +246,7 @@ class HazardLayer:
             sigma=self.config.smoothing_sigma
         )
         
-        final_risk = self._apply_final_normalization(smoothed_risk, valid_study_area)
+        final_risk = self.normalizer.normalize_hazard_data(smoothed_risk, valid_study_area)
         
         pixel_width = abs(transform[0])
         pixel_height_top = abs(transform[4])
@@ -406,7 +410,7 @@ class HazardLayer:
             logger.info(f"  High (0.6-0.8): {high_risk_count/total_pixels*100:.1f}% ({high_risk_count} pixels)")
             logger.info(f"  Moderate (0.3-0.6): {moderate_risk_count/total_pixels*100:.1f}% ({moderate_risk_count} pixels)")
             logger.info(f"  Low (0.1-0.3): {low_risk_count/total_pixels*100:.1f}% ({low_risk_count} pixels)")
-            logger.info(f"  Minimal (≤0.1): {minimal_risk_count/total_pixels*100:.1f}% ({minimal_risk_count} pixels)")
+            logger.info(f"  Minimal (<=0.1): {minimal_risk_count/total_pixels*100:.1f}% ({minimal_risk_count} pixels)")
             
             # Calculate total significant risk area (>0.3)
             significant_risk_count = very_high_count + high_risk_count + moderate_risk_count
@@ -528,128 +532,7 @@ class HazardLayer:
         
         return combined_risk
     
-    def _apply_final_normalization(self, risk_data: np.ndarray, valid_study_area: np.ndarray) -> np.ndarray:
-        """
-        Apply conservative final normalization to preserve realistic risk distributions.
-        
-        This method applies minimal normalization to preserve the selective risk calculation
-        while ensuring interpretable values and targeting ~40% significant risk coverage.
-        
-        Args:
-            risk_data: Risk data after smoothing
-            valid_study_area: Boolean mask for valid study area
-            
-        Returns:
-            Final normalized risk data with realistic distribution
-        """
-        # Apply study area mask first
-        masked_risk = risk_data * valid_study_area
-        
-        # Get valid risk values for normalization
-        valid_risk_values = masked_risk[valid_study_area]
-        
-        if len(valid_risk_values) == 0:
-            logger.warning("No valid risk values for final normalization")
-            return masked_risk.astype(np.float32)
-        
-        # Calculate current distribution statistics
-        risk_mean = np.mean(valid_risk_values)
-        risk_median = np.median(valid_risk_values)
-        risk_std = np.std(valid_risk_values)
-        risk_min = np.min(valid_risk_values)
-        risk_max = np.max(valid_risk_values) 
-        risk_95th = np.percentile(valid_risk_values, 95)
-        risk_99th = np.percentile(valid_risk_values, 99)
-        
-        # Calculate current significant risk coverage
-        current_significant_risk_pct = np.sum(valid_risk_values > 0.3) / len(valid_risk_values) * 100
-        
-        logger.info(f"Pre-normalization statistics:")
-        logger.info(f"  Mean: {risk_mean:.4f}, Median: {risk_median:.4f}, Std: {risk_std:.4f}")
-        logger.info(f"  Range: {risk_min:.4f} to {risk_max:.4f}")
-        logger.info(f"  95th percentile: {risk_95th:.4f}, 99th percentile: {risk_99th:.4f}")
-        logger.info(f"  Current significant risk coverage (>0.3): {current_significant_risk_pct:.1f}%")
-        
-        # Apply minimal normalization - preserve the careful risk calculation
-        normalized_risk = masked_risk.copy()
-        
-        # Only apply normalization if values exceed reasonable bounds
-        if risk_max > 1.0:
-            # Use conservative normalization to preserve risk structure
-            # Target keeping 99th percentile around 0.9-0.95
-            if risk_99th > 0.95:
-                normalization_factor = 0.90 / risk_99th  # More conservative
-                normalized_risk = masked_risk * normalization_factor
-                logger.info(f"Applied conservative normalization with factor: {normalization_factor:.3f}")
-            else:
-                logger.info("Risk values within acceptable range, minimal adjustment applied")
-                # Just ensure no values exceed 1.0
-                normalized_risk = np.minimum(masked_risk, 1.0)
-        else:
-            logger.info("Risk values already in optimal range, no normalization needed")
-        
-        # Apply very gentle smoothing of extreme outliers only
-        # This prevents a few extreme values from dominating while preserving most of the distribution
-        reasonable_max = 0.98  # Slightly below 1.0
-        outlier_mask = normalized_risk > reasonable_max
-        if np.any(outlier_mask):
-            # Apply very gentle saturation only to extreme outliers
-            normalized_risk[outlier_mask] = reasonable_max + 0.02 * np.tanh(
-                (normalized_risk[outlier_mask] - reasonable_max) / 0.1
-            )
-            outlier_count = np.sum(outlier_mask & valid_study_area)
-            logger.info(f"Applied gentle saturation to {outlier_count} extreme outlier pixels")
-        
-        # Ensure meaningful minimum values (avoid too many zeros)
-        min_meaningful_risk = 0.001
-        normalized_risk = np.where(
-            valid_study_area,
-            np.maximum(normalized_risk, min_meaningful_risk),
-            normalized_risk
-        )
-        
-        # Final distribution statistics
-        final_valid_values = normalized_risk[valid_study_area]
-        final_mean = np.mean(final_valid_values)
-        final_median = np.median(final_valid_values)
-        final_max = np.max(final_valid_values)
-        final_min = np.min(final_valid_values)
-        final_95th = np.percentile(final_valid_values, 95)
-        
-        # Calculate final risk distribution
-        very_high_count = np.sum(final_valid_values > 0.8)
-        high_risk_count = np.sum((final_valid_values > 0.6) & (final_valid_values <= 0.8))
-        moderate_risk_count = np.sum((final_valid_values > 0.3) & (final_valid_values <= 0.6))
-        low_risk_count = np.sum((final_valid_values > 0.1) & (final_valid_values <= 0.3))
-        minimal_risk_count = np.sum(final_valid_values <= 0.1)
-        
-        total_count = len(final_valid_values)
-        significant_risk_count = very_high_count + high_risk_count + moderate_risk_count
-        final_significant_risk_pct = significant_risk_count / total_count * 100
-        
-        logger.info(f"Post-normalization statistics:")
-        logger.info(f"  Mean: {final_mean:.4f}, Median: {final_median:.4f}")
-        logger.info(f"  Range: {final_min:.4f} to {final_max:.4f}, 95th percentile: {final_95th:.4f}")
-        
-        logger.info(f"Final risk distribution:")
-        logger.info(f"  Very High (>0.8): {very_high_count/total_count*100:.1f}% ({very_high_count} pixels)")
-        logger.info(f"  High (0.6-0.8): {high_risk_count/total_count*100:.1f}% ({high_risk_count} pixels)")
-        logger.info(f"  Moderate (0.3-0.6): {moderate_risk_count/total_count*100:.1f}% ({moderate_risk_count} pixels)")
-        logger.info(f"  Low (0.1-0.3): {low_risk_count/total_count*100:.1f}% ({low_risk_count} pixels)")
-        logger.info(f"  Minimal (≤0.1): {minimal_risk_count/total_count*100:.1f}% ({minimal_risk_count} pixels)")
-        logger.info(f"  **Total significant risk (>0.3): {final_significant_risk_pct:.1f}%**")
-        
-        # Provide guidance on risk distribution
-        if final_significant_risk_pct > 50:
-            logger.warning(f"Significant risk coverage ({final_significant_risk_pct:.1f}%) is higher than expected (~40%). "
-                          "Consider adjusting vulnerability_range or risk thresholds.")
-        elif final_significant_risk_pct < 30:
-            logger.warning(f"Significant risk coverage ({final_significant_risk_pct:.1f}%) is lower than expected (~40%). "
-                          "Consider increasing vulnerability sensitivity.")
-        else:
-            logger.info(f"Significant risk coverage ({final_significant_risk_pct:.1f}%) is within expected range (30-50%).")
-        
-        return normalized_risk.astype(np.float32)
+
     
     def process_scenarios(self, custom_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
