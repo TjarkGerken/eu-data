@@ -768,9 +768,9 @@ class HazardLayer:
             if nuts_gdf is not None:
                 nuts_gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=0.5, alpha=1.0, zorder=10)
             
-            # River network overlay
+            # River network overlay - 20% thinner lines and more transparent than debug version
             if self.river_network is not None:
-                self.river_network.plot(ax=ax, color='darkblue', linewidth=0.3, alpha=1.0, zorder=11)
+                self.river_network.plot(ax=ax, color='darkblue', linewidth=0.24, alpha=0.7, zorder=11)
                 
             ax.set_title(f'{scenario.name} Scenario\n({scenario.rise_meters}m SLR) - Normalized Risk', 
                         fontsize=12, fontweight='bold')
@@ -1021,7 +1021,8 @@ class HazardLayer:
                 output_path=risk_png_path,
                 land_mask=land_mask,
                 show_coastline_overlay=False,
-                coastline_zone_mask=flood_extents[scenario_name]['coastline_zone_mask']
+                coastline_zone_mask=flood_extents[scenario_name]['coastline_zone_mask'],
+                river_network=self.river_network
             )
             
 
