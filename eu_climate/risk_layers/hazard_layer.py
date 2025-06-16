@@ -235,11 +235,22 @@ class HazardLayer:
         
         elevation_risk = self._calculate_elevation_flood_risk(dem_data, sea_level_rise, valid_study_area)
         
+        river_decay_enhanced_risk = self._apply_river_proximity_decay(
+            dem_data, elevation_risk, sea_level_rise, valid_study_area, transform
+        )
+        
+        study_elevations = dem_data[valid_study_area]
+        elevation_stats = self._calculate_elevation_statistics(study_elevations, sea_level_rise)
+        
+        context_adjusted_risk = self._apply_study_area_context_adjustment(
+            river_decay_enhanced_risk, dem_data, elevation_stats, valid_study_area
+        )
+        
         river_risk_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
         
         coastline_risk_enhancement, coastline_zone_mask = self._calculate_coastline_risk_enhancement(dem_data.shape, transform, land_mask)
         
-        combined_risk = self._combine_flood_risks(elevation_risk, river_risk_enhancement, coastline_risk_enhancement, valid_study_area)
+        combined_risk = self._combine_flood_risks(context_adjusted_risk, river_risk_enhancement, coastline_risk_enhancement, valid_study_area)
         
         smoothed_risk = ndimage.gaussian_filter(
             np.nan_to_num(combined_risk, nan=0),
@@ -247,6 +258,8 @@ class HazardLayer:
         )
         
         final_risk = self.normalizer.normalize_hazard_data(smoothed_risk, valid_study_area)
+        
+        self._log_final_risk_statistics(final_risk, valid_study_area)
         
         pixel_width = abs(transform[0])
         pixel_height_top = abs(transform[4])
@@ -321,116 +334,223 @@ class HazardLayer:
         Returns:
             Selective flood risk with realistic distribution
         """
-        # Get study area elevation statistics for normalization
         study_elevations = dem_data[valid_study_area]
         
         if len(study_elevations) == 0:
             logger.warning("No valid elevations in study area, returning zero risk")
             return np.zeros_like(dem_data, dtype=np.float32)
         
-        # Calculate elevation range within study area
+        elevation_stats = self._calculate_elevation_statistics(study_elevations, sea_level_rise)
+        
+        base_risk = self._calculate_base_elevation_risk(dem_data, sea_level_rise, elevation_stats)
+        
+        return base_risk
+    
+    def _calculate_elevation_statistics(self, study_elevations: np.ndarray, 
+                                       sea_level_rise: float) -> Dict:
+        """Calculate comprehensive elevation statistics for risk assessment."""
         min_study_elevation = np.min(study_elevations)
         max_study_elevation = np.max(study_elevations)
         elevation_range = max_study_elevation - min_study_elevation
         mean_study_elevation = np.mean(study_elevations)
         
-        # Calculate critical thresholds
         max_safe_elevation = self.config.elevation_risk['max_safe_elevation_m']
-        safe_threshold = max_safe_elevation + sea_level_rise
+        safe_threshold = max_safe_elevation 
         
-        # Log study area elevation statistics
         logger.info(f"Study area elevation range: {min_study_elevation:.2f}m to {max_study_elevation:.2f}m")
         logger.info(f"Study area mean elevation: {mean_study_elevation:.2f}m")
         logger.info(f"Sea level rise scenario: {sea_level_rise:.2f}m")
         logger.info(f"Safe elevation threshold: {safe_threshold:.2f}m")
         
-        # Handle edge case where all elevations are the same
+        return {
+            'min_elevation': min_study_elevation,
+            'max_elevation': max_study_elevation,
+            'elevation_range': elevation_range,
+            'mean_elevation': mean_study_elevation,
+            'safe_threshold': safe_threshold,
+            'vulnerability_range': max(10.0, elevation_range * 0.3)
+        }
+    
+    def _calculate_base_elevation_risk(self, dem_data: np.ndarray, sea_level_rise: float, 
+                                      elevation_stats: Dict) -> np.ndarray:
+        """Calculate base elevation risk using standard decay parameters."""
+        return self._calculate_elevation_risk_with_decay(
+            dem_data, sea_level_rise, elevation_stats, 
+            self.config.elevation_risk['risk_decay_factor']
+        )
+    
+    def _calculate_elevation_risk_with_decay(self, dem_data: np.ndarray, sea_level_rise: float,
+                                           elevation_stats: Dict, decay_factor: float) -> np.ndarray:
+        """Calculate elevation risk with specified decay factor."""
+        elevation_range = elevation_stats['elevation_range']
+        safe_threshold = elevation_stats['safe_threshold']
+        vulnerability_range = elevation_stats['vulnerability_range']
+        
         if elevation_range == 0:
             logger.warning("All elevations in study area are identical, using uniform risk")
-            uniform_risk = 0.3 if min_study_elevation <= safe_threshold else 0.05
+            uniform_risk = 0.3 if elevation_stats['min_elevation'] <= safe_threshold else 0.05
             return np.full_like(dem_data, uniform_risk, dtype=np.float32)
         
-        # Calculate vulnerability based on position relative to sea level rise
         elevation_above_slr = dem_data - sea_level_rise
-        
-        # Create base risk using more selective approach
-        # Only areas within a reasonable vulnerability range get significant risk
-        vulnerability_range = max(10.0, elevation_range * 0.3)  # Focus on bottom 30% of elevation range or 10m, whichever is larger
-        
-        # Calculate selective risk - concentrate high risk in truly vulnerable areas
         risk = np.zeros_like(dem_data, dtype=np.float32)
         
-        # Areas below sea level rise - use exponential decay from surface
         below_slr_mask = elevation_above_slr <= 0
         if np.any(below_slr_mask):
-            # Higher risk for areas further below sea level rise, but not all = 1.0
             depth_below_slr = np.abs(elevation_above_slr[below_slr_mask])
-            # Use exponential function that starts high but doesn't saturate immediately
-            risk[below_slr_mask] = 0.8 + 0.19 * (1 - np.exp(-depth_below_slr / 2.0))  # Max ~0.99, not 1.0
+            risk[below_slr_mask] = 0.8 + 0.19 * (1 - np.exp(-depth_below_slr / 2.0))
         
-        # Areas above sea level rise but within vulnerability range
         vulnerable_mask = (elevation_above_slr > 0) & (elevation_above_slr <= vulnerability_range)
         if np.any(vulnerable_mask):
-            # Exponential decay based on height above sea level rise
             height_above_slr = elevation_above_slr[vulnerable_mask]
-            decay_factor = self.config.elevation_risk['risk_decay_factor']
-            # Scale the risk to avoid too many high values
             risk[vulnerable_mask] = 0.6 * np.exp(-height_above_slr / decay_factor)
         
-        # Areas well above vulnerability range but below safe threshold - minimal risk
         moderate_mask = (elevation_above_slr > vulnerability_range) & (dem_data <= safe_threshold)
         if np.any(moderate_mask):
             risk[moderate_mask] = 0.05 + 0.1 * np.exp(-(elevation_above_slr[moderate_mask] - vulnerability_range) / 5.0)
         
-        # Areas above safe threshold - very minimal risk
         safe_mask = dem_data > safe_threshold
         if np.any(safe_mask):
             risk[safe_mask] = 0.001 + 0.009 * np.exp(-(dem_data[safe_mask] - safe_threshold) / 10.0)
         
-        # Apply study area context adjustment
-        # Adjust risk based on relative position within study area
-        study_percentile = np.zeros_like(dem_data, dtype=np.float32)
-        study_percentile[valid_study_area] = (
-            (dem_data[valid_study_area] - min_study_elevation) / elevation_range
+        return risk
+    
+    def _apply_river_proximity_decay(self, dem_data: np.ndarray, base_risk: np.ndarray,
+                                   sea_level_rise: float, valid_study_area: np.ndarray,
+                                   transform: rasterio.Affine) -> np.ndarray:
+        """Apply enhanced risk decay near rivers where higher decay takes precedence."""
+        if not self.config.river_risk_decay:
+            return base_risk
+        
+        if self.river_polygon_network is None:
+            self.load_river_polygon_data()
+        
+        if self.river_polygon_network is None:
+            logger.warning("No river polygon network available, skipping river proximity decay")
+            return base_risk
+        
+        river_proximity_mask = self._create_river_proximity_mask(dem_data.shape, transform)
+        
+        if not np.any(river_proximity_mask):
+            logger.info("No areas within river proximity distance, using base risk")
+            return base_risk
+        
+        elevation_stats = {
+            'min_elevation': np.min(dem_data[valid_study_area]),
+            'max_elevation': np.max(dem_data[valid_study_area]),
+            'elevation_range': np.max(dem_data[valid_study_area]) - np.min(dem_data[valid_study_area]),
+            'safe_threshold': self.config.elevation_risk['max_safe_elevation_m'] ,
+            'vulnerability_range': max(10.0, (np.max(dem_data[valid_study_area]) - np.min(dem_data[valid_study_area])) * 0.3)
+        }
+        
+        enhanced_decay_factor = self.config.river_risk_decay['enhanced_decay_factor']
+        river_enhanced_risk = self._calculate_elevation_risk_with_decay(
+            dem_data, sea_level_rise, elevation_stats, enhanced_decay_factor
         )
         
-        # Lower elevations within study area get slight risk boost
-        # Higher elevations get slight risk reduction
+        combined_risk = base_risk.copy()
+        
+        precedence_mask = river_proximity_mask & (river_enhanced_risk > base_risk)
+        combined_risk[precedence_mask] = river_enhanced_risk[precedence_mask]
+        
+        affected_pixels = np.sum(precedence_mask)
+        total_pixels = np.sum(valid_study_area)
+        logger.info(f"River proximity decay applied to {affected_pixels} pixels ({affected_pixels/total_pixels*100:.2f}% of study area)")
+        logger.info(f"Enhanced decay factor: {enhanced_decay_factor} (vs base: {self.config.elevation_risk['risk_decay_factor']})")
+        
+        return combined_risk
+    
+    def _create_river_proximity_mask(self, data_shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
+        """Create mask for areas within river proximity distance."""
+        decay_distance = self.config.river_risk_decay['decay_distance_m']
+        min_river_area = self.config.river_risk_decay['min_river_area_m2']
+        
+        filtered_rivers = self._filter_rivers_by_area(self.river_polygon_network, min_river_area)
+        
+        if len(filtered_rivers) == 0:
+            logger.warning(f"No rivers meet minimum area requirement ({min_river_area} m²)")
+            return np.zeros(data_shape, dtype=bool)
+        
+        from shapely.ops import unary_union
+        combined_rivers = unary_union(filtered_rivers.geometry.tolist())
+        buffer_geom = combined_rivers.buffer(decay_distance)
+        
+        if hasattr(buffer_geom, 'geoms'):
+            buffer_geometries = [(geom, 1) for geom in buffer_geom.geoms if geom.is_valid]
+        else:
+            buffer_geometries = [(buffer_geom, 1)] if buffer_geom.is_valid else []
+        
+        if not buffer_geometries:
+            logger.warning("No valid buffer geometries created for river proximity")
+            return np.zeros(data_shape, dtype=bool)
+        
+        buffer_raster = rasterio.features.rasterize(
+            buffer_geometries,
+            out_shape=data_shape,
+            transform=transform,
+            dtype=np.uint8,
+            all_touched=True
+        )
+        
+        logger.info(f"Created river proximity mask within {decay_distance}m of {len(filtered_rivers)} rivers")
+        return buffer_raster == 1
+    
+    def _filter_rivers_by_area(self, rivers_gdf: gpd.GeoDataFrame, min_area_m2: float) -> gpd.GeoDataFrame:
+        """Filter rivers by minimum area requirement."""
+        rivers_with_area = rivers_gdf.copy()
+        rivers_with_area['area_m2'] = rivers_with_area.geometry.area
+        
+        filtered_rivers = rivers_with_area[rivers_with_area['area_m2'] >= min_area_m2]
+        
+        logger.info(f"River area filtering: {len(filtered_rivers)} rivers remain (from {len(rivers_gdf)}) with minimum area {min_area_m2} m²")
+        
+        return filtered_rivers.drop(columns=['area_m2'])
+    
+    def _apply_study_area_context_adjustment(self, risk_data: np.ndarray, dem_data: np.ndarray,
+                                           elevation_stats: Dict, valid_study_area: np.ndarray) -> np.ndarray:
+        """Apply study area context adjustment to risk values."""
+        elevation_range = elevation_stats['elevation_range']
+        min_elevation = elevation_stats['min_elevation']
+        
+        study_percentile = np.zeros_like(dem_data, dtype=np.float32)
+        if elevation_range > 0:
+            study_percentile[valid_study_area] = (
+                (dem_data[valid_study_area] - min_elevation) / elevation_range
+            )
+        
         context_adjustment = 1.0 + 0.2 * (1.0 - study_percentile) - 0.1 * study_percentile
-        # context_adjustment = np.clip(context_adjustment, 0.5, 1.5)
         
-        # Apply context adjustment
-        final_risk = risk * context_adjustment
+        final_risk = risk_data * context_adjustment
+        final_risk = final_risk * valid_study_area
         
-        
-        # Log final risk statistics
+        return final_risk
+    
+    def _log_final_risk_statistics(self, final_risk: np.ndarray, valid_study_area: np.ndarray) -> None:
+        """Log comprehensive risk statistics for analysis."""
         final_valid_risks = final_risk[valid_study_area]
-        if len(final_valid_risks) > 0:
-            logger.info(f"Risk calculation statistics:")
-            logger.info(f"  Range: {np.min(final_valid_risks):.4f} to {np.max(final_valid_risks):.4f}")
-            logger.info(f"  Mean: {np.mean(final_valid_risks):.4f}")
-            logger.info(f"  Median: {np.median(final_valid_risks):.4f}")
-            
-            # Count risk distribution
-            very_high_count = np.sum(final_valid_risks > 0.8)
-            high_risk_count = np.sum((final_valid_risks > 0.6) & (final_valid_risks <= 0.8))
-            moderate_risk_count = np.sum((final_valid_risks > 0.3) & (final_valid_risks <= 0.6))
-            low_risk_count = np.sum((final_valid_risks > 0.1) & (final_valid_risks <= 0.3))
-            minimal_risk_count = np.sum(final_valid_risks <= 0.1)
-            
-            total_pixels = len(final_valid_risks)
-            logger.info(f"Risk distribution:")
-            logger.info(f"  Very High (>0.8): {very_high_count/total_pixels*100:.1f}% ({very_high_count} pixels)")
-            logger.info(f"  High (0.6-0.8): {high_risk_count/total_pixels*100:.1f}% ({high_risk_count} pixels)")
-            logger.info(f"  Moderate (0.3-0.6): {moderate_risk_count/total_pixels*100:.1f}% ({moderate_risk_count} pixels)")
-            logger.info(f"  Low (0.1-0.3): {low_risk_count/total_pixels*100:.1f}% ({low_risk_count} pixels)")
-            logger.info(f"  Minimal (<=0.1): {minimal_risk_count/total_pixels*100:.1f}% ({minimal_risk_count} pixels)")
-            
-            # Calculate total significant risk area (>0.3)
-            significant_risk_count = very_high_count + high_risk_count + moderate_risk_count
-            logger.info(f"  Total significant risk (>0.3): {significant_risk_count/total_pixels*100:.1f}%")
+        if len(final_valid_risks) == 0:
+            return
         
-        return final_risk.astype(np.float32)
+        logger.info(f"Risk calculation statistics:")
+        logger.info(f"  Range: {np.min(final_valid_risks):.4f} to {np.max(final_valid_risks):.4f}")
+        logger.info(f"  Mean: {np.mean(final_valid_risks):.4f}")
+        logger.info(f"  Median: {np.median(final_valid_risks):.4f}")
+        
+        very_high_count = np.sum(final_valid_risks > 0.8)
+        high_risk_count = np.sum((final_valid_risks > 0.6) & (final_valid_risks <= 0.8))
+        moderate_risk_count = np.sum((final_valid_risks > 0.3) & (final_valid_risks <= 0.6))
+        low_risk_count = np.sum((final_valid_risks > 0.1) & (final_valid_risks <= 0.3))
+        minimal_risk_count = np.sum(final_valid_risks <= 0.1)
+        
+        total_pixels = len(final_valid_risks)
+        logger.info(f"Risk distribution:")
+        logger.info(f"  Very High (>0.8): {very_high_count/total_pixels*100:.1f}% ({very_high_count} pixels)")
+        logger.info(f"  High (0.6-0.8): {high_risk_count/total_pixels*100:.1f}% ({high_risk_count} pixels)")
+        logger.info(f"  Moderate (0.3-0.6): {moderate_risk_count/total_pixels*100:.1f}% ({moderate_risk_count} pixels)")
+        logger.info(f"  Low (0.1-0.3): {low_risk_count/total_pixels*100:.1f}% ({low_risk_count} pixels)")
+        logger.info(f"  Minimal (<=0.1): {minimal_risk_count/total_pixels*100:.1f}% ({minimal_risk_count} pixels)")
+        
+        significant_risk_count = very_high_count + high_risk_count + moderate_risk_count
+        logger.info(f"  Total significant risk (>0.3): {significant_risk_count/total_pixels*100:.1f}%")
     
     def _filter_rivers_by_size(self, rivers_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
@@ -729,6 +849,7 @@ class HazardLayer:
             meta=meta,
             scenario=scenario,
             output_path=risk_png_path,
+            show_nl_forecast=False,
             land_mask=land_mask,
             show_coastline_overlay=False,
             coastline_zone_mask=flood_data['coastline_zone_mask'],
@@ -1191,6 +1312,7 @@ class HazardLayer:
                 flood_mask=flood_risk,  # Pass normalized risk values
                 dem_data=dem_data,
                 meta=meta,
+                show_nl_forecast=False,
                 scenario=scenario,
                 output_path=risk_png_path,
                 land_mask=land_mask,

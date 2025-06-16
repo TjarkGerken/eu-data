@@ -109,6 +109,7 @@ class ScientificStyle:
 
     PORT_COLOR = 'violet'
     PORT_BUFFER_COLOR = 'yellow'  
+    NL_FORECAST_COLOR = 'pink'  # Orange for NL forecast zones
     
     # Statistics box styling
     STATS_BOX_PROPS = {
@@ -252,6 +253,28 @@ class LayerVisualizer:
             logger.warning(f"Could not load port boundaries: {e}")
             return None
     
+    def get_nl_forecast_boundaries(self) -> Optional[gpd.GeoDataFrame]:
+        """Load NL forecast/risk zone boundaries for overlay visualization."""
+        nl_forecast_path = self.config.data_dir / self.config.config['file_paths']['nl_forecast_file']
+        
+        if not nl_forecast_path.exists():
+            logger.warning(f"NL forecast boundaries not found: {nl_forecast_path}")
+            return None
+            
+        try:
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            nl_forecast_gdf = gpd.read_file(nl_forecast_path)
+            
+            if nl_forecast_gdf.crs != target_crs:
+                nl_forecast_gdf = nl_forecast_gdf.to_crs(target_crs)
+                
+            logger.info(f"Loaded NL forecast boundaries: {len(nl_forecast_gdf)} zones")
+            return nl_forecast_gdf
+            
+        except Exception as e:
+            logger.warning(f"Could not load NL forecast boundaries: {e}")
+            return None
+    
     def get_raster_extent(self, data: np.ndarray, meta: dict) -> Tuple[float, float, float, float]:
         """Calculate raster extent for proper coordinate alignment."""
         if 'transform' in meta:
@@ -342,6 +365,20 @@ class LayerVisualizer:
                 label='Port Areas'
             )
             logger.info(f"Plotted {len(port_gdf)} port polygons with precedence over buffers")
+    
+    def add_nl_forecast_overlay(self, ax, nl_forecast_gdf: Optional[gpd.GeoDataFrame]):
+        """Add NL forecast/risk zone boundaries as overlay with distinct styling."""
+        if nl_forecast_gdf is not None:
+            nl_forecast_gdf.plot(
+                ax=ax,
+                facecolor=ScientificStyle.NL_FORECAST_COLOR,
+                alpha=0.1,
+                edgecolor="darkred",
+                linewidth=2,
+                zorder=60,
+                label='NL Forecast Risk Zones'
+            )
+            logger.info(f"Plotted {len(nl_forecast_gdf)} NL forecast risk zones")
     
     def add_statistics_box(self, ax, data: np.ndarray, position: str = 'upper right'):
         """Add statistics box with consistent styling."""
@@ -473,7 +510,8 @@ class LayerVisualizer:
                                 land_mask: Optional[np.ndarray] = None,
                                 show_coastline_overlay: bool = False,
                                 coastline_zone_mask: Optional[np.ndarray] = None,
-                                river_polygon_network: Optional[gpd.GeoDataFrame] = None) -> None:
+                                river_polygon_network: Optional[gpd.GeoDataFrame] = None,
+                                show_nl_forecast: bool = False) -> None:
         """Create standardized hazard scenario visualization with centralized zone handling."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
@@ -558,13 +596,19 @@ class LayerVisualizer:
                 zorder=51  # Higher zorder to ensure outline appears on top of fill
             )
         
-        # Add NUTS overlay
-        if nuts_gdf is not None:
-            self.add_nuts_overlay(ax, nuts_gdf)
-        
         # Add river polygon network overlay - filled polygons with subtle outline
         if river_polygon_network is not None:
             river_polygon_network.plot(ax=ax, facecolor=ScientificStyle.WATER_COLOR, alpha=1, zorder=55)
+        
+        # Add NL forecast overlay if requested
+        if show_nl_forecast:
+            nl_forecast_gdf = self.get_nl_forecast_boundaries()
+            if nl_forecast_gdf is not None:
+                self.add_nl_forecast_overlay(ax, nl_forecast_gdf)
+        
+        # Add NUTS overlay
+        if nuts_gdf is not None:
+            self.add_nuts_overlay(ax, nuts_gdf)
         
         # Styling
         title = f'Hazard Assessment - {scenario.name} Scenario\n({scenario.rise_meters}m Sea Level Rise)'
@@ -593,6 +637,16 @@ class LayerVisualizer:
                                edgecolor='darkblue',
                                linewidth=0.5,
                                label=f'Coastline Risk Zone ({coastline_distance_m/1000:.0f}km, {coastline_multiplier}x)')
+            )
+        
+        # Add NL forecast overlay to legend if shown
+        if show_nl_forecast:
+            legend_patches.append(
+                mpatches.Patch(color=ScientificStyle.NL_FORECAST_COLOR, alpha=0.1,
+                               linewidth=2,
+                               edgecolor="darkred",
+                               zorder=60,
+                               label='NL Forecast Risk Zones')
             )
         
         ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
