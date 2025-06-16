@@ -432,10 +432,45 @@ class HazardLayer:
         
         return final_risk.astype(np.float32)
     
+    def _filter_rivers_by_size(self, rivers_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """
+        Filter river polygons by area to focus on significant rivers and improve performance.
+        
+        Args:
+            rivers_gdf: GeoDataFrame with river polygon geometries
+            
+        Returns:
+            Filtered GeoDataFrame with only significant rivers
+        """
+        # Calculate area for each river polygon
+        rivers_with_area = rivers_gdf.copy()
+        rivers_with_area['area_m2'] = rivers_with_area.geometry.area
+        
+        # Define size thresholds
+        min_area_m2 = 50_000  # 500 m² minimum (removes tiny streams)
+        max_area_m2 = 50_000_000  # 50 km² maximum (removes huge water bodies like lakes)
+        
+        # Filter by area
+        filtered_rivers = rivers_with_area[
+            (rivers_with_area['area_m2'] >= min_area_m2)
+        ]
+        
+        logger.info(f"River filtering results:")
+        logger.info(f"  Original rivers: {len(rivers_gdf):,}")
+        logger.info(f"  After size filtering: {len(filtered_rivers):,}")
+        logger.info(f"  Removed: {len(rivers_gdf) - len(filtered_rivers):,} rivers")
+        logger.info(f"  Area range: {min_area_m2/1000:.1f}-{max_area_m2/1_000_000:.0f}km² ({min_area_m2}-{max_area_m2:,} m²)")
+        
+        if len(filtered_rivers) > 0:
+            area_stats = filtered_rivers['area_m2']
+            logger.info(f"  Remaining river areas - Min: {area_stats.min():,.0f} m², Max: {area_stats.max():,.0f} m², Mean: {area_stats.mean():,.0f} m²")
+        
+        return filtered_rivers.drop(columns=['area_m2'])
+
     def _calculate_river_risk_enhancement(self, shape: Tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
         """
-        Calculate flood risk enhancement based on buffer zones around river polygons.
-        Uses the same approach as coastline risk enhancement - creates buffer polygons and rasterizes them.
+        Calculate flood risk enhancement using buffer zones around filtered significant river polygons.
+        Filters rivers by size to focus on important waterways and uses efficient buffer creation.
         
         Args:
             shape: Shape of the raster grid
@@ -453,57 +488,55 @@ class HazardLayer:
                 return np.ones(shape, dtype=np.float32)
             
             zones = self.config.river_zones
-            logger.info(f"Processing river polygon buffer enhancement with {len(self.river_polygon_network)} polygons")
+            logger.info(f"Processing river polygon enhancement with size filtering")
+            logger.info(f"Original river polygon count: {len(self.river_polygon_network)}")
             logger.info(f"River polygon bounds: {self.river_polygon_network.total_bounds}")
             logger.info(f"Raster shape: {shape}, pixel size: {abs(transform[0]):.1f}m")
             
-            # Initialize enhancement array with base value (no enhancement)
-            enhancement = np.ones(shape, dtype=np.float32)
+            # Step 1: Filter rivers by size to focus on significant waterways
+            filtered_rivers = self._filter_rivers_by_size(self.river_polygon_network)
             
-            # River polygon file is already clipped to study area, no additional clipping needed
-            river_polygons_to_process = self.river_polygon_network
-            logger.info(f"Using pre-clipped river polygons: {len(river_polygons_to_process)} features")
+            if len(filtered_rivers) == 0:
+                logger.warning("No rivers remaining after filtering!")
+                return np.ones(shape, dtype=np.float32)
             
-            if len(river_polygons_to_process) == 0:
-                logger.warning("No river polygons available!")
-                return enhancement
-            
-            # Create buffer zones using the same approach as coastline risk
+            # Step 2: Create buffer zones efficiently for filtered rivers
             from shapely.ops import unary_union
             
-            # Process each buffer zone (high, moderate, low risk)
-            buffer_configs = [
-                ('high_risk', zones['high_risk_distance_m'], zones['high_risk_weight']),
-                ('moderate_risk', zones['moderate_risk_distance_m'], zones['moderate_risk_weight']),
-                ('low_risk', zones['low_risk_distance_m'], zones['low_risk_weight'])
-            ]
-            
-            logger.info(f"Creating buffer zones:")
+            logger.info(f"Creating optimized buffer zones for {len(filtered_rivers)} filtered rivers:")
             logger.info(f"  High risk: {zones['high_risk_distance_m']}m (weight: {zones['high_risk_weight']})")
             logger.info(f"  Moderate risk: {zones['moderate_risk_distance_m']}m (weight: {zones['moderate_risk_weight']})")
             logger.info(f"  Low risk: {zones['low_risk_distance_m']}m (weight: {zones['low_risk_weight']})")
             
+            # Combine all filtered rivers into a single geometry for efficient buffering
+            logger.info("Combining filtered river geometries...")
+            combined_rivers = unary_union(filtered_rivers.geometry.tolist())
+            
+            # Initialize enhancement array
+            enhancement = np.ones(shape, dtype=np.float32)
             total_pixels = shape[0] * shape[1]
             
-            # Process buffer zones from largest to smallest to allow proper overlap handling
-            for zone_name, buffer_distance, risk_weight in sorted(buffer_configs, key=lambda x: x[1], reverse=True):
+            # Step 3: Create and apply buffer zones (largest to smallest for proper overlap)
+            buffer_configs = [
+                ('low_risk', zones['low_risk_distance_m'], zones['low_risk_weight']),
+                ('moderate_risk', zones['moderate_risk_distance_m'], zones['moderate_risk_weight']),
+                ('high_risk', zones['high_risk_distance_m'], zones['high_risk_weight'])
+            ]
+            
+            for zone_name, buffer_distance, risk_weight in buffer_configs:
                 logger.info(f"Processing {zone_name} buffer zone ({buffer_distance}m)...")
                 
-                # Create buffer around all river polygons
-                river_polygons_combined = unary_union(river_polygons_to_process.geometry.tolist())
-                river_buffer = river_polygons_combined.buffer(buffer_distance)
+                # Create buffer
+                buffer_geom = combined_rivers.buffer(buffer_distance)
                 
-                logger.info(f"  Buffer area: {river_buffer.area / 1e6:.2f} km²")
-                
-                # Rasterize the buffer polygon
-                # Handle both single geometry and geometry collection
-                if hasattr(river_buffer, 'geoms'):
-                    buffer_geometries = [(geom, 1) for geom in river_buffer.geoms if geom.is_valid]
+                # Rasterize buffer
+                if hasattr(buffer_geom, 'geoms'):
+                    buffer_geometries = [(geom, 1) for geom in buffer_geom.geoms if geom.is_valid]
                 else:
-                    buffer_geometries = [(river_buffer, 1)] if river_buffer.is_valid else []
+                    buffer_geometries = [(buffer_geom, 1)] if buffer_geom.is_valid else []
                 
                 if not buffer_geometries:
-                    logger.warning(f"No valid {zone_name} buffer geometries created!")
+                    logger.warning(f"No valid {zone_name} buffer geometries!")
                     continue
                 
                 buffer_raster = rasterio.features.rasterize(
@@ -514,25 +547,20 @@ class HazardLayer:
                     all_touched=True
                 )
                 
-                buffer_pixels = np.sum(buffer_raster == 1)
-                if buffer_pixels == 0:
-                    logger.warning(f"No {zone_name} buffer pixels found in raster!")
-                    continue
-                
-                # Apply enhancement to buffer areas where no higher risk zone has been applied
-                buffer_mask = (buffer_raster == 1) & (enhancement == 1.0)
+                # Apply enhancement (overwrites previous zones)
+                buffer_mask = buffer_raster == 1
                 enhancement[buffer_mask] = risk_weight
                 
                 enhanced_pixels = np.sum(buffer_mask)
-                logger.info(f"  Applied {zone_name} enhancement to {enhanced_pixels:,} pixels ({enhanced_pixels/total_pixels*100:.2f}%)")
+                logger.info(f"  Applied to {enhanced_pixels:,} pixels ({enhanced_pixels/total_pixels*100:.2f}%)")
             
-            # Log final enhancement statistics
+            # Log final statistics
             total_enhanced = np.sum(enhancement != 1.0)
             high_risk_pixels = np.sum(enhancement == zones['high_risk_weight'])
             moderate_risk_pixels = np.sum(enhancement == zones['moderate_risk_weight'])
             low_risk_pixels = np.sum(enhancement == zones['low_risk_weight'])
             
-            logger.info(f"Final river polygon buffer enhancement results:")
+            logger.info(f"Final filtered river enhancement results:")
             logger.info(f"  High risk pixels: {high_risk_pixels:,} ({high_risk_pixels/total_pixels*100:.2f}%)")
             logger.info(f"  Moderate risk pixels: {moderate_risk_pixels:,} ({moderate_risk_pixels/total_pixels*100:.2f}%)")
             logger.info(f"  Low risk pixels: {low_risk_pixels:,} ({low_risk_pixels/total_pixels*100:.2f}%)")
@@ -541,7 +569,7 @@ class HazardLayer:
             return enhancement
             
         except Exception as e:
-            logger.warning(f"Could not calculate river polygon buffer enhancement: {str(e)}")
+            logger.warning(f"Could not calculate river polygon enhancement: {str(e)}")
             import traceback
             logger.warning(f"Full traceback: {traceback.format_exc()}")
             return np.ones(shape, dtype=np.float32)
@@ -608,25 +636,25 @@ class HazardLayer:
     
     def process_scenarios(self, custom_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
-        Process all sea level rise scenarios and generate flood extent maps.
+        Process sea level rise scenarios with immediate TIF and PNG export per scenario.
         Args:
             custom_scenarios: Optional custom scenarios, uses defaults if None
         Returns:
             Dictionary mapping scenario names to flood extent arrays
         """
         scenarios = custom_scenarios or self.scenarios
-        logger.info(f"Processing {len(scenarios)} sea level rise scenarios...")
-        # Load DEM data and land mask once
+        logger.info(f"Processing {len(scenarios)} sea level rise scenarios with immediate export...")
+        
         dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
         
-        # Calculate coastline zone mask once (it's the same for all scenarios)
         _, coastline_zone_mask = self._calculate_coastline_risk_enhancement(dem_data.shape, transform, land_mask)
         
         flood_extents = {}
         for scenario in scenarios:
             logger.info(f"Processing scenario: {scenario.name} ({scenario.rise_meters}m)")
             flood_risk = self.calculate_flood_extent(dem_data, scenario.rise_meters, transform, land_mask)
-            flood_extents[scenario.name] = {
+            
+            flood_data = {
                 'flood_risk': flood_risk, 
                 'scenario': scenario,
                 'transform': transform,
@@ -634,8 +662,80 @@ class HazardLayer:
                 'dem_data': dem_data,
                 'coastline_zone_mask': coastline_zone_mask
             }
-        logger.info("Completed processing all scenarios")
+            flood_extents[scenario.name] = flood_data
+            
+            self._export_individual_scenario(scenario.name, flood_data, land_mask)
+            
+        logger.info("Completed processing all scenarios with immediate export")
         return flood_extents
+    
+    def _export_individual_scenario(self, scenario_name: str, flood_data: Dict, land_mask: np.ndarray) -> None:
+        """
+        Export TIF and PNG for individual scenario immediately after processing.
+        
+        Args:
+            scenario_name: Name of the scenario
+            flood_data: Dictionary containing flood risk and metadata
+            land_mask: Binary land mask for visualization
+        """
+        flood_risk = flood_data['flood_risk']
+        transform = flood_data['transform']
+        crs = flood_data['crs']
+        scenario = flood_data['scenario']
+        dem_data = flood_data['dem_data']
+        
+        logger.info(f"Exporting {scenario_name} scenario...")
+        
+        risk_output_path = self.config.output_dir / "hazard" / "tif" / f"flood_risk_{scenario_name.lower()}.tif"
+        risk_output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with rasterio.open(
+            risk_output_path,
+            'w',
+            driver='GTiff',
+            height=flood_risk.shape[0],
+            width=flood_risk.shape[1],
+            count=1,
+            dtype=np.float32,
+            crs=crs,
+            transform=transform,
+            nodata=-9999.0,
+            compress='lzw'
+        ) as dst:
+            dst.write(flood_risk, 1)
+            dst.set_band_description(1, f"Normalized flood risk for {scenario.rise_meters}m SLR")
+            dst.update_tags(
+                description='Normalized flood risk values (0=no risk, 1=maximum risk)',
+                scenario=scenario.name,
+                sea_level_rise_m=str(scenario.rise_meters),
+                method='elevation_profile_with_river_enhancement'
+            )
+        
+        logger.info(f"  Exported TIF: {risk_output_path}")
+        
+        meta = {
+            'crs': crs,
+            'transform': transform,
+            'height': flood_risk.shape[0],
+            'width': flood_risk.shape[1],
+            'dtype': 'float32'
+        }
+        
+        risk_png_path = self.config.output_dir / "hazard" / f"hazard_risk_{scenario_name.lower()}_scenario.png"
+        
+        self.visualizer.visualize_hazard_scenario(
+            flood_mask=flood_risk,
+            dem_data=dem_data,
+            meta=meta,
+            scenario=scenario,
+            output_path=risk_png_path,
+            land_mask=land_mask,
+            show_coastline_overlay=False,
+            coastline_zone_mask=flood_data['coastline_zone_mask'],
+            river_polygon_network=self.river_polygon_network
+        )
+        
+        logger.info(f"  Exported PNG: {risk_png_path}")
     
     def visualize_hazard_assessment(self, flood_extents: Dict[str, np.ndarray], 
                                       save_plots: bool = True) -> None:
@@ -1305,47 +1405,12 @@ class HazardLayer:
 
     def export_results(self, flood_extents: Dict[str, np.ndarray]) -> None:
         """
-        Export hazard assessment results to files for further analysis.
+        Export comprehensive analysis results (individual scenario exports handled during processing).
         
         Args:
             flood_extents: Dictionary of flood extent results
         """
-        logger.info("Exporting hazard assessment results...")
-        
-        for scenario_name, flood_data in flood_extents.items():
-            flood_risk = flood_data['flood_risk']
-            transform = flood_data['transform']
-            crs = flood_data['crs']
-            scenario = flood_data['scenario']
-            
-            risk_output_path = self.config.output_dir / "hazard" / "tif" / f"flood_risk_{scenario_name.lower()}.tif"
-            risk_output_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            with rasterio.open(
-                risk_output_path,
-                'w',
-                driver='GTiff',
-                height=flood_risk.shape[0],
-                width=flood_risk.shape[1],
-                count=1,
-                dtype=np.float32,
-                crs=crs,
-                transform=transform,
-                nodata=-9999.0,
-                compress='lzw'
-            ) as dst:
-                dst.write(flood_risk, 1)
-                dst.set_band_description(1, f"Normalized flood risk for {scenario.rise_meters}m SLR")
-                dst.update_tags(
-                    description='Normalized flood risk values (0=no risk, 1=maximum risk)',
-                    scenario=scenario.name,
-                    sea_level_rise_m=str(scenario.rise_meters),
-                    method='elevation_profile_with_river_enhancement'
-                )
-            
-            logger.info(f"Exported {scenario_name} normalized flood risk to: {risk_output_path}")
-            
-         
+        logger.info("Exporting comprehensive analysis results...")
         
         # Export summary statistics
         summary_stats = []
@@ -1388,11 +1453,7 @@ class HazardLayer:
         summary_path = self.config.output_dir / "hazard" / "hazard_assessment_summary.csv"
         summary_df.to_csv(summary_path, index=False)
         logger.info(f"Exported summary statistics to: {summary_path}")
-
-        # Create PNG visualizations for all scenarios
-        self.create_png_visualizations(flood_extents)
         
-        # Create standalone flood risk bar charts
         self.create_flood_risk_bar_charts(flood_extents)
 
     def _calculate_coastline_risk_enhancement(self, shape: Tuple[int, int], transform: rasterio.Affine, 
@@ -1572,268 +1633,3 @@ class HazardLayer:
         except Exception as e:
             logger.warning(f"Could not calculate coastline risk enhancement: {str(e)}")
             return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
-
-    def demonstrate_coastline_risk_functionality(self) -> None:
-        """
-        Demonstrate coastline risk functionality for testing and validation.
-        
-        This method shows how the coastline risk enhancement integrates with
-        the hazard layer and can be used to validate the implementation.
-        """
-        logger.info("Demonstrating coastline risk functionality...")
-        
-        try:
-            # Load basic data
-            dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
-            
-            # Calculate coastline risk enhancement
-            coastline_enhancement, coastline_zone_mask = self._calculate_coastline_risk_enhancement(
-                dem_data.shape, transform, land_mask
-            )
-            
-            # Get coastline configuration for logging
-            coastline_distance_m = self.config.coastline_risk.get('coastline_distance_m', 10000)
-            coastline_multiplier = self.config.coastline_risk.get('coastline_multiplier', 20)
-            
-            # Log results
-            affected_pixels = np.sum(coastline_zone_mask == 1)
-            total_land_pixels = np.sum(land_mask == 1)
-            affected_percentage = (affected_pixels / total_land_pixels * 100) if total_land_pixels > 0 else 0
-            
-            logger.info("Coastline Risk Enhancement Results:")
-            logger.info(f"  Configuration:")
-            logger.info(f"    Distance threshold: {coastline_distance_m}m ({coastline_distance_m/1000:.0f}km)")
-            logger.info(f"    Risk multiplier: {coastline_multiplier}x")
-            logger.info(f"  Impact Analysis:")
-            logger.info(f"    Total land pixels: {total_land_pixels:,}")
-            logger.info(f"    Affected pixels: {affected_pixels:,}")
-            logger.info(f"    Affected percentage: {affected_percentage:.1f}% of land area")
-            logger.info(f"    Enhancement values: {np.unique(coastline_enhancement)}")
-            
-            # Calculate area impact
-            pixel_area_m2 = abs(transform[0]) * abs(transform[4])
-            affected_area_km2 = (affected_pixels * pixel_area_m2) / 1_000_000
-            total_land_area_km2 = (total_land_pixels * pixel_area_m2) / 1_000_000
-            
-            logger.info(f"  Area Analysis:")
-            logger.info(f"    Total land area: {total_land_area_km2:.2f} km²")
-            logger.info(f"    Coastline risk area: {affected_area_km2:.2f} km²")
-            logger.info(f"    Coastline risk coverage: {affected_percentage:.1f}% of Netherlands land")
-            
-            # Test with a simple scenario
-            test_scenario = SeaLevelScenario("Test", 1.0, "Test scenario for coastline risk")
-            flood_risk = self.calculate_flood_extent(dem_data, test_scenario.rise_meters, transform, land_mask)
-            
-            # Compare areas with and without coastline enhancement
-            test_meta = {
-                'crs': crs,
-                'transform': transform,
-                'height': flood_risk.shape[0],
-                'width': flood_risk.shape[1],
-                'dtype': 'float32'
-            }
-            
-            logger.info("Coastline risk functionality demonstration completed successfully!")
-            logger.info("To use coastline overlays in visualization:")
-            logger.info("  show_coastline_overlay=True, coastline_zone_mask=<zone_mask>")
-            
-        except Exception as e:
-            logger.error(f"Error in coastline risk demonstration: {e}")
-            logger.error("Please check that coastline data file exists and is properly configured")
-
-    def debug_coastline_risk_effect(self) -> None:
-        """
-        Debug function to verify coastline risk is actually affecting the calculation.
-        Shows before/after values to confirm the enhancement is working.
-        """
-        logger.info("=== DEBUGGING COASTLINE RISK EFFECT ===")
-        
-        try:
-            # Load basic data
-            dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
-            
-            # Calculate base elevation risk
-            nuts_gdf = self._load_nuts_boundaries()
-            nuts_mask = rasterio.features.rasterize(
-                [(geom, 1) for geom in nuts_gdf.geometry],
-                out_shape=dem_data.shape,
-                transform=transform,
-                dtype=np.uint8
-            )
-            valid_land_mask = ~np.isnan(dem_data)
-            valid_study_area = (valid_land_mask & (nuts_mask == 1) & (land_mask == 1))
-            
-            # Calculate components
-            elevation_risk = self._calculate_elevation_flood_risk(dem_data, 1.0, valid_study_area)  # 1m rise
-            river_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
-            coastline_enhancement, coastline_zone_mask = self._calculate_coastline_risk_enhancement(dem_data.shape, transform, land_mask)
-            
-            # Calculate risk before and after coastline enhancement
-            risk_without_coastline = elevation_risk * river_enhancement
-            risk_with_coastline = elevation_risk * river_enhancement * coastline_enhancement
-            
-            # Focus on coastline zone for analysis
-            coastline_area_mask = (coastline_zone_mask == 1) & valid_study_area
-            
-            if np.any(coastline_area_mask):
-                # Values in coastline zone
-                coast_elevation_risk = elevation_risk[coastline_area_mask]
-                coast_river_enhancement = river_enhancement[coastline_area_mask]
-                coast_coastline_enhancement = coastline_enhancement[coastline_area_mask]
-                coast_risk_before = risk_without_coastline[coastline_area_mask]
-                coast_risk_after = risk_with_coastline[coastline_area_mask]
-                
-                logger.info(f"COASTLINE ZONE ANALYSIS ({np.sum(coastline_area_mask)} pixels):")
-                logger.info(f"  Elevation risk - Mean: {np.mean(coast_elevation_risk):.4f}, Range: {np.min(coast_elevation_risk):.4f}-{np.max(coast_elevation_risk):.4f}")
-                logger.info(f"  River enhancement - Mean: {np.mean(coast_river_enhancement):.4f}, Range: {np.min(coast_river_enhancement):.4f}-{np.max(coast_river_enhancement):.4f}")
-                logger.info(f"  Coastline enhancement - Mean: {np.mean(coast_coastline_enhancement):.4f}, Range: {np.min(coast_coastline_enhancement):.4f}-{np.max(coast_coastline_enhancement):.4f}")
-                logger.info(f"  Risk BEFORE coastline - Mean: {np.mean(coast_risk_before):.4f}, Range: {np.min(coast_risk_before):.4f}-{np.max(coast_risk_before):.4f}")
-                logger.info(f"  Risk AFTER coastline - Mean: {np.mean(coast_risk_after):.4f}, Range: {np.min(coast_risk_after):.4f}-{np.max(coast_risk_after):.4f}")
-                
-                # Calculate actual enhancement effect
-                enhancement_effect = coast_risk_after / coast_risk_before
-                logger.info(f"  Actual enhancement multiplier - Mean: {np.mean(enhancement_effect):.4f}, Range: {np.min(enhancement_effect):.4f}-{np.max(enhancement_effect):.4f}")
-                
-                # Compare with non-coastline areas
-                non_coast_mask = (~(coastline_zone_mask == 1)) & valid_study_area
-                if np.any(non_coast_mask):
-                    non_coast_risk_before = risk_without_coastline[non_coast_mask]
-                    non_coast_risk_after = risk_with_coastline[non_coast_mask]
-                    
-                    logger.info(f"NON-COASTLINE AREA COMPARISON ({np.sum(non_coast_mask)} pixels):")
-                    logger.info(f"  Risk BEFORE - Mean: {np.mean(non_coast_risk_before):.4f}")
-                    logger.info(f"  Risk AFTER - Mean: {np.mean(non_coast_risk_after):.4f}")
-                    logger.info(f"  Should be identical: {np.allclose(non_coast_risk_before, non_coast_risk_after)}")
-                
-                # Sample a few specific pixels for detailed analysis
-                sample_indices = np.where(coastline_area_mask)
-                sample_size = min(5, len(sample_indices[0]))
-                logger.info(f"DETAILED PIXEL ANALYSIS (first {sample_size} coastline pixels):")
-                for i in range(sample_size):
-                    row, col = sample_indices[0][i], sample_indices[1][i]
-                    logger.info(f"  Pixel ({row},{col}): elev_risk={elevation_risk[row,col]:.4f}, river_enh={river_enhancement[row,col]:.4f}, coast_enh={coastline_enhancement[row,col]:.4f}")
-                    logger.info(f"    Before: {risk_without_coastline[row,col]:.4f}, After: {risk_with_coastline[row,col]:.4f}, Ratio: {risk_with_coastline[row,col]/risk_without_coastline[row,col]:.4f}")
-            else:
-                logger.warning("No coastline area pixels found for analysis!")
-                
-        except Exception as e:
-            logger.error(f"Debug analysis failed: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-    def debug_river_polygon_buffer_calculation(self) -> None:
-        """
-        Debug method to verify river polygon buffer zone calculations.
-        
-        This method provides detailed diagnostics about:
-        - River polygon data loading and bounds
-        - Buffer zone creation and coverage
-        - Rasterization success
-        - Buffer zone effectiveness using coastline approach
-        """
-        logger.info("=== DEBUGGING RIVER POLYGON BUFFER CALCULATION ===")
-        
-        try:
-            # Load basic data
-            dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
-            
-            # Check river polygon data
-            if self.river_polygon_network is None:
-                self.load_river_polygon_data()
-            
-            if self.river_polygon_network is None:
-                logger.error("No river polygon network loaded!")
-                return
-            
-            logger.info(f"River polygon network loaded successfully:")
-            logger.info(f"  Number of polygons: {len(self.river_polygon_network)}")
-            logger.info(f"  CRS: {self.river_polygon_network.crs}")
-            logger.info(f"  Bounds: {self.river_polygon_network.total_bounds}")
-            logger.info(f"  Total area: {self.river_polygon_network.geometry.area.sum() / 1e6:.2f} km²")
-            
-            # Test buffer zone creation
-            zones = self.config.river_zones
-            
-            logger.info(f"Testing buffer zone creation:")
-            logger.info(f"  High risk: {zones['high_risk_distance_m']}m (weight: {zones['high_risk_weight']})")
-            logger.info(f"  Moderate risk: {zones['moderate_risk_distance_m']}m (weight: {zones['moderate_risk_weight']})")
-            logger.info(f"  Low risk: {zones['low_risk_distance_m']}m (weight: {zones['low_risk_weight']})")
-            
-            total_pixels = dem_data.shape[0] * dem_data.shape[1]
-            
-            # Test each buffer zone individually
-            for zone_name, distance_key, weight_key in [
-                ('high_risk', 'high_risk_distance_m', 'high_risk_weight'),
-                ('moderate_risk', 'moderate_risk_distance_m', 'moderate_risk_weight'),  
-                ('low_risk', 'low_risk_distance_m', 'low_risk_weight')
-            ]:
-                buffer_distance = zones[distance_key]
-                buffer_weight = zones[weight_key]
-                
-                logger.info(f"Testing {zone_name} buffer zone ({buffer_distance}m)...")
-                
-                try:
-                    # Create buffer zone
-                    buffer_gdf = self._create_single_buffer_zone(self.river_polygon_network, buffer_distance)
-                    
-                    logger.info(f"  Buffer created successfully")
-                    logger.info(f"  Buffer area: {buffer_gdf.geometry.area.sum() / 1e6:.2f} km²")
-                    
-                    # Test rasterization
-                    if hasattr(buffer_gdf.geometry.iloc[0], 'geoms'):
-                        buffer_geometries = [(geom, 1) for geom in buffer_gdf.geometry.iloc[0].geoms if geom.is_valid]
-                    else:
-                        buffer_geometries = [(buffer_gdf.geometry.iloc[0], 1)] if buffer_gdf.geometry.iloc[0].is_valid else []
-                    
-                    if buffer_geometries:
-                        buffer_raster = rasterio.features.rasterize(
-                            buffer_geometries,
-                            out_shape=dem_data.shape,
-                            transform=transform,
-                            dtype=np.uint8,
-                            all_touched=True
-                        )
-                        
-                        buffer_pixels = np.sum(buffer_raster == 1)
-                        logger.info(f"  Rasterized successfully: {buffer_pixels:,} pixels ({buffer_pixels/total_pixels*100:.2f}%)")
-                    else:
-                        logger.warning(f"  No valid geometries for rasterization")
-                        
-                except Exception as e:
-                    logger.error(f"  Failed to create {zone_name} buffer: {str(e)}")
-            
-            # Test full enhancement calculation
-            logger.info(f"Testing full enhancement calculation...")
-            enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
-            
-            enhanced_pixels = np.sum(enhancement != 1.0)
-            high_risk_pixels = np.sum(enhancement == zones['high_risk_weight'])
-            moderate_risk_pixels = np.sum(enhancement == zones['moderate_risk_weight'])
-            low_risk_pixels = np.sum(enhancement == zones['low_risk_weight'])
-            
-            logger.info(f"Final enhancement results:")
-            logger.info(f"  Total enhanced pixels: {enhanced_pixels:,} ({enhanced_pixels/total_pixels*100:.2f}%)")
-            logger.info(f"  High risk pixels: {high_risk_pixels:,} ({high_risk_pixels/total_pixels*100:.2f}%)")
-            logger.info(f"  Moderate risk pixels: {moderate_risk_pixels:,} ({moderate_risk_pixels/total_pixels*100:.2f}%)")
-            logger.info(f"  Low risk pixels: {low_risk_pixels:,} ({low_risk_pixels/total_pixels*100:.2f}%)")
-            logger.info(f"  Enhancement values: {np.unique(enhancement)}")
-            
-            # Calculate affected area in km²
-            pixel_area_km2 = (abs(transform[0]) * abs(transform[4])) / 1_000_000
-            enhanced_area_km2 = enhanced_pixels * pixel_area_km2
-            total_area_km2 = total_pixels * pixel_area_km2
-            
-            logger.info(f"Area analysis:")
-            logger.info(f"  Total study area: {total_area_km2:.2f} km²")
-            logger.info(f"  Enhanced area: {enhanced_area_km2:.2f} km²")
-            logger.info(f"  Enhanced percentage: {enhanced_pixels/total_pixels*100:.2f}%")
-            
-            logger.info("=== BUFFER DEBUG COMPLETE ===")
-            
-        except Exception as e:
-            logger.error(f"Debug failed: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-
-
