@@ -42,7 +42,7 @@ data:
     flood_risk:
       max_safe_flood_risk: 0.3
     coastline_risk:
-      coastline_multiplier: 2
+      coastline_multiplier: 1.1
       coastline_distance_m: 5000
   caching:
     enabled: false
@@ -70,8 +70,8 @@ data:
       urban_weight: 0.7
       semi_urban_weight: 0.3
     port_multipliers:
-      port_polygon_multiplier: 2.5
-      port_buffer_multiplier: 1.5
+      port_polygon_multiplier: 1.5
+      port_buffer_multiplier: 1.25
       port_buffer_distance_m: 500
 
   relevance:

@@ -782,7 +782,7 @@ class ExpositionLayer:
             logger.info(f"Default exposition layer PNG saved to {png_path}")
         
         # Create all economic-specific exposition layers
-        # self.save_economic_exposition_layers()
+        self.save_economic_exposition_layers()
 
     def run_exposition_with_all_economic_layers(self, visualize: bool = False, create_png: bool = True, show_ports: bool = False, show_port_buffers: bool = False):
         """Run exposition layer creation including all economic-specific layers."""
