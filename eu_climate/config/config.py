@@ -92,6 +92,7 @@ class ProjectConfig:
         hazard_config = self.config.get('hazard', {})
         
         self.river_zones = hazard_config.get('river_zones')
+        self.river_risk_decay = hazard_config.get('river_risk_decay')
         self.elevation_risk = hazard_config.get('elevation_risk')
         
         # Store coastline risk parameters
@@ -99,6 +100,7 @@ class ProjectConfig:
         
         # Log loaded hazard configuration for debugging
         logger.debug(f"Loaded river zones config: {self.river_zones}")
+        logger.debug(f"Loaded river risk decay config: {self.river_risk_decay}")
         logger.debug(f"Loaded elevation risk config: {self.elevation_risk}")
         logger.debug(f"Loaded coastline risk config: {self.coastline_risk}")
 
@@ -210,6 +212,11 @@ class ProjectConfig:
     def coastline_path(self) -> Path:
         """Get path to coastline shapefile."""
         return self.data_dir / self.config['file_paths']['coastline_file']
+    
+    @property
+    def nl_forecast_path(self) -> Path:
+        """Get path to NL forecast/risk zone GML file."""
+        return self.data_dir / self.config['file_paths']['nl_forecast_file']
     
     @property
     def nuts_l0_file_path(self) -> str:

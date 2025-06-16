@@ -23,6 +23,7 @@ data:
     gadm_l2_file: "NL-GADM-L2/gadm41_NLD_2.shp"
     port_file: "Port/PORT_RG_2009.shp"
     coastline_file: "EEA_Coastline_Polyline_Shape/Europe_coastline_raw_rev2017.shp"
+    nl_forecast_file: "NL_Riskzone/nz_riskzone_ror.gml"
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
     target_resolution: 30.0
@@ -36,9 +37,13 @@ data:
       moderate_risk_weight: 1.1
       low_risk_distance_m: 500
       low_risk_weight: 1.05
+    river_risk_decay:
+      decay_distance_m: 7500
+      enhanced_decay_factor: 6
+      min_river_area_m2: 50000
     elevation_risk:
       max_safe_elevation_m: 25.0
-      risk_decay_factor: 4
+      risk_decay_factor: 1.4
     flood_risk:
       max_safe_flood_risk: 0.3
     coastline_risk:
