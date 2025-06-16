@@ -12,6 +12,7 @@ from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
+from eu_climate.utils.normalise_data import AdvancedDataNormalizer, NormalizationStrategy
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 
 logger = setup_logging(__name__)
@@ -359,6 +360,9 @@ class RelevanceLayer:
         
         self.visualizer = LayerVisualizer(config)
         
+        # Initialize sophisticated normalizer optimized for economic data
+        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.ECONOMIC_OPTIMIZED)
+        
         logger.info("Initialized Relevance Layer")
     
     def load_and_process_economic_data(self) -> Dict[str, gpd.GeoDataFrame]:
@@ -487,24 +491,9 @@ class RelevanceLayer:
         return relevance_layers, exposition_meta
     
     def _normalize_economic_layer(self, data: np.ndarray) -> np.ndarray:
-        """Normalize economic layer to 0-1 range."""
+        """Normalize economic layer using sophisticated economic optimization."""
         valid_mask = (data > 0) & ~np.isnan(data)
-        
-        if not np.any(valid_mask):
-            logger.warning("No valid economic data found for normalization")
-            return data
-            
-        min_val = np.min(data[valid_mask])
-        max_val = np.max(data[valid_mask])
-        
-        if max_val <= min_val:
-            logger.warning("No variation in economic data")
-            return np.where(valid_mask, 1.0, 0.0).astype(np.float32)
-            
-        normalized = np.zeros_like(data, dtype=np.float32)
-        normalized[valid_mask] = (data[valid_mask] - min_val) / (max_val - min_val)
-        
-        return normalized
+        return self.normalizer.normalize_economic_data(data, valid_mask)
     
     def save_relevance_layers(self, relevance_layers: Dict[str, np.ndarray], 
                             meta: dict):

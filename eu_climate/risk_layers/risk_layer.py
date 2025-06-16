@@ -16,6 +16,7 @@ from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.utils.caching_wrappers import CacheAwareMethod
+from eu_climate.utils.normalise_data import AdvancedDataNormalizer, NormalizationStrategy
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.risk_layers.relevance_layer import RelevanceLayer
 
@@ -51,6 +52,9 @@ class RiskLayer:
         )
         
         self.visualizer = LayerVisualizer(self.config)
+        
+        # Initialize sophisticated normalizer optimized for risk data
+        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.EXPOSITION_OPTIMIZED)
         
         logger.info("Initialized Risk Layer")
     
@@ -303,11 +307,8 @@ class RiskLayer:
                 economic_weight * combined_economic[calculation_mask]
             )
             
-            # Normalize risk data for areas where calculation was applied
-            risk_min = np.min(risk_data[calculation_mask])
-            risk_max = np.max(risk_data[calculation_mask])
-            if risk_max > risk_min:
-                risk_data[calculation_mask] = (risk_data[calculation_mask] - risk_min) / (risk_max - risk_min)
+            # Normalize risk data ensuring full range utilization
+            risk_data = self.normalizer.normalize_risk_data(risk_data, calculation_mask)
             
             logger.info(f"Economic risk calculated for {np.sum(calculation_mask)} cells")
             logger.info(f"Flood risk cells: {np.sum(flood_risk_mask & land_valid_mask)}")
@@ -455,24 +456,14 @@ class RiskLayer:
             else str(self.config.resampling_method).lower()
         )
         
-        # Normalize population data (0-1 scale)
+        # Normalize population data ensuring full range utilization
         valid_mask = ~np.isnan(population_data) & (population_data >= 0)
-        if np.any(valid_mask):
-            min_val = np.min(population_data[valid_mask])
-            max_val = np.max(population_data[valid_mask])
-            
-            normalized_population = np.zeros_like(population_data, dtype=np.float32)
-            if max_val > min_val:
-                normalized_population[valid_mask] = (population_data[valid_mask] - min_val) / (max_val - min_val)
-            
-            logger.info(f"Population data normalized - Original range: [{min_val:.2f}, {max_val:.2f}]")
-            logger.info(f"Population data shape: {normalized_population.shape}")
-            logger.info(f"Population coverage: {np.sum(normalized_population > 0) / normalized_population.size * 100:.1f}%")
-            
-            return normalized_population
-        else:
-            logger.warning("No valid population data found")
-            return np.zeros_like(population_data, dtype=np.float32)
+        normalized_population = self.normalizer.normalize_risk_data(population_data, valid_mask)
+        
+        logger.info(f"Population data shape: {normalized_population.shape}")
+        logger.info(f"Population coverage: {np.sum(normalized_population > 0) / normalized_population.size * 100:.1f}%")
+        
+        return normalized_population
     
     def calculate_population_risk(self,
                                  hazard_data: np.ndarray,
@@ -529,11 +520,8 @@ class RiskLayer:
                 population_weight * population_data[calculation_mask]
             )
             
-            # Normalize risk data for areas where calculation was applied
-            risk_min = np.min(risk_data[calculation_mask])
-            risk_max = np.max(risk_data[calculation_mask])
-            if risk_max > risk_min:
-                risk_data[calculation_mask] = (risk_data[calculation_mask] - risk_min) / (risk_max - risk_min)
+            # Normalize risk data ensuring full range utilization
+            risk_data = self.normalizer.normalize_risk_data(risk_data, calculation_mask)
             
             logger.info(f"Population risk calculated for {np.sum(calculation_mask)} cells")
             logger.info(f"Flood risk cells: {np.sum(flood_risk_mask & land_valid_mask)}")
