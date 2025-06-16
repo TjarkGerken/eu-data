@@ -470,7 +470,9 @@ class LayerVisualizer:
     
     def visualize_hazard_scenario(self, flood_mask: np.ndarray, dem_data: np.ndarray, 
                                 meta: dict, scenario, output_path: Optional[Path] = None,
-                                land_mask: Optional[np.ndarray] = None) -> None:
+                                land_mask: Optional[np.ndarray] = None,
+                                show_coastline_overlay: bool = False,
+                                coastline_zone_mask: Optional[np.ndarray] = None) -> None:
         """Create standardized hazard scenario visualization with centralized zone handling."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
@@ -534,6 +536,23 @@ class LayerVisualizer:
             vmin=0, vmax=1
         )
         
+        # Add coastline risk overlay if requested
+        if show_coastline_overlay and coastline_zone_mask is not None:
+            # Create coastline overlay showing affected zones
+            coastline_overlay = np.full_like(coastline_zone_mask, np.nan, dtype=np.float32)
+            coastline_overlay[coastline_zone_mask == 1] = 1.0
+            
+            # Display coastline risk zone as dark blue border and see-through
+            ax.imshow(
+                coastline_overlay,
+                cmap=ListedColormap(['darkblue']),
+                aspect='equal',
+                extent=extent,
+                alpha=0.4,
+                zorder=40,
+                vmin=0, vmax=1
+            )
+        
         # Add NUTS overlay
         if nuts_gdf is not None:
             self.add_nuts_overlay(ax, nuts_gdf)
@@ -555,6 +574,18 @@ class LayerVisualizer:
             mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
             mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
         ]
+        
+        # Add coastline overlay to legend if shown
+        if show_coastline_overlay and coastline_zone_mask is not None:
+            coastline_distance_m = self.config.config['hazard']['coastline_risk']['coastline_distance_m']
+            coastline_multiplier = self.config.config['hazard']['coastline_risk']['coastline_multiplier']
+            legend_patches.append(
+                mpatches.Patch(color='darkblue', alpha=0.4, 
+                               edgecolor='darkblue',
+                               linewidth=0.5,
+                               label=f'Coastline Risk Zone ({coastline_distance_m/1000:.0f}km, {coastline_multiplier}x)')
+            )
+        
         ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
         
         # Add statistics for flood extent in Netherlands only

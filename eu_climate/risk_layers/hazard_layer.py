@@ -233,7 +233,9 @@ class HazardLayer:
         
         river_risk_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
         
-        combined_risk = self._combine_flood_risks(elevation_risk, river_risk_enhancement, valid_study_area)
+        coastline_risk_enhancement, coastline_zone_mask = self._calculate_coastline_risk_enhancement(dem_data.shape, transform, land_mask)
+        
+        combined_risk = self._combine_flood_risks(elevation_risk, river_risk_enhancement, coastline_risk_enhancement, valid_study_area)
         
         smoothed_risk = ndimage.gaussian_filter(
             np.nan_to_num(combined_risk, nan=0),
@@ -469,20 +471,21 @@ class HazardLayer:
             return np.ones(shape, dtype=np.float32)
     
     def _combine_flood_risks(self, elevation_risk: np.ndarray, river_enhancement: np.ndarray, 
-                           valid_study_area: np.ndarray) -> np.ndarray:
+                           coastline_enhancement: np.ndarray, valid_study_area: np.ndarray) -> np.ndarray:
         """
-        Combine elevation-based flood risk with river proximity enhancement using unified normalization.
+        Combine elevation-based flood risk with river and coastline proximity enhancements using unified normalization.
         
         Args:
             elevation_risk: Base flood risk from elevation (normalized within study area)
             river_enhancement: Risk enhancement multiplier from rivers (≥1.0)
+            coastline_enhancement: Risk enhancement multiplier from coastline proximity (≥1.0)
             valid_study_area: Mask for valid areas to consider
             
         Returns:
             Combined flood risk with preserved gradients and unified normalization
         """
-        # Apply river enhancement to elevation risk
-        enhanced_risk = elevation_risk * river_enhancement
+        # Apply both river and coastline enhancements to elevation risk
+        enhanced_risk = elevation_risk * river_enhancement * coastline_enhancement
         
         # Get valid enhanced risk values for normalization
         valid_enhanced_risk = enhanced_risk[valid_study_area]
@@ -508,15 +511,6 @@ class HazardLayer:
         
         # Ensure only valid study areas have risk values
         combined_risk = enhanced_risk * valid_study_area
-        
-        # Apply very soft upper bound to prevent extreme outliers while preserving gradients
-        # This replaces the hard np.clip(0, 1) with a more nuanced approach
-        # max_reasonable_risk = 1.2  # Allow some values above 1.0 for better gradient preservation
-        # combined_risk = np.where(
-        #     combined_risk > max_reasonable_risk,
-        #     max_reasonable_risk * (1 - np.exp(-(combined_risk - max_reasonable_risk) / 0.3)),
-        #     combined_risk
-        # )
         
         # Final statistics
         final_valid_risk = combined_risk[valid_study_area]
@@ -669,6 +663,10 @@ class HazardLayer:
         logger.info(f"Processing {len(scenarios)} sea level rise scenarios...")
         # Load DEM data and land mask once
         dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
+        
+        # Calculate coastline zone mask once (it's the same for all scenarios)
+        _, coastline_zone_mask = self._calculate_coastline_risk_enhancement(dem_data.shape, transform, land_mask)
+        
         flood_extents = {}
         for scenario in scenarios:
             logger.info(f"Processing scenario: {scenario.name} ({scenario.rise_meters}m)")
@@ -678,7 +676,8 @@ class HazardLayer:
                 'scenario': scenario,
                 'transform': transform,
                 'crs': crs,
-                'dem_data': dem_data
+                'dem_data': dem_data,
+                'coastline_zone_mask': coastline_zone_mask
             }
         logger.info("Completed processing all scenarios")
         return flood_extents
@@ -1138,6 +1137,8 @@ class HazardLayer:
                 scenario=scenario,
                 output_path=risk_png_path,
                 land_mask=land_mask,
+                show_coastline_overlay=True,
+                coastline_zone_mask=flood_extents[scenario_name]['coastline_zone_mask']
             )
             
 
@@ -1435,6 +1436,332 @@ class HazardLayer:
         
         # Create standalone flood risk bar charts
         self.create_flood_risk_bar_charts(flood_extents)
+
+    def _calculate_coastline_risk_enhancement(self, shape: Tuple[int, int], transform: rasterio.Affine, 
+                                              land_mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate flood risk enhancement based on distance to coastline.
+        
+        Args:
+            shape: Shape of the raster grid
+            transform: Affine transform matrix
+            land_mask: Binary land mask (1=land, 0=water)
+            
+        Returns:
+            Tuple of (risk enhancement multiplier, coastline zone mask)
+            - enhancement: 1.0 = no enhancement, >1.0 = increased risk
+            - zone_mask: Binary mask showing areas within coastline influence zone
+        """
+        try:
+            if not self.config.coastline_path.exists():
+                logger.warning(f"Coastline file not found: {self.config.coastline_path}")
+                return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
+            
+            # Get coastline configuration
+            coastline_distance_m = self.config.config['hazard']['coastline_risk']['coastline_distance_m']
+            coastline_multiplier = self.config.config['hazard']['coastline_risk']['coastline_multiplier']
+            
+            logger.info(f"Calculating coastline risk enhancement:")
+            logger.info(f"  Distance threshold: {coastline_distance_m}m")
+            logger.info(f"  Risk multiplier: {coastline_multiplier}")
+            logger.info(f"  Coastline file: {self.config.coastline_path}")
+            
+            # Load coastline data
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            coastline_gdf = gpd.read_file(self.config.coastline_path)
+            
+            logger.info(f"Loaded coastline data:")
+            logger.info(f"  Features: {len(coastline_gdf)}")
+            logger.info(f"  Original CRS: {coastline_gdf.crs}")
+            logger.info(f"  Original bounds: {coastline_gdf.total_bounds}")
+            
+            if coastline_gdf.crs != target_crs:
+                coastline_gdf = coastline_gdf.to_crs(target_crs)
+                logger.info(f"Transformed coastline to {target_crs}")
+                logger.info(f"  Transformed bounds: {coastline_gdf.total_bounds}")
+            
+            # Get NUTS boundaries extent to clip coastline data
+            nuts_gdf = self._load_nuts_boundaries()
+            if nuts_gdf is None:
+                logger.warning("No NUTS boundaries available for coastline clipping")
+                return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
+            
+            # Get NUTS extent (bounding box) to avoid overlap issues
+            nuts_bounds = nuts_gdf.total_bounds  # [minx, miny, maxx, maxy]
+            
+            logger.info(f"NUTS boundaries:")
+            logger.info(f"  Features: {len(nuts_gdf)}")
+            logger.info(f"  Bounds: {nuts_bounds}")
+            
+            # Add buffer to NUTS bounds to capture nearby coastline features
+            buffer_distance = coastline_distance_m * 1.2  # 20% buffer beyond influence zone
+            nuts_extent_buffered = [
+                nuts_bounds[0] - buffer_distance,  # minx
+                nuts_bounds[1] - buffer_distance,  # miny
+                nuts_bounds[2] + buffer_distance,  # maxx
+                nuts_bounds[3] + buffer_distance   # maxy
+            ]
+            
+            logger.info(f"Buffered clipping extent:")
+            logger.info(f"  Buffer distance: {buffer_distance}m")
+            logger.info(f"  Buffered bounds: {nuts_extent_buffered}")
+            
+            # Check if coastline and NUTS bounds overlap at all
+            coastline_bounds = coastline_gdf.total_bounds
+            logger.info(f"Bounds overlap check:")
+            logger.info(f"  Coastline bounds: {coastline_bounds}")
+            logger.info(f"  NUTS bounds: {nuts_bounds}")
+            logger.info(f"  Buffered bounds: {nuts_extent_buffered}")
+            
+            # Clip coastline to buffered NUTS extent
+            from shapely.geometry import box
+            clipping_box = box(*nuts_extent_buffered)
+            coastline_clipped = coastline_gdf[coastline_gdf.geometry.intersects(clipping_box)]
+            
+            logger.info(f"Clipping results:")
+            logger.info(f"  Original coastline features: {len(coastline_gdf)}")
+            logger.info(f"  Clipped coastline features: {len(coastline_clipped)}")
+            
+            if len(coastline_clipped) == 0:
+                logger.warning("No coastline features found within study area extent!")
+                logger.warning("This suggests the coastline data doesn't overlap with the Netherlands study area")
+                return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
+            
+            # Create buffer polygon around coastline (extends into both land and sea)
+            logger.info(f"Creating {coastline_distance_m}m buffer around coastline...")
+            
+            # Combine all coastline geometries and create buffer
+            from shapely.ops import unary_union
+            coastline_combined = unary_union(coastline_clipped.geometry.tolist())
+            coastline_buffer = coastline_combined.buffer(coastline_distance_m)
+            
+            logger.info(f"Buffer creation:")
+            logger.info(f"  Original coastline geometries: {len(coastline_clipped)}")
+            logger.info(f"  Combined coastline type: {type(coastline_combined)}")
+            logger.info(f"  Buffer distance: {coastline_distance_m}m")
+            logger.info(f"  Buffer area: {coastline_buffer.area / 1e6:.2f} km²")
+            
+            # Rasterize the buffer polygon
+            logger.info(f"Rasterizing coastline buffer...")
+            logger.info(f"  Raster shape: {shape}")
+            logger.info(f"  Transform: {transform}")
+            
+            # Handle both single geometry and geometry collection
+            if hasattr(coastline_buffer, 'geoms'):
+                # MultiPolygon or GeometryCollection
+                buffer_geometries = [(geom, 1) for geom in coastline_buffer.geoms if geom.is_valid]
+            else:
+                # Single Polygon
+                buffer_geometries = [(coastline_buffer, 1)] if coastline_buffer.is_valid else []
+            
+            if not buffer_geometries:
+                logger.warning("No valid buffer geometries created!")
+                return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
+            
+            logger.info(f"  Rasterizing {len(buffer_geometries)} buffer geometries...")
+            
+            coastline_buffer_raster = rasterio.features.rasterize(
+                buffer_geometries,
+                out_shape=shape,
+                transform=transform,
+                dtype=np.uint8,
+                all_touched=True  # Include pixels touched by geometry
+            )
+            
+            buffer_pixels = np.sum(coastline_buffer_raster == 1)
+            logger.info(f"  Buffer pixels in raster: {buffer_pixels}")
+            
+            if buffer_pixels == 0:
+                logger.warning("No buffer pixels found in raster! Buffer may be outside raster bounds")
+                return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
+            
+            # Create coastline influence zone by intersecting buffer with land mask
+            logger.info(f"Creating coastline influence zone...")
+            
+            # The buffer extends into both land and sea - we only want the land portion
+            coastline_zone_mask = (coastline_buffer_raster == 1) & (land_mask == 1)
+            
+            # Calculate statistics
+            land_pixels = np.sum(land_mask == 1)
+            buffer_pixels_total = np.sum(coastline_buffer_raster == 1)
+            affected_land_pixels = np.sum(coastline_zone_mask)
+            
+            logger.info(f"Zone calculation:")
+            logger.info(f"  Total land pixels: {land_pixels}")
+            logger.info(f"  Total buffer pixels (land + sea): {buffer_pixels_total}")
+            logger.info(f"  Land pixels within {coastline_distance_m}m of coastline: {affected_land_pixels}")
+            
+            # Initialize enhancement array with base value (no enhancement)
+            enhancement = np.ones(shape, dtype=np.float32)
+            
+            # Apply enhancement multiplier to areas within coastline influence zone
+            # Use boolean mask directly for indexing
+            enhancement[coastline_zone_mask] = coastline_multiplier
+            
+            # Convert to uint8 for return (after applying enhancement)
+            coastline_zone_mask = coastline_zone_mask.astype(np.uint8)
+            
+            affected_pixels = np.sum(coastline_zone_mask)
+            total_land_pixels = np.sum(land_mask == 1)
+            affected_percentage = (affected_pixels / total_land_pixels * 100) if total_land_pixels > 0 else 0
+            
+            logger.info(f"Applied coastline risk enhancement:")
+            logger.info(f"  Affected land pixels: {affected_pixels} ({affected_percentage:.1f}% of land)")
+            logger.info(f"  Enhancement factor: {coastline_multiplier}x within {coastline_distance_m}m")
+            
+            return enhancement, coastline_zone_mask
+            
+        except Exception as e:
+            logger.warning(f"Could not calculate coastline risk enhancement: {str(e)}")
+            return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
+
+    def demonstrate_coastline_risk_functionality(self) -> None:
+        """
+        Demonstrate coastline risk functionality for testing and validation.
+        
+        This method shows how the coastline risk enhancement integrates with
+        the hazard layer and can be used to validate the implementation.
+        """
+        logger.info("Demonstrating coastline risk functionality...")
+        
+        try:
+            # Load basic data
+            dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
+            
+            # Calculate coastline risk enhancement
+            coastline_enhancement, coastline_zone_mask = self._calculate_coastline_risk_enhancement(
+                dem_data.shape, transform, land_mask
+            )
+            
+            # Get coastline configuration for logging
+            coastline_distance_m = self.config.coastline_risk.get('coastline_distance_m', 10000)
+            coastline_multiplier = self.config.coastline_risk.get('coastline_multiplier', 20)
+            
+            # Log results
+            affected_pixels = np.sum(coastline_zone_mask == 1)
+            total_land_pixels = np.sum(land_mask == 1)
+            affected_percentage = (affected_pixels / total_land_pixels * 100) if total_land_pixels > 0 else 0
+            
+            logger.info("Coastline Risk Enhancement Results:")
+            logger.info(f"  Configuration:")
+            logger.info(f"    Distance threshold: {coastline_distance_m}m ({coastline_distance_m/1000:.0f}km)")
+            logger.info(f"    Risk multiplier: {coastline_multiplier}x")
+            logger.info(f"  Impact Analysis:")
+            logger.info(f"    Total land pixels: {total_land_pixels:,}")
+            logger.info(f"    Affected pixels: {affected_pixels:,}")
+            logger.info(f"    Affected percentage: {affected_percentage:.1f}% of land area")
+            logger.info(f"    Enhancement values: {np.unique(coastline_enhancement)}")
+            
+            # Calculate area impact
+            pixel_area_m2 = abs(transform[0]) * abs(transform[4])
+            affected_area_km2 = (affected_pixels * pixel_area_m2) / 1_000_000
+            total_land_area_km2 = (total_land_pixels * pixel_area_m2) / 1_000_000
+            
+            logger.info(f"  Area Analysis:")
+            logger.info(f"    Total land area: {total_land_area_km2:.2f} km²")
+            logger.info(f"    Coastline risk area: {affected_area_km2:.2f} km²")
+            logger.info(f"    Coastline risk coverage: {affected_percentage:.1f}% of Netherlands land")
+            
+            # Test with a simple scenario
+            test_scenario = SeaLevelScenario("Test", 1.0, "Test scenario for coastline risk")
+            flood_risk = self.calculate_flood_extent(dem_data, test_scenario.rise_meters, transform, land_mask)
+            
+            # Compare areas with and without coastline enhancement
+            test_meta = {
+                'crs': crs,
+                'transform': transform,
+                'height': flood_risk.shape[0],
+                'width': flood_risk.shape[1],
+                'dtype': 'float32'
+            }
+            
+            logger.info("Coastline risk functionality demonstration completed successfully!")
+            logger.info("To use coastline overlays in visualization:")
+            logger.info("  show_coastline_overlay=True, coastline_zone_mask=<zone_mask>")
+            
+        except Exception as e:
+            logger.error(f"Error in coastline risk demonstration: {e}")
+            logger.error("Please check that coastline data file exists and is properly configured")
+
+    def debug_coastline_risk_effect(self) -> None:
+        """
+        Debug function to verify coastline risk is actually affecting the calculation.
+        Shows before/after values to confirm the enhancement is working.
+        """
+        logger.info("=== DEBUGGING COASTLINE RISK EFFECT ===")
+        
+        try:
+            # Load basic data
+            dem_data, transform, crs, land_mask = self.load_and_prepare_dem()
+            
+            # Calculate base elevation risk
+            nuts_gdf = self._load_nuts_boundaries()
+            nuts_mask = rasterio.features.rasterize(
+                [(geom, 1) for geom in nuts_gdf.geometry],
+                out_shape=dem_data.shape,
+                transform=transform,
+                dtype=np.uint8
+            )
+            valid_land_mask = ~np.isnan(dem_data)
+            valid_study_area = (valid_land_mask & (nuts_mask == 1) & (land_mask == 1))
+            
+            # Calculate components
+            elevation_risk = self._calculate_elevation_flood_risk(dem_data, 1.0, valid_study_area)  # 1m rise
+            river_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
+            coastline_enhancement, coastline_zone_mask = self._calculate_coastline_risk_enhancement(dem_data.shape, transform, land_mask)
+            
+            # Calculate risk before and after coastline enhancement
+            risk_without_coastline = elevation_risk * river_enhancement
+            risk_with_coastline = elevation_risk * river_enhancement * coastline_enhancement
+            
+            # Focus on coastline zone for analysis
+            coastline_area_mask = (coastline_zone_mask == 1) & valid_study_area
+            
+            if np.any(coastline_area_mask):
+                # Values in coastline zone
+                coast_elevation_risk = elevation_risk[coastline_area_mask]
+                coast_river_enhancement = river_enhancement[coastline_area_mask]
+                coast_coastline_enhancement = coastline_enhancement[coastline_area_mask]
+                coast_risk_before = risk_without_coastline[coastline_area_mask]
+                coast_risk_after = risk_with_coastline[coastline_area_mask]
+                
+                logger.info(f"COASTLINE ZONE ANALYSIS ({np.sum(coastline_area_mask)} pixels):")
+                logger.info(f"  Elevation risk - Mean: {np.mean(coast_elevation_risk):.4f}, Range: {np.min(coast_elevation_risk):.4f}-{np.max(coast_elevation_risk):.4f}")
+                logger.info(f"  River enhancement - Mean: {np.mean(coast_river_enhancement):.4f}, Range: {np.min(coast_river_enhancement):.4f}-{np.max(coast_river_enhancement):.4f}")
+                logger.info(f"  Coastline enhancement - Mean: {np.mean(coast_coastline_enhancement):.4f}, Range: {np.min(coast_coastline_enhancement):.4f}-{np.max(coast_coastline_enhancement):.4f}")
+                logger.info(f"  Risk BEFORE coastline - Mean: {np.mean(coast_risk_before):.4f}, Range: {np.min(coast_risk_before):.4f}-{np.max(coast_risk_before):.4f}")
+                logger.info(f"  Risk AFTER coastline - Mean: {np.mean(coast_risk_after):.4f}, Range: {np.min(coast_risk_after):.4f}-{np.max(coast_risk_after):.4f}")
+                
+                # Calculate actual enhancement effect
+                enhancement_effect = coast_risk_after / coast_risk_before
+                logger.info(f"  Actual enhancement multiplier - Mean: {np.mean(enhancement_effect):.4f}, Range: {np.min(enhancement_effect):.4f}-{np.max(enhancement_effect):.4f}")
+                
+                # Compare with non-coastline areas
+                non_coast_mask = (~(coastline_zone_mask == 1)) & valid_study_area
+                if np.any(non_coast_mask):
+                    non_coast_risk_before = risk_without_coastline[non_coast_mask]
+                    non_coast_risk_after = risk_with_coastline[non_coast_mask]
+                    
+                    logger.info(f"NON-COASTLINE AREA COMPARISON ({np.sum(non_coast_mask)} pixels):")
+                    logger.info(f"  Risk BEFORE - Mean: {np.mean(non_coast_risk_before):.4f}")
+                    logger.info(f"  Risk AFTER - Mean: {np.mean(non_coast_risk_after):.4f}")
+                    logger.info(f"  Should be identical: {np.allclose(non_coast_risk_before, non_coast_risk_after)}")
+                
+                # Sample a few specific pixels for detailed analysis
+                sample_indices = np.where(coastline_area_mask)
+                sample_size = min(5, len(sample_indices[0]))
+                logger.info(f"DETAILED PIXEL ANALYSIS (first {sample_size} coastline pixels):")
+                for i in range(sample_size):
+                    row, col = sample_indices[0][i], sample_indices[1][i]
+                    logger.info(f"  Pixel ({row},{col}): elev_risk={elevation_risk[row,col]:.4f}, river_enh={river_enhancement[row,col]:.4f}, coast_enh={coastline_enhancement[row,col]:.4f}")
+                    logger.info(f"    Before: {risk_without_coastline[row,col]:.4f}, After: {risk_with_coastline[row,col]:.4f}, Ratio: {risk_with_coastline[row,col]/risk_without_coastline[row,col]:.4f}")
+            else:
+                logger.warning("No coastline area pixels found for analysis!")
+                
+        except Exception as e:
+            logger.error(f"Debug analysis failed: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
 
 
 
