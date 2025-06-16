@@ -21,6 +21,8 @@ data:
     hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv"
     ghs_duc_file: "degree_of_urbanisation/GHS_DUC_NL_Extract.xlsx"
     gadm_l2_file: "NL-GADM-L2/gadm41_NLD_2.shp"
+    port_file: "Port/PORT_RG_2009.shp"
+    coastline_file: "EEA_Coastline_Polyline_Shape/Europe_coastline_raw_rev2017.shp"
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
     target_resolution: 30.0
@@ -39,6 +41,9 @@ data:
       risk_decay_factor: 2.2
     flood_risk:
       max_safe_flood_risk: 0.3
+    coastline_risk:
+      coastline_multiplier: 1.1
+      coastline_distance_m: 5000
   caching:
     enabled: false
     cache_dir: ".cache"
@@ -53,17 +58,22 @@ data:
       cache_operations: true
       cache_statistics: true
   exposition:
-    ghs_built_c_weight: 0.25
-    ghs_built_v_weight: 0.75
-    population_weight: 0.5
+    ghs_built_c_weight: 0.325
+    ghs_built_v_weight: 0.425
+    population_weight: 0.25
     urbanisation_multipliers:
       urban_threshold: 0.6
       semi_urban_threshold: 0.4
-      urban_multiplier: 1.5
-      semi_urban_multiplier: 1.25
-      rural_multiplier: 1.0
+      urban_multiplier: 1.15
+      semi_urban_multiplier: 1.05
+      rural_multiplier: 0.5
       urban_weight: 0.7
       semi_urban_weight: 0.3
+    port_multipliers:
+      port_polygon_multiplier: 1.15
+      port_buffer_multiplier: 1.05
+      port_buffer_distance_m: 500
+
   relevance:
     min_economic_value: 0.05
     economic_datasets:
@@ -71,18 +81,34 @@ data:
         weight: 0.25
         nuts_level: "l3"
         file_key: "gdp"
+        exposition_weights:
+          ghs_built_c_weight: 0.2
+          ghs_built_v_weight: 0.4
+          population_weight: 0.3
       freight_loading:
         weight: 0.25
         nuts_level: "l3"
         file_key: "freight_loading"
+        exposition_weights:
+          ghs_built_c_weight: 0.45
+          ghs_built_v_weight: 0.4
+          population_weight: 0.15
       freight_unloading:
         weight: 0.25
         nuts_level: "l3"
         file_key: "freight_unloading"
+        exposition_weights:
+          ghs_built_c_weight: 0.45
+          ghs_built_v_weight: 0.4
+          population_weight: 0.15
       hrst:
         weight: 0.25
         nuts_level: "l2"
         file_key: "hrst"
+        exposition_weights:
+          ghs_built_c_weight: 0.375
+          ghs_built_v_weight: 0.375
+          population_weight: 0.25
     economic_variables:
       - "gdp"
       - "freight_loading"
@@ -99,16 +125,16 @@ data:
       3: 0.0 # open spaces, high vegetation
       4: 0.0 # water surfaces
       5: 0.5 # road surfaces
-      11: 0.6 # residential, <=3m
-      12: 0.7 # residential, 3-6m
-      13: 0.8 # residential, 6-15m
-      14: 0.8 # residential, 15-30m
-      15: 0.8 # residential, >30m
-      21: 0.6 # non-residential, <=3m
+      11: 0.05 # residential, <=3m
+      12: 0.1 # residential, 3-6m
+      13: 0.1 # residential, 6-15m
+      14: 0.15 # residential, 15-30m
+      15: 0.15 # residential, >30m
+      21: 0.25 # non-residential, <=3m
       22: 0.7 # non-residential, 3-6m
-      23: 0.8 # non-residential, 6-15m
-      24: 0.8 # non-residential, 15-30m
-      25: 0.8 # non-residential, >30m
+      23: 0.7 # non-residential, 6-15m
+      24: 0.9 # non-residential, 15-30m
+      25: 1.0 # non-residential, >30m
   visualization:
     figure_size: [15, 10]
     dpi: 300

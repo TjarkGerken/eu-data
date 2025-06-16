@@ -94,9 +94,13 @@ class ProjectConfig:
         self.river_zones = hazard_config.get('river_zones')
         self.elevation_risk = hazard_config.get('elevation_risk')
         
+        # Store coastline risk parameters
+        self.coastline_risk = hazard_config.get('coastline_risk', {})
+        
         # Log loaded hazard configuration for debugging
         logger.debug(f"Loaded river zones config: {self.river_zones}")
         logger.debug(f"Loaded elevation risk config: {self.elevation_risk}")
+        logger.debug(f"Loaded coastline risk config: {self.coastline_risk}")
 
         # Validate configuration
         self._validate_config()
@@ -198,6 +202,16 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['gadm_l2_file']
     
     @property
+    def port_path(self) -> Path:
+        """Get path to port shapefile."""
+        return self.data_dir / self.config['file_paths']['port_file']
+    
+    @property
+    def coastline_path(self) -> Path:
+        """Get path to coastline shapefile."""
+        return self.data_dir / self.config['file_paths']['coastline_file']
+    
+    @property
     def nuts_l0_file_path(self) -> str:
         """Get path to NUTS L0 file."""
         return self.config['file_paths']['nuts_files']['l0']
@@ -227,6 +241,15 @@ class ProjectConfig:
         """Get minimum economic value threshold from config."""
         return self.config['relevance']['min_economic_value']
     
+    @property
+    def economic_exposition_weights(self) -> Dict[str, Dict[str, float]]:
+        """Get exposition weights for each economic dataset."""
+        economic_weights = {}
+        for dataset_name, dataset_config in self.economic_datasets.items():
+            if 'exposition_weights' in dataset_config:
+                economic_weights[dataset_name] = dataset_config['exposition_weights']
+        return economic_weights
+    
     def validate_files(self) -> bool:
         """Validate that all required input files exist."""
         required_files = [
@@ -237,10 +260,12 @@ class ProjectConfig:
             (self.river_segments_path, "River Segments"),
             (self.river_nodes_path, "River Nodes"),
             (self.land_mass_path, "Land Mass"),
+            (self.coastline_path, "Coastline"),
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
             (self.data_dir / self.hrst_file_path, "HRST Data"),
             (self.ghs_duc_path, "GHS DUC Excel"),
-            (self.gadm_l2_path, "GADM L2 Shapefile")
+            (self.gadm_l2_path, "GADM L2 Shapefile"),
+            (self.port_path, "Port Shapefile")
         ]
         
         missing_files = []

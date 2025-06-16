@@ -59,6 +59,10 @@ hazard_risk_colors = [
     (1.0, '#9f040e'),  
 ]
 
+risk_colors = ['#ffffff', '#ffffcc', '#feb24c', '#fd8d3c', '#fc4e2a', '#e31a1c', '#b10026', '#800026']
+risk_cmap = LinearSegmentedColormap.from_list('raw_flood_risk', risk_colors, N=256)
+
+
 # Neue Colormap erzeugen
 exposition_cmap = LinearSegmentedColormap.from_list("exposition_colors", exposition_colors)
 economic_cmap = LinearSegmentedColormap.from_list("economic_risk_colors", economic_risk_colors)
@@ -69,7 +73,7 @@ class ScientificStyle:
     
     # Color schemes for different data types
     ELEVATION_CMAP = 'terrain'
-    HAZARD_CMAP = hazard_cmap
+    HAZARD_CMAP = risk_cmap
     EXPOSITION_CMAP = exposition_cmap
     RELEVANCE_CMAP = exposition_cmap  
     ECONOMIC_RISK_CMAP = economic_cmap
@@ -102,6 +106,9 @@ class ScientificStyle:
     
     SAFE_LAND_COLOR = '#27ae60'  # Green
     FLOOD_RISK_COLOR = '#e74c3c'  # Red
+
+    PORT_COLOR = 'violet'
+    PORT_BUFFER_COLOR = 'yellow'  
     
     # Statistics box styling
     STATS_BOX_PROPS = {
@@ -198,6 +205,53 @@ class LayerVisualizer:
             logger.warning(f"Could not load NUTS {level} boundaries: {e}")
             return None
     
+    def get_port_boundaries(self) -> Optional[gpd.GeoDataFrame]:
+        """Load port boundaries for overlay visualization, clipped to study area."""
+        if not self.config.port_path.exists():
+            logger.warning(f"Port boundaries not found: {self.config.port_path}")
+            return None
+            
+        try:
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            port_gdf = gpd.read_file(self.config.port_path)
+            
+            if port_gdf.crs != target_crs:
+                port_gdf = port_gdf.to_crs(target_crs)
+                
+            logger.info(f"Loaded port boundaries: {len(port_gdf)} ports")
+            
+            # Load NUTS-L3 boundaries to define study area
+            nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+            try:
+                nuts_gdf = gpd.read_file(nuts_l3_path)
+                logger.info(f"Loaded NUTS-L3 boundaries for port clipping: {len(nuts_gdf)} regions")
+                
+                # Ensure NUTS is in target CRS
+                if nuts_gdf.crs != target_crs:
+                    nuts_gdf = nuts_gdf.to_crs(target_crs)
+                
+                # Create study area boundary (union of all NUTS regions)
+                study_area = nuts_gdf.geometry.unary_union
+                
+                # Clip ports to study area (keep ports that intersect with study area)
+                ports_in_study_area = port_gdf[port_gdf.geometry.intersects(study_area)]
+                logger.info(f"Clipped ports for visualization: {len(ports_in_study_area)} ports within Netherlands boundaries (from {len(port_gdf)} total)")
+                
+                if len(ports_in_study_area) == 0:
+                    logger.warning("No ports found within the study area boundaries for visualization")
+                    return None
+                
+                return ports_in_study_area
+                
+            except Exception as e:
+                logger.warning(f"Could not load NUTS boundaries for port clipping in visualization: {e}")
+                logger.warning("Using all ports for visualization (no clipping)")
+                return port_gdf
+            
+        except Exception as e:
+            logger.warning(f"Could not load port boundaries: {e}")
+            return None
+    
     def get_raster_extent(self, data: np.ndarray, meta: dict) -> Tuple[float, float, float, float]:
         """Calculate raster extent for proper coordinate alignment."""
         if 'transform' in meta:
@@ -224,6 +278,70 @@ class LayerVisualizer:
                 alpha=ScientificStyle.NUTS_BOUNDARY_ALPHA,
                 zorder=10
             )
+    
+    def add_port_overlay(self, ax, port_gdf: Optional[gpd.GeoDataFrame], show_buffer: bool = False):
+        """Add port boundaries as overlay with distinct styling and proper precedence."""
+        if port_gdf is not None:
+            # Get port configuration for buffer distance
+            port_config = self.config.exposition_weights.get('port_multipliers', {})
+            buffer_distance = port_config.get('port_buffer_distance_m', 250)
+            
+            # Show buffer zones if requested
+            if show_buffer:
+                # Create buffer zones
+                port_buffers = port_gdf.copy()
+                port_buffers['geometry'] = port_gdf.geometry.buffer(buffer_distance)
+                
+                # Remove overlaps between buffer zones by dissolving them
+                from shapely.ops import unary_union
+                dissolved_buffers = unary_union(port_buffers.geometry.tolist())
+                
+                # Convert back to GeoDataFrame for plotting
+                if hasattr(dissolved_buffers, 'geoms'):
+                    # Multiple polygons
+                    buffer_geometries = list(dissolved_buffers.geoms)
+                else:
+                    # Single polygon
+                    buffer_geometries = [dissolved_buffers]
+                
+                clean_buffers = gpd.GeoDataFrame(
+                    geometry=buffer_geometries, 
+                    crs=port_gdf.crs
+                )
+                
+                # Remove areas that overlap with actual port polygons
+                port_union = unary_union(port_gdf.geometry.tolist())
+                clean_buffers['geometry'] = clean_buffers.geometry.difference(port_union)
+                
+                # Remove empty geometries
+                clean_buffers = clean_buffers[~clean_buffers.geometry.is_empty]
+                
+                if len(clean_buffers) > 0:
+                    # Plot cleaned buffer zones
+                    clean_buffers.plot(
+                        ax=ax,
+                        facecolor=ScientificStyle.PORT_BUFFER_COLOR,
+                        edgecolor="black",
+                        alpha=0.5,
+                        linewidth=0.1,
+                        zorder=15,
+                        label=f'Port Buffer Zones {buffer_distance}m'
+                    )
+                    logger.info(f"Plotted {len(clean_buffers)} non-overlapping buffer zones")
+                else:
+                    logger.info("No buffer zones to display after removing overlaps")
+            
+            # Plot port polygons with prominent styling (these take precedence)
+            port_gdf.plot(
+                ax=ax,
+                facecolor=ScientificStyle.PORT_COLOR,
+                edgecolor="black",
+                alpha=0.7,
+                linewidth=0.1,
+                zorder=20,
+                label='Port Areas'
+            )
+            logger.info(f"Plotted {len(port_gdf)} port polygons with precedence over buffers")
     
     def add_statistics_box(self, ax, data: np.ndarray, position: str = 'upper right'):
         """Add statistics box with consistent styling."""
@@ -268,7 +386,9 @@ class LayerVisualizer:
     def visualize_exposition_layer(self, data: np.ndarray, meta: dict, 
                                  output_path: Optional[Path] = None,
                                  title: str = "Exposition Layer",
-                                 land_mask: Optional[np.ndarray] = None) -> None:
+                                 land_mask: Optional[np.ndarray] = None,
+                                 show_ports: bool = False,
+                                 show_port_buffers: bool = False) -> None:
         """Create standardized exposition layer visualization with proper zone separation."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
@@ -297,25 +417,41 @@ class LayerVisualizer:
             alpha=0.85
         )
         
-        # Add NUTS overlay
         nuts_gdf = self.get_nuts_boundaries("L3")
         if nuts_gdf is not None:
             self.add_nuts_overlay(ax, nuts_gdf)
         
-        # Styling
+        if show_ports:
+            port_gdf = self.get_port_boundaries()
+            if port_gdf is not None:
+                self.add_port_overlay(ax, port_gdf, show_buffer=show_port_buffers)
+        
         ax.set_title(title, fontsize=ScientificStyle.TITLE_SIZE, fontweight='bold', pad=20)
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
         
-        # Add colorbar for exposition data
         self.create_standard_colorbar(im, ax, 'Exposition Index (0-1)')
         
-        # Add zone legend
         import matplotlib.patches as mpatches
         legend_patches = [
             mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
             mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
         ]
+        
+        # Add port legend entries if ports are shown
+        if show_ports:
+            legend_patches.extend([
+                mpatches.Patch(color=ScientificStyle.PORT_COLOR, alpha=0.5, label='Port Areas')
+            ])
+            if show_port_buffers:
+                # Get actual buffer distance from config
+                port_config = self.config.exposition_weights.get('port_multipliers', {})
+                buffer_distance = port_config.get('port_buffer_distance_m', 250)
+                legend_patches.append(
+                    mpatches.Patch(color=ScientificStyle.PORT_BUFFER_COLOR, alpha=0.3, 
+                                 label=f'Port Buffer Zones ({buffer_distance}m)')
+                )
+        
         ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
         
         # Add statistics for Netherlands areas only
@@ -334,7 +470,9 @@ class LayerVisualizer:
     
     def visualize_hazard_scenario(self, flood_mask: np.ndarray, dem_data: np.ndarray, 
                                 meta: dict, scenario, output_path: Optional[Path] = None,
-                                land_mask: Optional[np.ndarray] = None) -> None:
+                                land_mask: Optional[np.ndarray] = None,
+                                show_coastline_overlay: bool = False,
+                                coastline_zone_mask: Optional[np.ndarray] = None) -> None:
         """Create standardized hazard scenario visualization with centralized zone handling."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
@@ -384,17 +522,7 @@ class LayerVisualizer:
         # Create masked elevation data for proper visualization
         dem_for_vis = np.full_like(dem_data, np.nan, dtype=np.float32)
         dem_for_vis[netherlands_mask] = dem_data[netherlands_mask]
-        
-        # Overlay elevation data with transparency
-        # im_dem = ax.imshow(
-        #     dem_for_vis,
-        #     cmap=ScientificStyle.ELEVATION_CMAP,
-        #     aspect='equal',
-        #     extent=extent,
-        #     alpha=0.7,
-        #     vmin=elevation_min, vmax=elevation_max
-        # )
-        
+                
         # Overlay flood risk areas on Netherlands land only
         flood_overlay = np.full_like(flood_mask, np.nan, dtype=np.float32)
         flood_overlay[netherlands_mask & (flood_mask > 0)] = flood_mask[netherlands_mask & (flood_mask > 0)]
@@ -404,9 +532,30 @@ class LayerVisualizer:
             cmap=ScientificStyle.HAZARD_CMAP,
             aspect='equal',
             extent=extent,
+            zorder=50,
             alpha=0.8,
             vmin=0, vmax=1
         )
+        
+        # Add coastline risk overlay if requested
+        if show_coastline_overlay and coastline_zone_mask is not None:
+            # Create coordinate grids for contour plotting
+            height, width = coastline_zone_mask.shape
+            
+            # Create coordinate arrays based on extent
+            x = np.linspace(extent[0], extent[1], width)
+            y = np.linspace(extent[3], extent[2], height)  # Note: y is flipped for proper orientation
+            X, Y = np.meshgrid(x, y)
+            
+            # Create contour lines for dark blue outline
+            contour = ax.contour(
+                X, Y, coastline_zone_mask,
+                levels=[0.5],  # This creates the boundary line
+                colors=['darkblue'],
+                linewidths=0.2,
+                alpha=0.9,
+                zorder=51  # Higher zorder to ensure outline appears on top of fill
+            )
         
         # Add NUTS overlay
         if nuts_gdf is not None:
@@ -417,11 +566,6 @@ class LayerVisualizer:
         ax.set_title(title, fontsize=ScientificStyle.TITLE_SIZE, fontweight='bold', pad=20)
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
-        
-        # Add dual colorbars
-        # Elevation colorbar
-        # cbar_dem = self.create_standard_colorbar(im_dem, ax, 'Elevation (m)', shrink=0.6)
-        # cbar_dem.ax.set_position([0.92, 0.15, 0.02, 0.3])
         
         # Flood risk colorbar (only if there are flooded areas)
         if np.any(flood_mask > 0):
@@ -434,6 +578,18 @@ class LayerVisualizer:
             mpatches.Patch(color=ScientificStyle.WATER_COLOR, label='Water Bodies'),
             mpatches.Patch(color=ScientificStyle.LAND_OUTSIDE_COLOR, label='Outside Netherlands')
         ]
+        
+        # Add coastline overlay to legend if shown
+        if show_coastline_overlay and coastline_zone_mask is not None:
+            coastline_distance_m = self.config.config['hazard']['coastline_risk']['coastline_distance_m']
+            coastline_multiplier = self.config.config['hazard']['coastline_risk']['coastline_multiplier']
+            legend_patches.append(
+                mpatches.Patch(color='darkblue', alpha=0.4, 
+                               edgecolor='darkblue',
+                               linewidth=0.5,
+                               label=f'Coastline Risk Zone ({coastline_distance_m/1000:.0f}km, {coastline_multiplier}x)')
+            )
+        
         ax.legend(handles=legend_patches, loc='lower left', fontsize=8, frameon=True)
         
         # Add statistics for flood extent in Netherlands only
@@ -693,4 +849,4 @@ def create_flood_composite_colormap():
         ScientificStyle.SAFE_LAND_COLOR,       # Safe land
         ScientificStyle.FLOOD_RISK_COLOR       # Flood risk
     ]
-    return ListedColormap(colors), BoundaryNorm([0, 1, 2, 3, 4], len(colors)) 
+    return ListedColormap(colors), BoundaryNorm([0, 1, 2, 3, 4], len(colors))

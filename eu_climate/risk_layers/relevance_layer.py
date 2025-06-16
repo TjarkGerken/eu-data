@@ -12,6 +12,7 @@ from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
+from eu_climate.utils.normalise_data import AdvancedDataNormalizer, NormalizationStrategy
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 
 logger = setup_logging(__name__)
@@ -359,6 +360,9 @@ class RelevanceLayer:
         
         self.visualizer = LayerVisualizer(config)
         
+        # Initialize sophisticated normalizer optimized for economic data
+        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.ECONOMIC_OPTIMIZED)
+        
         logger.info("Initialized Relevance Layer")
     
     def load_and_process_economic_data(self) -> Dict[str, gpd.GeoDataFrame]:
@@ -393,13 +397,11 @@ class RelevanceLayer:
         # Load and process economic data
         nuts_economic_gdfs = self.load_and_process_economic_data()
         
-        # Get exposition layer (now properly masked to study area)
-        exposition_data, exposition_meta = self.exposition_layer.calculate_exposition()
-        logger.info(f"Using exposition layer for spatial distribution - "
-                   f"Min: {np.nanmin(exposition_data)}, Max: {np.nanmax(exposition_data)}, "
-                   f"Non-zero pixels: {np.sum(exposition_data > 0)}")
+        # Get default exposition layer metadata for reference
+        default_exposition_data, exposition_meta = self.exposition_layer.calculate_exposition()
+        logger.info(f"Using default exposition layer metadata for spatial distribution")
         
-        # Process each dataset separately since they may have different NUTS levels
+        # Process each dataset separately since they may have different NUTS levels and exposition weights
         relevance_layers = {}
         
         for dataset_name, nuts_gdf in nuts_economic_gdfs.items():
@@ -420,9 +422,31 @@ class RelevanceLayer:
                 nuts_gdf, exposition_meta, variable
             )
             
-            # Distribute using exposition layer (which is now properly masked)
+            # Get the specific exposition layer for this economic dataset
+            logger.info(f"Ensuring economic exposition layer exists for {dataset_name}")
+            economic_exposition_path = self.exposition_layer.ensure_economic_exposition_layer_exists(dataset_name)
+            
+            # Load the economic-specific exposition layer
+            with rasterio.open(economic_exposition_path) as src:
+                economic_exposition_data = src.read(1).astype(np.float32)
+                logger.info(f"Loaded economic exposition layer for {dataset_name} - "
+                           f"Min: {np.nanmin(economic_exposition_data)}, Max: {np.nanmax(economic_exposition_data)}, "
+                           f"Non-zero pixels: {np.sum(economic_exposition_data > 0)}")
+            
+            # Ensure alignment between economic raster and economic exposition layer
+            if economic_exposition_data.shape != economic_raster.shape:
+                logger.warning(f"Shape mismatch between economic exposition and economic raster for {dataset_name}")
+                logger.warning(f"Economic exposition shape: {economic_exposition_data.shape}, Economic raster shape: {economic_raster.shape}")
+                # Resample economic exposition to match economic raster
+                economic_exposition_data = self.transformer.ensure_alignment(
+                    economic_exposition_data, exposition_meta['transform'], 
+                    raster_meta['transform'], economic_raster.shape,
+                    self.config.resampling_method
+                )
+            
+            # Distribute using the economic-specific exposition layer
             distributed_raster = self.distributor.distribute_with_exposition(
-                economic_raster, exposition_data
+                economic_raster, economic_exposition_data
             )
             
             # Normalize to 0-1 range
@@ -467,24 +491,9 @@ class RelevanceLayer:
         return relevance_layers, exposition_meta
     
     def _normalize_economic_layer(self, data: np.ndarray) -> np.ndarray:
-        """Normalize economic layer to 0-1 range."""
+        """Normalize economic layer using sophisticated economic optimization."""
         valid_mask = (data > 0) & ~np.isnan(data)
-        
-        if not np.any(valid_mask):
-            logger.warning("No valid economic data found for normalization")
-            return data
-            
-        min_val = np.min(data[valid_mask])
-        max_val = np.max(data[valid_mask])
-        
-        if max_val <= min_val:
-            logger.warning("No variation in economic data")
-            return np.where(valid_mask, 1.0, 0.0).astype(np.float32)
-            
-        normalized = np.zeros_like(data, dtype=np.float32)
-        normalized[valid_mask] = (data[valid_mask] - min_val) / (max_val - min_val)
-        
-        return normalized
+        return self.normalizer.normalize_economic_data(data, valid_mask)
     
     def save_relevance_layers(self, relevance_layers: Dict[str, np.ndarray], 
                             meta: dict):
