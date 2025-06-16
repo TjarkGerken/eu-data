@@ -82,3 +82,10 @@ NUTS L0-L3: https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/te
 Copernicus DEM: https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/copernicus
 Ports: https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks und selberweiterverarbeitet
 European Coastline: https://www.eea.europa.eu/data-and-maps/data/eea-coastline-for-analysis-1/gis-data/europe-coastline-shapefile
+
+Gebieden met Natuurrisico's - Overstromingen - Risicogebied - Richtlijn Overstromingsrisico's (ROR) (INSPIRE geharmoniseerd): https://service.pdok.nl/rws/overstromingen-risicogebied/atom/gebieden_met_natuurrisicos_overstromingen_risicogebied_richtlijn_overstromingsrisicos_ror_inspire_geharmoniseerd.xml
+
+Data Feed - Hydrografie EPSG:4258 (GML): https://service.pdok.nl/kadaster/hy/atom/v1_0/hydrografie.xml
+Vierkantstatistieken 100m 2023: https://service.pdok.nl/cbs/vierkantstatistieken100m/atom/vierkantstatistieken100m.xml (cbs_vk100_2023.gpkg)
+
+Electricity Consumption: https://figshare.com/articles/dataset/Global_1_km_1_km_gridded_revised_real_gross_domestic_product_and_electricity_consumption_during_1992-2019_based_on_calibrated_nighttime_light_data/17004523/1

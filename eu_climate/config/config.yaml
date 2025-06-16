@@ -58,20 +58,20 @@ data:
       cache_operations: true
       cache_statistics: true
   exposition:
-    ghs_built_c_weight: 0.125
-    ghs_built_v_weight: 0.625
+    ghs_built_c_weight: 0.325
+    ghs_built_v_weight: 0.425
     population_weight: 0.25
     urbanisation_multipliers:
       urban_threshold: 0.6
       semi_urban_threshold: 0.4
-      urban_multiplier: 1.5
-      semi_urban_multiplier: 1.25
-      rural_multiplier: 1.0
+      urban_multiplier: 1.15
+      semi_urban_multiplier: 1.05
+      rural_multiplier: 0.5
       urban_weight: 0.7
       semi_urban_weight: 0.3
     port_multipliers:
-      port_polygon_multiplier: 1.5
-      port_buffer_multiplier: 1.25
+      port_polygon_multiplier: 1.15
+      port_buffer_multiplier: 1.05
       port_buffer_distance_m: 500
 
   relevance:
@@ -90,25 +90,25 @@ data:
         nuts_level: "l3"
         file_key: "freight_loading"
         exposition_weights:
-          ghs_built_c_weight: 0.25
-          ghs_built_v_weight: 0.75
-          population_weight: 0
+          ghs_built_c_weight: 0.45
+          ghs_built_v_weight: 0.4
+          population_weight: 0.15
       freight_unloading:
         weight: 0.25
         nuts_level: "l3"
         file_key: "freight_unloading"
         exposition_weights:
-          ghs_built_c_weight: 0.25
-          ghs_built_v_weight: 0.75
-          population_weight: 0
+          ghs_built_c_weight: 0.45
+          ghs_built_v_weight: 0.4
+          population_weight: 0.15
       hrst:
         weight: 0.25
         nuts_level: "l2"
         file_key: "hrst"
         exposition_weights:
-          ghs_built_c_weight: 0.05
-          ghs_built_v_weight: 0.5
-          population_weight: 0.6
+          ghs_built_c_weight: 0.375
+          ghs_built_v_weight: 0.375
+          population_weight: 0.25
     economic_variables:
       - "gdp"
       - "freight_loading"

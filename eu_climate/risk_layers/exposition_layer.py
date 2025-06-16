@@ -16,6 +16,7 @@ from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
+from eu_climate.utils.normalise_data import DataNormalizer, AdvancedDataNormalizer, NormalizationStrategy, ensure_full_range_utilization
 
 
 # Set up logging for the exposition layer
@@ -77,6 +78,9 @@ class ExpositionLayer:
         
         # Initialize visualizer
         self.visualizer = LayerVisualizer(self.config)
+        
+        # Initialize sophisticated normalizer optimized for exposition data
+        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.EXPOSITION_OPTIMIZED)
         
         logger.info(f"Initialized Exposition Layer with urbanisation and port integration")
         
@@ -441,16 +445,9 @@ class ExpositionLayer:
         return normalized
 
     def normalize_raster(self, data: np.ndarray) -> np.ndarray:
-        """Normalize a raster to 0-1 based on min/max values, ignoring NaNs."""
-        valid = ~np.isnan(data)
-        min_val = np.nanmin(data)
-        max_val = np.nanmax(data)
-        logger.info(f"Raster normalization - Original Min: {min_val}, Max: {max_val}, Mean: {np.nanmean(data)}")
-        norm = np.zeros_like(data, dtype=np.float32)
-        if max_val > min_val:
-            norm[valid] = (data[valid] - min_val) / (max_val - min_val)
-        logger.info(f"Raster normalization - Normalized Min: {np.nanmin(norm)}, Max: {np.nanmax(norm)}, Mean: {np.nanmean(norm)}")
-        return norm
+        """Normalize a raster ensuring sophisticated exposition optimization."""
+        valid_mask = ~np.isnan(data)
+        return self.normalizer.normalize_exposition_data(data, valid_mask)
 
     def calculate_exposition(self) -> Tuple[np.ndarray, dict]:
         """Calculate the final exposition layer using weighted combination."""
@@ -585,6 +582,11 @@ class ExpositionLayer:
         # Apply study area mask to limit data to relevant landmass
         exposition = self._apply_study_area_mask(exposition, reference_transform, reference_shape)
         logger.info(f"Exposition after study area masking - Min: {np.nanmin(exposition)}, Max: {np.nanmax(exposition)}, Mean: {np.nanmean(exposition)}")
+        
+        # Apply final normalization to ensure full 0-1 range utilization after multipliers
+        study_area_mask = exposition > 0
+        exposition = ensure_full_range_utilization(exposition, study_area_mask)
+        logger.info(f"Final exposition after full range normalization - Min: {np.nanmin(exposition)}, Max: {np.nanmax(exposition)}, Mean: {np.nanmean(exposition)}")
             
         return exposition, meta
 
