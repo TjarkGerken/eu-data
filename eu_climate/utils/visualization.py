@@ -473,7 +473,7 @@ class LayerVisualizer:
                                 land_mask: Optional[np.ndarray] = None,
                                 show_coastline_overlay: bool = False,
                                 coastline_zone_mask: Optional[np.ndarray] = None,
-                                river_network: Optional[gpd.GeoDataFrame] = None) -> None:
+                                river_polygon_network: Optional[gpd.GeoDataFrame] = None) -> None:
         """Create standardized hazard scenario visualization with centralized zone handling."""
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
@@ -562,9 +562,9 @@ class LayerVisualizer:
         if nuts_gdf is not None:
             self.add_nuts_overlay(ax, nuts_gdf)
         
-        # Add river network overlay - 20% thinner lines and more transparent than debug version
-        if river_network is not None:
-            river_network.plot(ax=ax, color='darkblue', linewidth=0.14, alpha=0.7, zorder=11)
+        # Add river polygon network overlay - filled polygons with subtle outline
+        if river_polygon_network is not None:
+            river_polygon_network.plot(ax=ax, facecolor=ScientificStyle.WATER_COLOR, alpha=1, zorder=55)
         
         # Styling
         title = f'Hazard Assessment - {scenario.name} Scenario\n({scenario.rise_meters}m Sea Level Rise)'
