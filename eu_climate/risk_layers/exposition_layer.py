@@ -3,7 +3,7 @@ import rasterio.features
 import rasterio.warp
 import geopandas as gpd
 from scipy import ndimage
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 import numpy as np
 from rasterio.enums import Resampling
 from pathlib import Path
@@ -16,6 +16,7 @@ from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
+from eu_climate.utils.normalise_data import DataNormalizer, AdvancedDataNormalizer, NormalizationStrategy, ensure_full_range_utilization
 
 
 # Set up logging for the exposition layer
@@ -47,6 +48,13 @@ class ExpositionLayer:
           * Semi-urban areas (≥0.4, <0.6): 1.1x multiplier  
           * Rural areas (<0.4): 1.0x multiplier (no boost)
         - Rasterized to 30m resolution matching other layers
+    - Port Infrastructure (PORT_RG_2009) - Applied as Multiplier
+        - Loads port shapefile data and creates two zone types:
+          * Port polygons (direct port areas): 1.8x multiplier
+          * Port buffer zones (250m radius): 1.3x multiplier
+        - Port polygons override buffer zones for higher multiplier effect
+        - Combined with urbanisation multipliers for cumulative effect in overlapping areas
+        - Rasterized to 30m resolution matching other layers
     """
     
     def __init__(self, config: ProjectConfig):
@@ -60,6 +68,7 @@ class ExpositionLayer:
         self.nuts_paths = self.config.nuts_paths
         self.ghs_duc_path = self.config.ghs_duc_path
         self.gadm_l2_path = self.config.gadm_l2_path
+        self.port_path = self.config.port_path
         
         # Initialize raster transformer
         self.transformer = RasterTransformer(
@@ -70,7 +79,10 @@ class ExpositionLayer:
         # Initialize visualizer
         self.visualizer = LayerVisualizer(self.config)
         
-        logger.info(f"Initialized Exposition Layer with urbanisation integration")
+        # Initialize sophisticated normalizer optimized for exposition data
+        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.EXPOSITION_OPTIMIZED)
+        
+        logger.info(f"Initialized Exposition Layer with urbanisation and port integration")
         
 
 
@@ -209,10 +221,188 @@ class ExpositionLayer:
         
         return urbanisation_raster, meta
     
-    def normalize_data(self):
-        """Normalize the data to a unified scale of 0-1."""
-        pass
+    def load_port_data(self) -> gpd.GeoDataFrame:
+        """Load and process port data from shapefile, clipped to study area.
+        
+        Creates two zone types:
+        - Port polygons (direct port areas): get port_polygon_multiplier boost (1.8)
+        - Port buffer zones (250m radius): get port_buffer_multiplier boost (1.3)
+        """
+        logger.info("Loading port data from shapefile")
+        
+        # Load port shapefile
+        port_gdf = gpd.read_file(self.config.port_path)
+        logger.info(f"Loaded port data with {len(port_gdf)} records")
+        logger.info(f"Port columns: {list(port_gdf.columns)}")
+        
+        # Ensure port data is in target CRS
+        target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+        if port_gdf.crs != target_crs:
+            port_gdf = port_gdf.to_crs(target_crs)
+            logger.info(f"Transformed port data to {target_crs}")
+        
+        # Load NUTS-L3 boundaries to define study area
+        nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+        try:
+            nuts_gdf = gpd.read_file(nuts_l3_path)
+            logger.info(f"Loaded NUTS-L3 boundaries with {len(nuts_gdf)} regions")
+            
+            # Ensure NUTS is in target CRS
+            if nuts_gdf.crs != target_crs:
+                nuts_gdf = nuts_gdf.to_crs(target_crs)
+                logger.info(f"Transformed NUTS boundaries to {target_crs}")
+            
+            # Create study area boundary (union of all NUTS regions)
+            study_area = nuts_gdf.geometry.unary_union
+            
+            # Clip ports to study area (keep ports that intersect with study area)
+            ports_in_study_area = port_gdf[port_gdf.geometry.intersects(study_area)]
+            logger.info(f"Clipped to study area: {len(ports_in_study_area)} ports within Netherlands boundaries (from {len(port_gdf)} total)")
+            
+            if len(ports_in_study_area) == 0:
+                logger.warning("No ports found within the study area boundaries")
+                # Return empty GeoDataFrame with required columns
+                empty_gdf = gpd.GeoDataFrame(columns=['geometry', 'multiplier', 'zone_type'], crs=target_crs)
+                return empty_gdf
+            
+            port_gdf = ports_in_study_area
+            
+        except Exception as e:
+            logger.warning(f"Could not load NUTS boundaries for port clipping: {e}")
+            logger.warning("Proceeding with all ports (no clipping)")
+        
+        # Get port configuration
+        port_config = self.config.exposition_weights['port_multipliers']
+        buffer_distance = port_config['port_buffer_distance_m']
+        port_polygon_multiplier = port_config['port_polygon_multiplier']
+        port_buffer_multiplier = port_config['port_buffer_multiplier']
+        
+        # Create buffer zones around ports
+        port_buffers = port_gdf.copy()
+        port_buffers['geometry'] = port_gdf.geometry.buffer(buffer_distance)
+        port_buffers['multiplier'] = port_buffer_multiplier
+        port_buffers['zone_type'] = 'buffer'
+        
+        # Original port polygons (these will override buffer zones)
+        port_polygons = port_gdf.copy()
+        port_polygons['multiplier'] = port_polygon_multiplier
+        port_polygons['zone_type'] = 'polygon'
+        
+        logger.info(f"Created {len(port_buffers)} port buffer zones ({buffer_distance}m radius) - Multiplier: {port_buffer_multiplier}")
+        logger.info(f"Created {len(port_polygons)} port polygon zones - Multiplier: {port_polygon_multiplier}")
+        
+        # Combine both zone types (polygons will be processed after buffers to override)
+        combined_port_zones = pd.concat([port_buffers, port_polygons], ignore_index=True)
+        
+        logger.info(f"Total port zones created: {len(combined_port_zones)} (within study area)")
+        
+        return combined_port_zones
     
+    def rasterize_port_multiplier(self, port_gdf: gpd.GeoDataFrame) -> Tuple[np.ndarray, dict]:
+        """Rasterize the port multiplier to target resolution using NUTS-L3 bounds."""
+        logger.info("Rasterizing port multiplier to target resolution")
+        
+        # Get reference bounds from NUTS-L3 for consistency
+        nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+        reference_bounds = self.transformer.get_reference_bounds(nuts_l3_path)
+        
+        # Ensure GDF is in target CRS
+        target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+        if len(port_gdf) > 0 and port_gdf.crs != target_crs:
+            port_gdf = port_gdf.to_crs(target_crs)
+        
+        # Calculate raster dimensions
+        left, bottom, right, top = reference_bounds
+        resolution = self.config.target_resolution
+        width = int((right - left) / resolution)
+        height = int((top - bottom) / resolution)
+        
+        # Create transform
+        transform = rasterio.transform.from_bounds(
+            left, bottom, right, top,
+            width, height
+        )
+        
+        # Handle case where no ports are in study area
+        if len(port_gdf) == 0:
+            logger.info("No ports in study area - creating default multiplier raster (all 1.0)")
+            port_raster = np.ones((height, width), dtype=np.float32)
+        else:
+            # Initialize with default multiplier
+            port_raster = np.ones((height, width), dtype=np.float32)
+            
+            # First rasterize buffer zones with proper overlap handling
+            buffer_zones = port_gdf[port_gdf['zone_type'] == 'buffer']
+            if len(buffer_zones) > 0:
+                # For overlapping buffers, use merge_alg='replace' to handle overlaps
+                # This will use the last (highest) value where buffers overlap
+                buffer_raster = rasterio.features.rasterize(
+                    [(geom, value) for geom, value in zip(buffer_zones.geometry, buffer_zones['multiplier'])],
+                    out_shape=(height, width),
+                    transform=transform,
+                    dtype=np.float32,
+                    fill=0.0,  # Use 0 to identify areas without buffers
+                    merge_alg=rasterio.enums.MergeAlg.replace
+                )
+                
+                # Apply buffer multipliers where they exist, keeping max value for overlaps
+                port_raster = np.maximum(port_raster, buffer_raster)
+                
+                # Log buffer overlap statistics
+                buffer_pixels = np.sum(buffer_raster > 1.0)
+                logger.info(f"Buffer zones applied to {buffer_pixels} pixels")
+            
+            # Then rasterize port polygons (these will override everything)
+            port_polygons = port_gdf[port_gdf['zone_type'] == 'polygon']
+            if len(port_polygons) > 0:
+                polygon_raster = rasterio.features.rasterize(
+                    [(geom, value) for geom, value in zip(port_polygons.geometry, port_polygons['multiplier'])],
+                    out_shape=(height, width),
+                    transform=transform,
+                    dtype=np.float32,
+                    fill=0.0,  # Use 0 to identify areas without port polygons
+                    merge_alg=rasterio.enums.MergeAlg.replace
+                )
+                
+                # Apply polygon multipliers where they exist (override buffer and default values)
+                port_raster = np.where(polygon_raster > 0, polygon_raster, port_raster)
+                
+                # Log polygon statistics
+                polygon_pixels = np.sum(polygon_raster > 0)
+                logger.info(f"Port polygons applied to {polygon_pixels} pixels (override buffers)")
+            
+            # Log final precedence application
+            final_buffer_pixels = np.sum((port_raster > 1.0) & (port_raster < port_gdf[port_gdf['zone_type'] == 'polygon']['multiplier'].iloc[0] if len(port_polygons) > 0 else 2.0))
+            final_polygon_pixels = np.sum(port_raster >= port_gdf[port_gdf['zone_type'] == 'polygon']['multiplier'].iloc[0]) if len(port_polygons) > 0 else 0
+            
+            logger.info(f"Final port precedence - Buffer pixels: {final_buffer_pixels}, Polygon pixels: {final_polygon_pixels}")
+        
+        logger.info(f"Rasterized port multiplier - Min: {np.nanmin(port_raster):.2f}, "
+                   f"Max: {np.nanmax(port_raster):.2f}, "
+                   f"Mean: {np.nanmean(port_raster):.2f}")
+        
+        # Overall coverage summary
+        if len(port_gdf) == 0:
+            logger.info("Port coverage - No ports in study area, using default multiplier everywhere")
+        else:
+            total_affected_pixels = np.sum(port_raster > 1.0)
+            total_pixels = port_raster.size
+            coverage_percentage = (total_affected_pixels / total_pixels) * 100
+            logger.info(f"Port coverage - {total_affected_pixels} pixels affected ({coverage_percentage:.2f}% of study area)")
+            logger.info("Port precedence system applied: Port polygons > Buffer zones > Default (1.0)")
+        
+        # Create metadata
+        meta = {
+            'crs': target_crs,
+            'transform': transform,
+            'height': height,
+            'width': width,
+            'dtype': 'float32'
+        }
+        
+        return port_raster, meta
+    
+
     def load_and_preprocess_raster(self, path: str) -> Tuple[np.ndarray, dict]:
         """Load and preprocess a single raster to target resolution and CRS using NUTS-L3 bounds."""
         logger.info(f"Loading raster: {path}")
@@ -255,19 +445,16 @@ class ExpositionLayer:
         return normalized
 
     def normalize_raster(self, data: np.ndarray) -> np.ndarray:
-        """Normalize a raster to 0-1 based on min/max values, ignoring NaNs."""
-        valid = ~np.isnan(data)
-        min_val = np.nanmin(data)
-        max_val = np.nanmax(data)
-        logger.info(f"Raster normalization - Original Min: {min_val}, Max: {max_val}, Mean: {np.nanmean(data)}")
-        norm = np.zeros_like(data, dtype=np.float32)
-        if max_val > min_val:
-            norm[valid] = (data[valid] - min_val) / (max_val - min_val)
-        logger.info(f"Raster normalization - Normalized Min: {np.nanmin(norm)}, Max: {np.nanmax(norm)}, Mean: {np.nanmean(norm)}")
-        return norm
+        """Normalize a raster ensuring sophisticated exposition optimization."""
+        valid_mask = ~np.isnan(data)
+        return self.normalizer.normalize_exposition_data(data, valid_mask)
 
     def calculate_exposition(self) -> Tuple[np.ndarray, dict]:
-        """Calculate the final exposition layer using weighted combination including urbanisation factor."""
+        """Calculate the final exposition layer using weighted combination."""
+        return self.calculate_exposition_with_weights(self.config.exposition_weights)
+
+    def calculate_exposition_with_weights(self, weights: Dict[str, float]) -> Tuple[np.ndarray, dict]:
+        """Calculate exposition layer using custom weights."""
         # Load and preprocess rasters
         ghs_built_c, meta = self.load_and_preprocess_raster(self.ghs_built_c_path)
         logger.info(f"GHS Built-C after preprocessing - Min: {np.nanmin(ghs_built_c)}, Max: {np.nanmax(ghs_built_c)}, Mean: {np.nanmean(ghs_built_c)}")
@@ -289,6 +476,11 @@ class ExpositionLayer:
         urbanisation_gdf = self.load_urbanisation_data()
         urbanisation_multiplier, urbanisation_meta = self.rasterize_urbanisation_multiplier(urbanisation_gdf)
         logger.info(f"Urbanisation multiplier after rasterization - Min: {np.nanmin(urbanisation_multiplier):.2f}, Max: {np.nanmax(urbanisation_multiplier):.2f}, Mean: {np.nanmean(urbanisation_multiplier):.2f}")
+        
+        # Load and process port data
+        port_gdf = self.load_port_data()
+        port_multiplier, port_meta = self.rasterize_port_multiplier(port_gdf)
+        logger.info(f"Port multiplier after rasterization - Min: {np.nanmin(port_multiplier):.2f}, Max: {np.nanmax(port_multiplier):.2f}, Mean: {np.nanmean(port_multiplier):.2f}")
         
         # Ensure all layers have the same shape and transform
         resampling_method_str = (self.config.resampling_method.name.lower() 
@@ -326,6 +518,17 @@ class ExpositionLayer:
             )
             logger.info(f"Urbanisation multiplier after reprojection - Min: {np.nanmin(urbanisation_multiplier):.2f}, Max: {np.nanmax(urbanisation_multiplier):.2f}, Mean: {np.nanmean(urbanisation_multiplier):.2f}")
         
+        # Ensure port multiplier has the same shape and transform
+        if not self.transformer.validate_alignment(port_multiplier, port_meta['transform'], ghs_built_c, reference_transform):
+            port_multiplier = self.transformer.ensure_alignment(
+                port_multiplier,
+                port_meta['transform'],
+                reference_transform,
+                reference_shape,
+                resampling_method_str
+            )
+            logger.info(f"Port multiplier after reprojection - Min: {np.nanmin(port_multiplier):.2f}, Max: {np.nanmax(port_multiplier):.2f}, Mean: {np.nanmean(port_multiplier):.2f}")
+        
         # Check for valid data
         if np.all(ghs_built_c == 0) or np.all(ghs_built_v == 0) or np.all(population == 0):
             logger.error("One or more input layers contain only zeros!")
@@ -341,18 +544,25 @@ class ExpositionLayer:
             logger.error("One or more normalized layers contain only zeros!")
             raise ValueError("Invalid normalized data: one or more layers contain only zeros")
         
-        # Calculate base exposition (without urbanisation)
-        w = self.config.exposition_weights
-        base_exposition = (
-            w['ghs_built_c_weight'] * norm_built_c +
-            w['ghs_built_v_weight'] * norm_built_v +
-            w['population_weight'] * norm_population
+        # Weighted sum using provided weights
+        exposition = (
+            weights['ghs_built_c_weight'] * norm_built_c +
+            weights['ghs_built_v_weight'] * norm_built_v +
+            weights['population_weight'] * norm_population
         )
-        logger.info(f"Base exposition - Min: {np.nanmin(base_exposition):.4f}, Max: {np.nanmax(base_exposition):.4f}, Mean: {np.nanmean(base_exposition):.4f}")
+        logger.info(f"Base exposition - Min: {np.nanmin(exposition):.4f}, Max: {np.nanmax(exposition):.4f}, Mean: {np.nanmean(exposition):.4f}")
         
-        # Apply urbanisation multiplier
-        exposition = base_exposition * urbanisation_multiplier
-        logger.info(f"Final exposition with urbanisation multiplier - Min: {np.nanmin(exposition):.4f}, Max: {np.nanmax(exposition):.4f}, Mean: {np.nanmean(exposition):.4f}")
+        # Apply urbanisation and port multipliers
+        # Combine multipliers: areas with both get cumulative effect, others get individual effect
+        combined_multiplier = urbanisation_multiplier * port_multiplier
+        exposition = exposition * combined_multiplier
+        logger.info(f"Final exposition with urbanisation and port multipliers - Min: {np.nanmin(exposition):.4f}, Max: {np.nanmax(exposition):.4f}, Mean: {np.nanmean(exposition):.4f}")
+        
+        # Log multiplier effect breakdown
+        urban_only_pixels = np.sum((urbanisation_multiplier > 1.0) & (port_multiplier == 1.0))
+        port_only_pixels = np.sum((urbanisation_multiplier == 1.0) & (port_multiplier > 1.0))
+        both_pixels = np.sum((urbanisation_multiplier > 1.0) & (port_multiplier > 1.0))
+        logger.info(f"Multiplier coverage - Urban only: {urban_only_pixels} pixels, Port only: {port_only_pixels} pixels, Both: {both_pixels} pixels")
         
         # Check final exposition
         if np.all(exposition == 0):
@@ -372,6 +582,11 @@ class ExpositionLayer:
         # Apply study area mask to limit data to relevant landmass
         exposition = self._apply_study_area_mask(exposition, reference_transform, reference_shape)
         logger.info(f"Exposition after study area masking - Min: {np.nanmin(exposition)}, Max: {np.nanmax(exposition)}, Mean: {np.nanmean(exposition)}")
+        
+        # Apply final normalization to ensure full 0-1 range utilization after multipliers
+        study_area_mask = exposition > 0
+        exposition = ensure_full_range_utilization(exposition, study_area_mask)
+        logger.info(f"Final exposition after full range normalization - Min: {np.nanmin(exposition)}, Max: {np.nanmax(exposition)}, Mean: {np.nanmean(exposition)}")
             
         return exposition, meta
 
@@ -410,7 +625,7 @@ class ExpositionLayer:
             dst.write(data.astype(np.float32), 1)
             logger.info(f"Successfully wrote data to {out_path}")
 
-    def visualize_exposition(self, exposition: np.ndarray, meta: dict, title: str = "Exposition Layer"):
+    def visualize_exposition(self, exposition: np.ndarray, meta: dict, title: str = "Exposition Layer", show_ports: bool = False, show_port_buffers: bool = False):
         """Visualize the exposition index for each cell using unified styling."""
         output_path = Path(self.config.output_dir) / "exposition" / "exposition_layer.png"
         
@@ -442,7 +657,9 @@ class ExpositionLayer:
             meta=meta,
             output_path=output_path,
             title=title,
-            land_mask=land_mask
+            land_mask=land_mask,
+            show_ports=show_ports,
+            show_port_buffers=show_port_buffers
         )
 
     def export_exposition(self, data: np.ndarray, meta: dict, out_path: str):
@@ -452,16 +669,83 @@ class ExpositionLayer:
             dst.write(data.astype(np.float32), 1)
         logger.info(f"Exposition layer exported to {out_path}")
 
-    def run_exposition(self, visualize: bool = False, create_png: bool = True):
+    def create_economic_exposition_layer(self, economic_identifier: str, weights: Dict[str, float]) -> Tuple[np.ndarray, dict]:
+        """Create an exposition layer for a specific economic dataset using custom weights."""
+        logger.info(f"Creating exposition layer for {economic_identifier} with weights: {weights}")
+        return self.calculate_exposition_with_weights(weights)
+
+    def save_economic_exposition_layers(self):
+        """Create and save all economic-specific exposition layers based on config."""
+        logger.info("Creating economic-specific exposition layers")
+        
+        # Get economic exposition weights from config
+        economic_weights = self.config.economic_exposition_weights
+        
+        for economic_identifier, weights in economic_weights.items():
+            logger.info(f"Processing exposition layer for {economic_identifier}")
+            
+            # Create exposition layer with custom weights
+            exposition_data, meta = self.create_economic_exposition_layer(economic_identifier, weights)
+            
+            # Define output paths
+            tif_output_dir = Path(self.config.output_dir) / "exposition" / "tif"
+            png_output_dir = Path(self.config.output_dir) / "exposition"
+            tif_output_dir.mkdir(parents=True, exist_ok=True)
+            png_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save TIF file
+            tif_path = tif_output_dir / f"exposition_{economic_identifier}.tif"
+            self.save_exposition_layer(exposition_data, meta, str(tif_path))
+            logger.info(f"Saved {economic_identifier} exposition layer TIF to {tif_path}")
+            
+            # Create PNG visualization
+            png_path = png_output_dir / f"exposition_{economic_identifier}.png"
+            
+            # Load land mask for proper water/land separation  
+            land_mask = None
+            try:
+                with rasterio.open(self.config.land_mass_path) as src:
+                    # Transform land mask to match exposition layer resolution and extent
+                    if meta and 'transform' in meta:
+                        land_mask, _ = rasterio.warp.reproject(
+                            source=src.read(1),
+                            destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
+                            src_transform=src.transform,
+                            src_crs=src.crs,
+                            dst_transform=meta['transform'],
+                            dst_crs=meta['crs'],
+                            resampling=rasterio.enums.Resampling.nearest
+                        )
+                        # Ensure proper data type (1=land, 0=water)
+                        land_mask = (land_mask > 0).astype(np.uint8)
+                        logger.info(f"Loaded and transformed land mask for {economic_identifier} exposition visualization")
+                    else:
+                        logger.warning("No metadata available for land mask transformation")
+            except Exception as e:
+                logger.warning(f"Could not load land mask for {economic_identifier} exposition visualization: {e}")
+            
+            # Create visualization with economic identifier in title
+            self.visualizer.visualize_exposition_layer(
+                data=exposition_data,
+                meta=meta,
+                output_path=png_path,
+                title=f"Exposition Layer - {economic_identifier.upper()}",
+                land_mask=land_mask
+            )
+            
+            logger.info(f"Saved {economic_identifier} exposition layer PNG to {png_path}")
+
+    def run_exposition(self, visualize: bool = False, create_png: bool = True, show_ports: bool = False, show_port_buffers: bool = False):
         """Main execution flow for the exposition layer."""
+        # Create default exposition layer
         exposition, meta = self.calculate_exposition()
         out_path = Path(self.config.output_dir) /"exposition" / "tif" / 'exposition_layer.tif'
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.save_exposition_layer(exposition, meta, out_path)
-        logger.info(f"Exposition layer saved to {out_path}")
+        logger.info(f"Default exposition layer saved to {out_path}")
         
-        # Create PNG visualization (only once)
+        # Create PNG visualization for default layer
         if create_png or visualize:
             png_path = Path(self.config.output_dir) / "exposition" / 'exposition_layer.png'
             
@@ -482,20 +766,30 @@ class ExpositionLayer:
                         )
                         # Ensure proper data type (1=land, 0=water)
                         land_mask = (land_mask > 0).astype(np.uint8)
-                        logger.info("Loaded and transformed land mask for exposition PNG")
+                        logger.info("Loaded and transformed land mask for default exposition PNG")
                     else:
                         logger.warning("No metadata available for land mask transformation")
             except Exception as e:
-                logger.warning(f"Could not load land mask for exposition PNG: {e}")
+                logger.warning(f"Could not load land mask for default exposition PNG: {e}")
             
             self.visualizer.visualize_exposition_layer(
                 data=exposition,
                 meta=meta,
                 output_path=png_path,
                 title="Exposition Layer",
-                land_mask=land_mask
+                land_mask=land_mask,
+                show_ports=show_ports,
+                show_port_buffers=show_port_buffers
             )
-            logger.info(f"Exposition layer PNG saved to {png_path}")
+            logger.info(f"Default exposition layer PNG saved to {png_path}")
+        
+        # Create all economic-specific exposition layers
+        self.save_economic_exposition_layers()
+
+    def run_exposition_with_all_economic_layers(self, visualize: bool = False, create_png: bool = True, show_ports: bool = False, show_port_buffers: bool = False):
+        """Run exposition layer creation including all economic-specific layers."""
+        logger.info("Creating default exposition layer and all economic-specific exposition layers")
+        self.run_exposition(visualize=visualize, create_png=create_png, show_ports=show_ports, show_port_buffers= show_port_buffers)
 
     def _apply_study_area_mask(self, exposition: np.ndarray, transform: rasterio.Affine, shape: Tuple[int, int]) -> np.ndarray:
         """Apply study area mask using NUTS boundaries and land mass data."""
@@ -575,3 +869,38 @@ class ExpositionLayer:
             logger.warning(f"Could not apply study area mask: {str(e)}")
             logger.warning("Proceeding with unmasked exposition layer")
             return exposition
+
+    def ensure_economic_exposition_layer_exists(self, economic_identifier: str) -> Path:
+        """
+        Ensure that the economic exposition layer exists for the given identifier.
+        If it doesn't exist, create it using the weights from config.
+        
+        Returns:
+            Path to the exposition layer TIF file
+        """
+        tif_path = Path(self.config.output_dir) / "exposition" / "tif" / f"exposition_{economic_identifier}.tif"
+        
+        if tif_path.exists():
+            logger.info(f"Economic exposition layer for {economic_identifier} already exists at {tif_path}")
+            return tif_path
+        
+        logger.info(f"Economic exposition layer for {economic_identifier} does not exist, creating it...")
+        
+        # Get weights for this economic dataset
+        economic_weights = self.config.economic_exposition_weights
+        if economic_identifier not in economic_weights:
+            raise ValueError(f"No exposition weights found for economic identifier: {economic_identifier}")
+        
+        weights = economic_weights[economic_identifier]
+        
+        # Create the exposition layer
+        exposition_data, meta = self.create_economic_exposition_layer(economic_identifier, weights)
+        
+        # Ensure output directory exists
+        tif_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save the TIF file
+        self.save_exposition_layer(exposition_data, meta, str(tif_path))
+        logger.info(f"Created and saved economic exposition layer for {economic_identifier} at {tif_path}")
+        
+        return tif_path
