@@ -532,25 +532,29 @@ class LayerVisualizer:
             cmap=ScientificStyle.HAZARD_CMAP,
             aspect='equal',
             extent=extent,
+            zorder=50,
             alpha=0.8,
             vmin=0, vmax=1
         )
         
         # Add coastline risk overlay if requested
         if show_coastline_overlay and coastline_zone_mask is not None:
-            # Create coastline overlay showing affected zones
-            coastline_overlay = np.full_like(coastline_zone_mask, np.nan, dtype=np.float32)
-            coastline_overlay[coastline_zone_mask == 1] = 1.0
+            # Create coordinate grids for contour plotting
+            height, width = coastline_zone_mask.shape
             
-            # Display coastline risk zone as dark blue border and see-through
-            ax.imshow(
-                coastline_overlay,
-                cmap=ListedColormap(['darkblue']),
-                aspect='equal',
-                extent=extent,
-                alpha=0.4,
-                zorder=40,
-                vmin=0, vmax=1
+            # Create coordinate arrays based on extent
+            x = np.linspace(extent[0], extent[1], width)
+            y = np.linspace(extent[3], extent[2], height)  # Note: y is flipped for proper orientation
+            X, Y = np.meshgrid(x, y)
+            
+            # Create contour lines for dark blue outline
+            contour = ax.contour(
+                X, Y, coastline_zone_mask,
+                levels=[0.5],  # This creates the boundary line
+                colors=['darkblue'],
+                linewidths=0.2,
+                alpha=0.9,
+                zorder=51  # Higher zorder to ensure outline appears on top of fill
             )
         
         # Add NUTS overlay
@@ -846,84 +850,3 @@ def create_flood_composite_colormap():
         ScientificStyle.FLOOD_RISK_COLOR       # Flood risk
     ]
     return ListedColormap(colors), BoundaryNorm([0, 1, 2, 3, 4], len(colors))
-
-
-def demonstrate_port_visualization(config: ProjectConfig, exposition_data: np.ndarray, meta: dict):
-    """
-    Demonstration function showing different port overlay options for exposition visualization.
-    
-    Args:
-        config: Project configuration
-        exposition_data: Exposition layer data
-        meta: Raster metadata
-        
-    Usage Examples:
-        # Basic exposition without ports
-        run_exposition(visualize=True, show_ports=False)
-        
-        # Show only port areas (polygons)
-        run_exposition(visualize=True, show_ports=True, show_port_buffers=False)
-        
-        # Show both port areas and buffer zones
-        run_exposition(visualize=True, show_ports=True, show_port_buffers=True)
-    """
-    visualizer = LayerVisualizer(config)
-    output_dir = Path(config.output_dir) / "exposition" / "port_demos"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Load land mask for proper visualization
-    land_mask = None
-    try:
-        with rasterio.open(config.land_mass_path) as src:
-            if meta and 'transform' in meta:
-                land_mask, _ = rasterio.warp.reproject(
-                    source=src.read(1),
-                    destination=np.zeros((meta['height'], meta['width']), dtype=np.uint8),
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=meta['transform'],
-                    dst_crs=meta['crs'],
-                    resampling=rasterio.enums.Resampling.nearest
-                )
-                land_mask = (land_mask > 0).astype(np.uint8)
-    except Exception as e:
-        logger.warning(f"Could not load land mask for demonstration: {e}")
-    
-    # 1. Basic exposition (no ports)
-    visualizer.visualize_exposition_layer(
-        data=exposition_data,
-        meta=meta,
-        output_path=output_dir / "exposition_no_ports.png",
-        title="Exposition Layer (No Port Overlay)",
-        land_mask=land_mask,
-        show_ports=False,
-        show_port_buffers=False
-    )
-    
-    # 2. With port polygons only
-    visualizer.visualize_exposition_layer(
-        data=exposition_data,
-        meta=meta,
-        output_path=output_dir / "exposition_with_ports.png",
-        title="Exposition Layer (With Port Areas)",
-        land_mask=land_mask,
-        show_ports=True,
-        show_port_buffers=False
-    )
-    
-    # 3. With port polygons and buffer zones
-    visualizer.visualize_exposition_layer(
-        data=exposition_data,
-        meta=meta,
-        output_path=output_dir / "exposition_with_ports_and_buffers.png",
-        title="Exposition Layer (With Ports and Buffer Zones)",
-        land_mask=land_mask,
-        show_ports=True,
-        show_port_buffers=True
-    )
-    
-    logger.info(f"Port visualization demonstrations saved to {output_dir}")
-    logger.info("To use port overlays in your exposition analysis:")
-    logger.info("  exposition_layer.run_exposition(visualize=True, show_ports=True, show_port_buffers=True)")
-    
-    return output_dir 

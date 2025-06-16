@@ -1137,7 +1137,7 @@ class HazardLayer:
                 scenario=scenario,
                 output_path=risk_png_path,
                 land_mask=land_mask,
-                show_coastline_overlay=True,
+                show_coastline_overlay=False,
                 coastline_zone_mask=flood_extents[scenario_name]['coastline_zone_mask']
             )
             
