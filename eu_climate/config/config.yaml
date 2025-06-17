@@ -16,7 +16,6 @@ data:
       l2: "NUTS-L2-NL.shp"
       l3: "NUTS-L3-NL.shp"
     river_polygons_file: "Hydrographie-Watercourse/Watercourse-Polygon.shp"
-    river_nodes_file: "ClippedRiverNodes.shp"
     land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
     hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv"
     ghs_duc_file: "degree_of_urbanisation/GHS_DUC_NL_Extract.xlsx"

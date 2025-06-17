@@ -64,28 +64,66 @@ python -m eu_climate.main
   python -m main --no-upload --all           # Run all layers without data upload
 ```
 
-# Datasets
+# 📦 Datasets Overview
 
-What data is used:
+This section outlines all geospatial and statistical datasets used for the case study on climate risk in the Netherlands. Each dataset is grouped by thematic domain and includes source links and file structure.
 
-Degree of Urbanisation https://human-settlement.emergency.copernicus.eu/download.php?ds=DUC
-GADM Shapefiles: https://gadm.org/download_world.html
-HRSThttps://ec.europa.eu/eurostat/databrowser/view/hrst_st_rcat/default/table?lang=en
+---
 
-Freight Loading: https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table?lang=en&category=reg.reg_tran.reg_road
-Freight Unloading: https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table?lang=en&category=reg.reg_tran.reg_road
-GHS built-up volume (R2023): https://human-settlement.emergency.copernicus.eu/download.php?ds=builtV
-Land fraction per pixel as derived from Sentinel2 data composite and OpenStreetMap (OSM) data. (R2022): https://human-settlement.emergency.copernicus.eu/download.php?ds=land
-GHS built-up characteristics (R2023) https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
-GHS Popuation: https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
-NUTS L0-L3: https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics
-Copernicus DEM: https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/copernicus
-Ports: https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks und selberweiterverarbeitet
-European Coastline: https://www.eea.europa.eu/data-and-maps/data/eea-coastline-for-analysis-1/gis-data/europe-coastline-shapefile
+## 🗺️ Administrative Boundaries
 
-Gebieden met Natuurrisico's - Overstromingen - Risicogebied - Richtlijn Overstromingsrisico's (ROR) (INSPIRE geharmoniseerd): https://service.pdok.nl/rws/overstromingen-risicogebied/atom/gebieden_met_natuurrisicos_overstromingen_risicogebied_richtlijn_overstromingsrisicos_ror_inspire_geharmoniseerd.xml
+| Dataset                           | Description                                              | Scope/Resolution | Used in Layers  | Files                                   | Source                                                                                                     |
+| --------------------------------- | -------------------------------------------------------- | ---------------- | --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **NUTS Levels 0–3 (Netherlands)** | European statistical units for regional analysis (L0–L3) | NUTS L0-L3       | Relevance, Risk | `NUTS-L0-NL.shp`, ..., `NUTS-L3-NL.shp` | [Eurostat](https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics) |
+| **GADM Shapefiles (NL, L2)**      | Administrative boundary fallback dataset                 | GADM L2          | Relevance       | `NL-GADM-L2/`                           | [GADM](https://gadm.org/download_world.html)                                                               |
 
-Data Feed - Hydrografie EPSG:4258 (GML): https://service.pdok.nl/kadaster/hy/atom/v1_0/hydrografie.xml
-Vierkantstatistieken 100m 2023: https://service.pdok.nl/cbs/vierkantstatistieken100m/atom/vierkantstatistieken100m.xml (cbs_vk100_2023.gpkg)
+---
 
-Electricity Consumption: https://figshare.com/articles/dataset/Global_1_km_1_km_gridded_revised_real_gross_domestic_product_and_electricity_consumption_during_1992-2019_based_on_calibrated_nighttime_light_data/17004523/1
+## 👥 Population & Urban Development
+
+| Dataset                                  | Description                                               | Scope/Resolution | Used in Layers | Files                        | Source                                                                                    |
+| ---------------------------------------- | --------------------------------------------------------- | ---------------- | -------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| **GHS Population Grid (R2023)**          | Gridded population at 3 arcsecond resolution              | 3 arcsec (~100m) | Exposition     | `ClippedGHS_POP_3ss.tif`     | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=pop)    |
+| **GHS Built-up Characteristics (R2023)** | Structural type and height of buildings                   | NaN              | Exposition     | `GHS_BUILT_C/`               | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC) |
+| **GHS Built-up Volume (R2023)**          | Estimated 3D volume of built structures (100m resolution) | 100m             | Exposition     | `Clipped_GHS_Built-V-100m/`  | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=builtV) |
+| **Degree of Urbanisation (DUC)**         | Urban/rural classification by grid cell on GADM basis     | GADM L2          | Exposition     | `degree_of_urbanisation/`    | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=DUC)    |
+| **GHS Land Fraction (R2022)**            | Land cover based on Sentinel-2 + OSM (10m)                | 10m              | Hazard         | `Clipped_GHS_LAND-10m_Moll/` | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=land)   |
+
+---
+
+## 🚛 Transportation & Infrastructure
+
+| Dataset                          | Description                      | Scope/Resolution | Used in Layers | Files                                          | Source                                                                                   |
+| -------------------------------- | -------------------------------- | ---------------- | -------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Freight Loading Statistics**   | Road freight loading by NUTS-3   | NUTS L3          | Relevance      | `road_go_loading/`, `unified_freight_data.csv` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table) |
+| **Freight Unloading Statistics** | Road freight unloading by NUTS-3 | NUTS L3          | Relevance      | `L3-estat_road_go_unloading/`                  | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table) |
+| **European Ports**               | Location and attributes of ports | Point data       | Exposition     | `Port/PORT_RG_2009.shp`                        | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks)     |
+
+---
+
+## 🌍 Physical Geography & Environment
+
+| Dataset                | Description                                   | Scope/Resolution | Used in Layers | Files                                | Source                                                                                                               |
+| ---------------------- | --------------------------------------------- | ---------------- | -------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| **Copernicus DEM**     | High-resolution elevation model               | ~30m             | Hazard         | `ClippedCopernicusHeightProfile.tif` | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/copernicus)                 |
+| **European Coastline** | Coastal geometry for flood exposure modelling | Vector polylines | Hazard         | `EEA_Coastline_Polyline_Shape/`      | [EEA](https://www.eea.europa.eu/data-and-maps/data/eea-coastline-for-analysis-1/gis-data/europe-coastline-shapefile) |
+| **Dutch Hydrography**  | Dutch river networks and water bodies         | Vector polygons  | Hazard         | `Hydrographie-Watercourse/`          | [PDOK](https://service.pdok.nl/kadaster/hy/atom/v1_0/hydrographie.xml)                                               |
+
+---
+
+## 🌊 Flood Risk
+
+| Dataset                    | Description                                       | Scope/Resolution | Used in Layers | Files          | Source                                                                |
+| -------------------------- | ------------------------------------------------- | ---------------- | -------------- | -------------- | --------------------------------------------------------------------- |
+| **Dutch Flood Risk Zones** | Zones under flood risk as per EU Floods Directive | Vector polygons  | Hazard         | `NL_Riskzone/` | [PDOK](https://service.pdok.nl/rws/overstromingen-risicogebied/atom/) |
+
+---
+
+## 💶 Socioeconomic Data
+
+| Dataset                          | Description                                         | Scope/Resolution | Used in Layers        | Files                                | Source                                                                                         |
+| -------------------------------- | --------------------------------------------------- | ---------------- | --------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **GDP Statistics (NUTS-3)**      | Regional GDP by administrative region               | NUTS L3          | Relevance             | `L3-estat_gdp.csv/`                  | —                                                                                              |
+| **Electricity Consumption Grid** | 1 km² global grid electricity estimates (1992–2019) | 1 km             | Exposition, Relevance | `Electricity/Electricity.0.tif`      | [Figshare](https://figshare.com/articles/dataset/17004523)                                     |
+| **Vierkantstatistieken (100m)**  | Dutch socio-demographic grid at 100m                | 100m             | Exposition            | `Vierkantstatistieken/`              | [PDOK](https://service.pdok.nl/cbs/vierkantstatistieken100m/atom/vierkantstatistieken100m.xml) |
+| **HRST Statistics**              | Human capital in science and tech sectors           | NUTS L2          | Relevance             | `L2_estat_hrst_st_rcat_filtered_en/` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/hrst_st_rcat/default/table)          |

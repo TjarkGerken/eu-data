@@ -210,11 +210,6 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['river_polygons_file']
     
     @property
-    def river_nodes_path(self) -> Path:
-        """Get path to river nodes shapefile."""
-        return self.data_dir / self.config['file_paths']['river_nodes_file']
-    
-    @property
     def land_mass_path(self) -> Path:
         """Get path to land mass raster file."""
         return self.data_dir / self.config['file_paths']['land_mass_file']
@@ -298,7 +293,6 @@ class ProjectConfig:
             (self.electricity_consumption_path, "Electricity Consumption"),
             (self.vierkant_stats_path, "Vierkant Stats"),
             (self.river_polygons_path, "River Polygons"),
-            (self.river_nodes_path, "River Nodes"),
             (self.land_mass_path, "Land Mass"),
             (self.coastline_path, "Coastline"),
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],
