@@ -75,6 +75,9 @@ class ProjectConfig:
         # Store exposition weights
         self.exposition_weights = self.config['exposition']
         
+        # Store vierkant stats multipliers
+        self.vierkant_stats_multipliers = self.config['exposition']['vierkant_stats_multipliers']
+        
         # Store relevance configuration
         relevance_config = self.config.get('relevance', {})
         self.relevance_weights = relevance_config.get('economic_datasets')
@@ -138,10 +141,28 @@ class ProjectConfig:
     
     def _validate_config(self):
         """Validate configuration values."""
+        # Use higher precision tolerance for decimal validation (up to 6 decimal places)
+        tolerance = 1e-6
+        
+        # Validate risk weights
         weights = self.risk_weights
         total_weight = sum(weights.values())
-        if not np.isclose(total_weight, 1.0):
-            raise ValueError(f"Risk weights must sum to 1.0, got {total_weight}")
+        if not np.isclose(total_weight, 1.0, atol=tolerance):
+            raise ValueError(f"Risk weights must sum to 1.0, got {total_weight:.6f}")
+        
+        # Validate exposition weights
+        exposition_weights = self.exposition_weights
+        main_exposition_weight_keys = ['ghs_built_c_weight', 'ghs_built_v_weight', 'population_weight', 'electricity_consumption_weight', 'vierkant_stats_weight']
+        main_exposition_total = sum(exposition_weights.get(key, 0) for key in main_exposition_weight_keys)
+        if not np.isclose(main_exposition_total, 1.0, atol=tolerance):
+            raise ValueError(f"Main exposition weights must sum to 1.0, got {main_exposition_total:.6f}")
+        
+        # Validate economic dataset exposition weights
+        economic_weights = self.economic_exposition_weights
+        for dataset_name, dataset_weights in economic_weights.items():
+            economic_exposition_total = sum(dataset_weights.values())
+            if not np.isclose(economic_exposition_total, 1.0, atol=tolerance):
+                raise ValueError(f"Economic dataset '{dataset_name}' exposition weights must sum to 1.0, got {economic_exposition_total:.6f}")
     
     @property
     def dem_path(self) -> Path:
@@ -162,6 +183,16 @@ class ProjectConfig:
     def ghs_built_v_path(self) -> Path:
         """Get path to GHS Built V file."""
         return self.data_dir / self.config['file_paths']['ghs_built_v_file']
+    
+    @property
+    def electricity_consumption_path(self) -> Path:
+        """Get path to electricity consumption file."""
+        return self.data_dir / self.config['file_paths']['electricity_consumption_file']
+    
+    @property
+    def vierkant_stats_path(self) -> Path:
+        """Get path to vierkant stats file."""
+        return self.data_dir / self.config['file_paths']['vierkant_stats_file']
     
     @property
     def nuts_paths(self) -> Dict[str, Path]:
@@ -264,6 +295,8 @@ class ProjectConfig:
             (self.ghs_built_c_path, "GHS Built C"),
             (self.ghs_built_v_path, "GHS Built V"),
             (self.population_path, "Population Density"),
+            (self.electricity_consumption_path, "Electricity Consumption"),
+            (self.vierkant_stats_path, "Vierkant Stats"),
             (self.river_polygons_path, "River Polygons"),
             (self.river_nodes_path, "River Nodes"),
             (self.land_mass_path, "Land Mass"),

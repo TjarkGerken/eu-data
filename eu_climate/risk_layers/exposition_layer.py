@@ -17,6 +17,7 @@ from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.utils.normalise_data import DataNormalizer, AdvancedDataNormalizer, NormalizationStrategy, ensure_full_range_utilization
+from eu_climate.utils.vierkant_processor import VierkantStatsProcessor
 
 
 # Set up logging for the exposition layer
@@ -65,6 +66,8 @@ class ExpositionLayer:
         self.ghs_built_c_path = self.config.ghs_built_c_path
         self.ghs_built_v_path = self.config.ghs_built_v_path
         self.population_path = self.config.population_path
+        self.electricity_consumption_path = self.config.electricity_consumption_path
+        self.vierkant_stats_path = self.config.vierkant_stats_path
         self.nuts_paths = self.config.nuts_paths
         self.ghs_duc_path = self.config.ghs_duc_path
         self.gadm_l2_path = self.config.gadm_l2_path
@@ -78,6 +81,9 @@ class ExpositionLayer:
         
         # Initialize visualizer
         self.visualizer = LayerVisualizer(self.config)
+        
+        # Initialize vierkant stats processor
+        self.vierkant_processor = VierkantStatsProcessor(self.config)
         
         # Initialize sophisticated normalizer optimized for exposition data
         self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.EXPOSITION_OPTIMIZED)
@@ -98,6 +104,14 @@ class ExpositionLayer:
     def load_population(self):
         """Load the population data.Transform to the target CRS from the config file."""
         return self.population_path
+    
+    def load_electricity_consumption(self):
+        """Load the electricity consumption data. Transform to the target CRS from the config file."""
+        return self.electricity_consumption_path
+    
+    def load_vierkant_stats(self):
+        """Load the vierkant stats data. Transform to the target CRS from the config file."""
+        return self.vierkant_stats_path
     
     def load_urbanisation_data(self) -> pd.DataFrame:
         """Load and process urbanisation data from Excel and GADM shapefiles.
@@ -161,8 +175,8 @@ class ExpositionLayer:
         rural_count = (merged_data['urbanisation_factor'] < semi_urban_threshold).sum()
         
         logger.info(f"Area classification:")
-        logger.info(f"  Urban areas (≥{urban_threshold}): {urban_count} ({urban_count/len(merged_data)*100:.1f}%) - Multiplier: {urban_multiplier}")
-        logger.info(f"  Semi-urban areas (≥{semi_urban_threshold}, <{urban_threshold}): {semi_urban_count} ({semi_urban_count/len(merged_data)*100:.1f}%) - Multiplier: {semi_urban_multiplier}")
+        logger.info(f"  Urban areas (>={urban_threshold}): {urban_count} ({urban_count/len(merged_data)*100:.1f}%) - Multiplier: {urban_multiplier}")
+        logger.info(f"  Semi-urban areas (>={semi_urban_threshold}, <{urban_threshold}): {semi_urban_count} ({semi_urban_count/len(merged_data)*100:.1f}%) - Multiplier: {semi_urban_multiplier}")
         logger.info(f"  Rural areas (<{semi_urban_threshold}): {rural_count} ({rural_count/len(merged_data)*100:.1f}%) - Multiplier: {rural_multiplier}")
         
         logger.info(f"Urbanisation multipliers - Min: {merged_data['urbanisation_multiplier'].min():.1f}, "
@@ -468,9 +482,17 @@ class ExpositionLayer:
         ghs_built_v, _ = self.load_and_preprocess_raster(self.ghs_built_v_path)
         logger.info(f"GHS Built-V after preprocessing - Min: {np.nanmin(ghs_built_v)}, Max: {np.nanmax(ghs_built_v)}, Mean: {np.nanmean(ghs_built_v)}")
         
-        # Load population data last to ensure proper alignment
+        # Load population data
         population, _ = self.load_and_preprocess_raster(self.population_path)
         logger.info(f"Population after preprocessing - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
+        
+        # Load electricity consumption data
+        electricity_consumption, _ = self.load_and_preprocess_raster(self.electricity_consumption_path)
+        logger.info(f"Electricity consumption after preprocessing - Min: {np.nanmin(electricity_consumption)}, Max: {np.nanmax(electricity_consumption)}, Mean: {np.nanmean(electricity_consumption)}")
+        
+        # Load vierkant stats socioeconomic data
+        vierkant_stats, vierkant_meta = self.load_and_preprocess_vierkant_stats()
+        logger.info(f"Vierkant stats after preprocessing - Min: {np.nanmin(vierkant_stats)}, Max: {np.nanmax(vierkant_stats)}, Mean: {np.nanmean(vierkant_stats)}")
         
         # Load and process urbanisation data
         urbanisation_gdf = self.load_urbanisation_data()
@@ -507,6 +529,27 @@ class ExpositionLayer:
             )
             logger.info(f"Population after reprojection - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
         
+        if not self.transformer.validate_alignment(electricity_consumption, meta['transform'], ghs_built_c, reference_transform):
+            electricity_consumption = self.transformer.ensure_alignment(
+                electricity_consumption,
+                meta['transform'],
+                reference_transform,
+                reference_shape,
+                resampling_method_str
+            )
+            logger.info(f"Electricity consumption after reprojection - Min: {np.nanmin(electricity_consumption)}, Max: {np.nanmax(electricity_consumption)}, Mean: {np.nanmean(electricity_consumption)}")
+        
+        # Ensure vierkant stats alignment with reference
+        if not self.transformer.validate_alignment(vierkant_stats, vierkant_meta['transform'], ghs_built_c, reference_transform):
+            vierkant_stats = self.transformer.ensure_alignment(
+                vierkant_stats,
+                vierkant_meta['transform'],
+                reference_transform,
+                reference_shape,
+                resampling_method_str
+            )
+            logger.info(f"Vierkant stats after reprojection - Min: {np.nanmin(vierkant_stats)}, Max: {np.nanmax(vierkant_stats)}, Mean: {np.nanmean(vierkant_stats)}")
+        
         # Ensure urbanisation multiplier has the same shape and transform
         if not self.transformer.validate_alignment(urbanisation_multiplier, urbanisation_meta['transform'], ghs_built_c, reference_transform):
             urbanisation_multiplier = self.transformer.ensure_alignment(
@@ -530,7 +573,7 @@ class ExpositionLayer:
             logger.info(f"Port multiplier after reprojection - Min: {np.nanmin(port_multiplier):.2f}, Max: {np.nanmax(port_multiplier):.2f}, Mean: {np.nanmean(port_multiplier):.2f}")
         
         # Check for valid data
-        if np.all(ghs_built_c == 0) or np.all(ghs_built_v == 0) or np.all(population == 0):
+        if np.all(ghs_built_c == 0) or np.all(ghs_built_v == 0) or np.all(population == 0) or np.all(electricity_consumption == 0) or np.all(vierkant_stats == 0):
             logger.error("One or more input layers contain only zeros!")
             raise ValueError("Invalid input data: one or more layers contain only zeros")
         
@@ -538,9 +581,11 @@ class ExpositionLayer:
         norm_built_c = self.normalize_ghs_built_c(ghs_built_c)
         norm_built_v = self.normalize_raster(ghs_built_v)
         norm_population = self.normalize_raster(population)
+        norm_electricity_consumption = self.normalize_raster(electricity_consumption)
+        norm_vierkant_stats = self.normalize_raster(vierkant_stats)
         
         # Check normalized data
-        if np.all(norm_built_c == 0) or np.all(norm_built_v == 0) or np.all(norm_population == 0):
+        if np.all(norm_built_c == 0) or np.all(norm_built_v == 0) or np.all(norm_population == 0) or np.all(norm_electricity_consumption == 0) or np.all(norm_vierkant_stats == 0):
             logger.error("One or more normalized layers contain only zeros!")
             raise ValueError("Invalid normalized data: one or more layers contain only zeros")
         
@@ -548,7 +593,9 @@ class ExpositionLayer:
         exposition = (
             weights['ghs_built_c_weight'] * norm_built_c +
             weights['ghs_built_v_weight'] * norm_built_v +
-            weights['population_weight'] * norm_population
+            weights['population_weight'] * norm_population +
+            weights['electricity_consumption_weight'] * norm_electricity_consumption +
+            weights['vierkant_stats_weight'] * norm_vierkant_stats
         )
         logger.info(f"Base exposition - Min: {np.nanmin(exposition):.4f}, Max: {np.nanmax(exposition):.4f}, Mean: {np.nanmean(exposition):.4f}")
         
@@ -904,3 +951,16 @@ class ExpositionLayer:
         logger.info(f"Created and saved economic exposition layer for {economic_identifier} at {tif_path}")
         
         return tif_path
+
+    def load_and_preprocess_vierkant_stats(self) -> Tuple[np.ndarray, dict]:
+        """Load and preprocess vierkant stats socioeconomic data."""
+        logger.info("Loading and preprocessing Vierkantstatistieken socioeconomic data")
+        
+        vierkant_data, vierkant_meta = self.vierkant_processor.process_vierkant_stats()
+        
+        logger.info(f"Vierkant stats socioeconomic data - Shape: {vierkant_data.shape}, "
+                   f"Min: {np.nanmin(vierkant_data):.4f}, "
+                   f"Max: {np.nanmax(vierkant_data):.4f}, "
+                   f"Mean: {np.nanmean(vierkant_data):.4f}")
+        
+        return vierkant_data, vierkant_meta
