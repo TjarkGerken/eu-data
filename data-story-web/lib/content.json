@@ -1,0 +1,95 @@
+{
+  "references": [
+    {
+      "id": "1",
+      "title": "Climate Change Impacts on European Agriculture",
+      "authors": ["Smith, J.", "Johnson, A."],
+      "year": 2023,
+      "journal": "Environmental Science & Policy",
+      "type": "journal",
+      "url": "#"
+    },
+    {
+      "id": "2",
+      "title": "European Environment Agency Climate Data",
+      "authors": ["EEA"],
+      "year": 2023,
+      "type": "dataset",
+      "url": "#"
+    },
+    {
+      "id": "3",
+      "title": "Temperature Trends in Central Europe",
+      "authors": ["Brown, M.", "Davis, K.", "Wilson, R."],
+      "year": 2022,
+      "journal": "Climate Dynamics",
+      "type": "journal",
+      "url": "#"
+    },
+    {
+      "id": "4",
+      "title": "IPCC Sixth Assessment Report",
+      "authors": ["IPCC"],
+      "year": 2021,
+      "type": "report",
+      "url": "#"
+    },
+    {
+      "id": "5",
+      "title": "Precipitation Patterns in Northern Europe",
+      "authors": ["Anderson, L.", "Taylor, S."],
+      "year": 2023,
+      "journal": "Journal of Climate",
+      "type": "journal",
+      "url": "#"
+    }
+  ],
+  "en": {
+    "heroTitle": "European Climate Data Analysis",
+    "heroDescription": "Exploring climate patterns and environmental changes across European regions through comprehensive data visualization and analysis.",
+    "dataStoryTitle": "European Climate Risk Assessment",
+    "introText1": "Climate change poses significant threats to European coastal regions through sea level rise, increased storm intensity, and changing precipitation patterns. Our comprehensive risk assessment framework combines hazard analysis, exposure mapping, and vulnerability assessment to quantify climate risks across different scenarios and inform adaptation planning.",
+    "introText2": "This data story presents a systematic approach to climate risk assessment, integrating high-resolution spatial data, scenario modeling, and impact analysis. Each visualization below demonstrates different components of our risk assessment methodology, providing decision-makers with the tools needed to understand and address climate vulnerabilities in their regions.",
+    "visualizations": [
+      {
+        "title": "Climate Hazard Risk Assessment",
+        "description": "Comprehensive analysis of climate hazards across different sea level rise scenarios showing current and projected risk levels.",
+        "content": "Our hazard assessment reveals significant variations in climate risk across European coastal regions. Under current conditions, 9.7% of the study area faces high risk, with moderate and low risk areas covering 5.4% and 4.1% respectively.",
+        "type": "map",
+        "imageCategory": "hazard",
+        "imageScenario": "current",
+        "imageId": "current-scenario",
+        "references": ["1", "3"]
+      },
+      {
+        "title": "Severe Hazard",
+        "description": "Comprehensive analysis of climate hazards across different sea level rise scenarios showing current and projected risk levels.",
+        "content": "Our hazard assessment reveals significant variations in climate risk across European coastal regions. Under current conditions, 9.7% of the study area faces high risk, with moderate and low risk areas covering 5.4% and 4.1% respectively.",
+        "type": "map",
+        "imageCategory": "hazard",
+        "imageId": "severe-scenario",
+        "references": ["1"],
+        "imageScenario": "severe"
+      }
+    ]
+  },
+  "de": {
+    "heroTitle": "Europäische Klimadatenanalyse",
+    "heroDescription": "Erforschung von Klimamustern und Umweltveränderungen in europäischen Regionen durch umfassende Datenvisualisierung und -analyse.",
+    "dataStoryTitle": "Europäische Klimarisiko-Bewertung",
+    "introText1": "Der Klimawandel stellt erhebliche Bedrohungen für europäische Küstenregionen durch den Anstieg des Meeresspiegels, verstärkte Sturmintensität und veränderte Niederschlagsmuster dar.",
+    "introText2": "Diese Datengeschichte präsentiert einen systematischen Ansatz zur Klimarisikobewertung, der hochauflösende räumliche Daten, Szenariomodellierung und Folgenanalyse integriert.",
+    "visualizations": [
+      {
+        "title": "Klimagefahren-Risikobewertung",
+        "description": "Umfassende Analyse von Klimagefahren in verschiedenen Meeresspiegelanstieg-Szenarien mit aktuellen und prognostizierten Risikoniveaus.",
+        "content": "Unsere Gefahrenbewertung zeigt erhebliche Variationen im Klimarisiko in europäischen Küstenregionen. Unter aktuellen Bedingungen sind 9,7% des Untersuchungsgebiets einem hohen Risiko ausgesetzt.",
+        "type": "map",
+        "imageCategory": "hazard",
+        "imageScenario": "current",
+        "imageId": "current-scenario",
+        "references": ["1", "3"]
+      }
+    ]
+  }
+}

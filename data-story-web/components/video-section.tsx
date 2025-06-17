@@ -3,19 +3,21 @@
 import { Card } from "@/components/ui/card";
 import { Play } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
+import { useDynamicContent } from "@/hooks/use-dynamic-content";
 
 export function VideoSection() {
   const { t } = useLanguage();
+  const { content: dynamicContent } = useDynamicContent();
 
   return (
     <section className="w-full py-12 bg-gradient-to-r from-[#2d5a3d]/5 to-[#c4a747]/5 flex justify-center items-center">
       <div className="container">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold tracking-tight text-[#2d5a3d] mb-4">
-            {t.heroTitle}
+            {dynamicContent?.heroTitle || t.heroTitle}
           </h1>
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-            {t.heroDescription}
+            {dynamicContent?.heroDescription || t.heroDescription}
           </p>
         </div>
 
