@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -7,7 +7,6 @@ import { useLanguage } from "@/contexts/language-context"
 export function ClimateMapStatic() {
   const { language } = useLanguage()
 
-  // European countries with climate data
   const countries = [
     { name: "Norway", x: 50, y: 15, temp: 2.1, renewable: 98, color: "#dc2626" },
     { name: "Sweden", x: 55, y: 20, temp: 1.8, renewable: 65, color: "#dc2626" },
@@ -22,17 +21,9 @@ export function ClimateMapStatic() {
   ]
 
   const getTemperatureColor = (temp: number) => {
-    if (temp >= 2.0) return "#dc2626" // Red
-    if (temp >= 1.5) return "#f97316" // Orange
-    if (temp >= 1.0) return "#f59e0b" // Amber
-    return "#3b82f6" // Blue
   }
 
   const getRenewableColor = (renewable: number) => {
-    if (renewable >= 70) return "#22c55e" // Green
-    if (renewable >= 40) return "#84cc16" // Lime
-    if (renewable >= 20) return "#eab308" // Yellow
-    return "#ef4444" // Red
   }
 
   return (
@@ -49,7 +40,6 @@ export function ClimateMapStatic() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Temperature Map */}
         <Card className="overflow-hidden">
           <CardContent className="p-6">
             <h4 className="text-xl font-semibold text-[#2d5a3d] mb-4 text-center">
@@ -57,9 +47,7 @@ export function ClimateMapStatic() {
             </h4>
 
             <div className="relative bg-gradient-to-b from-blue-100 to-green-100 dark:from-blue-900/30 dark:to-green-900/30 rounded-lg p-4 h-80">
-              {/* Simplified Europe outline */}
               <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
-                {/* Coastline approximation */}
                 <path
                   d="M20,30 Q30,25 40,30 Q50,20 60,25 Q70,15 75,25 Q80,30 75,40 Q70,50 65,60 Q60,70 50,75 Q40,80 30,75 Q20,70 15,60 Q10,50 15,40 Q20,35 20,30 Z"
                   fill="none"
@@ -68,7 +56,6 @@ export function ClimateMapStatic() {
                   opacity="0.3"
                 />
 
-                {/* Country dots */}
                 {countries.map((country, index) => (
                   <g key={index}>
                     <circle
@@ -94,7 +81,6 @@ export function ClimateMapStatic() {
               </svg>
             </div>
 
-            {/* Temperature Legend */}
             <div className="flex justify-center gap-4 mt-4 text-xs">
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
@@ -116,7 +102,6 @@ export function ClimateMapStatic() {
           </CardContent>
         </Card>
 
-        {/* Renewable Energy Map */}
         <Card className="overflow-hidden">
           <CardContent className="p-6">
             <h4 className="text-xl font-semibold text-[#2d5a3d] mb-4 text-center">
@@ -125,7 +110,6 @@ export function ClimateMapStatic() {
 
             <div className="relative bg-gradient-to-b from-green-100 to-blue-100 dark:from-green-900/30 dark:to-blue-900/30 rounded-lg p-4 h-80">
               <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
-                {/* Coastline */}
                 <path
                   d="M20,30 Q30,25 40,30 Q50,20 60,25 Q70,15 75,25 Q80,30 75,40 Q70,50 65,60 Q60,70 50,75 Q40,80 30,75 Q20,70 15,60 Q10,50 15,40 Q20,35 20,30 Z"
                   fill="none"
@@ -134,7 +118,6 @@ export function ClimateMapStatic() {
                   opacity="0.3"
                 />
 
-                {/* Country dots */}
                 {countries.map((country, index) => (
                   <g key={index}>
                     <circle
@@ -160,7 +143,6 @@ export function ClimateMapStatic() {
               </svg>
             </div>
 
-            {/* Renewable Legend */}
             <div className="flex justify-center gap-4 mt-4 text-xs">
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -183,7 +165,6 @@ export function ClimateMapStatic() {
         </Card>
       </div>
 
-      {/* Country details */}
       <div className="mt-8 grid grid-cols-2 md:grid-cols-5 gap-4">
         {countries.slice(0, 5).map((country, index) => (
           <Card key={index} className="text-center">

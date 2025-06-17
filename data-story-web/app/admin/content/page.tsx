@@ -279,6 +279,117 @@ export default function ContentAdminPage() {
             variant: "info",
             interactive: true,
           };
+        case "neural-climate-network":
+          return {
+            type: "neural-climate-network",
+            title: "Neural Climate Network",
+            description: "Interactive neural network visualization",
+            intensity: 1.0,
+            speed: 1.0,
+          };
+        case "earth-pulse":
+          return {
+            type: "earth-pulse",
+            title: "Earth Pulse",
+            description: "Earth heartbeat visualization",
+            intensity: 1.0,
+            speed: 1.0,
+          };
+        case "impact-comparison":
+          return {
+            type: "impact-comparison",
+            title: "Climate Impact Comparison",
+            description: "Compare different climate scenarios",
+            scenarios: [
+              {
+                name: "Current",
+                temperature: 1.2,
+                seaLevel: 0.1,
+                precipitation: 5,
+                extremeEvents: 10,
+              },
+            ],
+          };
+        case "kpi-showcase":
+          return {
+            type: "kpi-showcase",
+            title: "Key Performance Indicators",
+            description: "Important climate metrics",
+            kpis: [
+              {
+                label: "Temperature",
+                value: "+1.2°C",
+                change: "+0.1°C",
+                trend: "up",
+                icon: "thermometer",
+              },
+            ],
+          };
+        case "climate-map-static":
+          return {
+            type: "climate-map-static",
+            title: "Climate Map",
+            description: "Regional climate visualization",
+            mapType: "temperature",
+            region: "europe",
+          };
+        case "climate-metamorphosis":
+          return {
+            type: "climate-metamorphosis",
+            title: "Climate Metamorphosis",
+            description: "Evolution of climate over time",
+            stages: [
+              {
+                year: 2020,
+                title: "Current State",
+                description: "Current climate conditions",
+                data: 100,
+              },
+            ],
+          };
+        case "climate-timeline-minimal":
+          return {
+            type: "climate-timeline-minimal",
+            title: "Climate Timeline",
+            description: "Minimal timeline view",
+            events: [
+              {
+                year: 2024,
+                title: "Event",
+                description: "Description",
+              },
+            ],
+          };
+        case "data-storm":
+          return {
+            type: "data-storm",
+            title: "Data Storm",
+            description: "Dynamic data visualization",
+            intensity: 1.0,
+            particles: 100,
+          };
+        case "carbon-molecule-dance":
+          return {
+            type: "carbon-molecule-dance",
+            title: "Carbon Molecule Dance",
+            description: "Carbon molecule animation",
+            molecules: 50,
+            speed: 1.0,
+          };
+        case "climate-infographic":
+          return {
+            type: "climate-infographic",
+            title: "Climate Infographic",
+            description: "Visual climate information",
+            sections: [
+              {
+                title: "Temperature",
+                value: "+1.2°C",
+                description: "Global average increase",
+                icon: "thermometer",
+              },
+            ],
+          };
         default:
           return { type: "markdown", content: "" };
       }
@@ -962,6 +1073,385 @@ export default function ContentAdminPage() {
           </div>
         );
 
+      case "neural-climate-network":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Intensity</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={blockData.intensity || 1.0}
+                onChange={(e) =>
+                  updateField("intensity", parseFloat(e.target.value))
+                }
+              />
+            </div>
+            <div>
+              <Label>Speed</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={blockData.speed || 1.0}
+                onChange={(e) =>
+                  updateField("speed", parseFloat(e.target.value))
+                }
+              />
+            </div>
+          </div>
+        );
+
+      case "earth-pulse":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Intensity</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={blockData.intensity || 1.0}
+                onChange={(e) =>
+                  updateField("intensity", parseFloat(e.target.value))
+                }
+              />
+            </div>
+            <div>
+              <Label>Speed</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={blockData.speed || 1.0}
+                onChange={(e) =>
+                  updateField("speed", parseFloat(e.target.value))
+                }
+              />
+            </div>
+          </div>
+        );
+
+      case "impact-comparison":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Scenarios (JSON format)</Label>
+              <Textarea
+                value={JSON.stringify(blockData.scenarios || [], null, 2)}
+                onChange={(e) => {
+                  try {
+                    const scenarios = JSON.parse(e.target.value);
+                    updateField("scenarios", scenarios);
+                  } catch {}
+                }}
+                rows={8}
+                placeholder="[{name: 'Current', temperature: 1.2, seaLevel: 0.1, precipitation: 5, extremeEvents: 10}]"
+              />
+            </div>
+          </div>
+        );
+
+      case "kpi-showcase":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>KPIs (JSON format)</Label>
+              <Textarea
+                value={JSON.stringify(blockData.kpis || [], null, 2)}
+                onChange={(e) => {
+                  try {
+                    const kpis = JSON.parse(e.target.value);
+                    updateField("kpis", kpis);
+                  } catch {}
+                }}
+                rows={8}
+                placeholder="[{label: 'Temperature', value: '+1.2°C', change: '+0.1°C', trend: 'up', icon: 'thermometer'}]"
+              />
+            </div>
+          </div>
+        );
+
+      case "climate-map-static":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Map Type</Label>
+              <Select
+                value={blockData.mapType || "temperature"}
+                onValueChange={(value) => updateField("mapType", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="temperature">Temperature</SelectItem>
+                  <SelectItem value="precipitation">Precipitation</SelectItem>
+                  <SelectItem value="risk">Risk</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Region</Label>
+              <Input
+                value={blockData.region || ""}
+                onChange={(e) => updateField("region", e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case "climate-metamorphosis":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Stages (JSON format)</Label>
+              <Textarea
+                value={JSON.stringify(blockData.stages || [], null, 2)}
+                onChange={(e) => {
+                  try {
+                    const stages = JSON.parse(e.target.value);
+                    updateField("stages", stages);
+                  } catch {}
+                }}
+                rows={8}
+                placeholder="[{year: 2020, title: 'Current State', description: 'Current climate conditions', data: 100}]"
+              />
+            </div>
+          </div>
+        );
+
+      case "climate-timeline-minimal":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Events (JSON format)</Label>
+              <Textarea
+                value={JSON.stringify(blockData.events || [], null, 2)}
+                onChange={(e) => {
+                  try {
+                    const events = JSON.parse(e.target.value);
+                    updateField("events", events);
+                  } catch {}
+                }}
+                rows={8}
+                placeholder="[{year: 2024, title: 'Event', description: 'Description'}]"
+              />
+            </div>
+          </div>
+        );
+
+      case "data-storm":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Intensity</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={blockData.intensity || 1.0}
+                onChange={(e) =>
+                  updateField("intensity", parseFloat(e.target.value))
+                }
+              />
+            </div>
+            <div>
+              <Label>Particles</Label>
+              <Input
+                type="number"
+                value={blockData.particles || 100}
+                onChange={(e) =>
+                  updateField("particles", parseInt(e.target.value))
+                }
+              />
+            </div>
+          </div>
+        );
+
+      case "carbon-molecule-dance":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Molecules</Label>
+              <Input
+                type="number"
+                value={blockData.molecules || 50}
+                onChange={(e) =>
+                  updateField("molecules", parseInt(e.target.value))
+                }
+              />
+            </div>
+            <div>
+              <Label>Speed</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={blockData.speed || 1.0}
+                onChange={(e) =>
+                  updateField("speed", parseFloat(e.target.value))
+                }
+              />
+            </div>
+          </div>
+        );
+
+      case "climate-infographic":
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={blockData.title || ""}
+                onChange={(e) => updateField("title", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={blockData.description || ""}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Sections (JSON format)</Label>
+              <Textarea
+                value={JSON.stringify(blockData.sections || [], null, 2)}
+                onChange={(e) => {
+                  try {
+                    const sections = JSON.parse(e.target.value);
+                    updateField("sections", sections);
+                  } catch {}
+                }}
+                rows={8}
+                placeholder="[{title: 'Temperature', value: '+1.2°C', description: 'Global average increase', icon: 'thermometer'}]"
+              />
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -1311,6 +1801,76 @@ export default function ContentAdminPage() {
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Interactive Callout
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("neural-climate-network")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Neural Climate Network
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("earth-pulse")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Earth Pulse
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("impact-comparison")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Impact Comparison
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("kpi-showcase")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        KPI Showcase
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("climate-map-static")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Climate Map Static
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("climate-metamorphosis")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Climate Metamorphosis
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("climate-timeline-minimal")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Climate Timeline Minimal
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("data-storm")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Data Storm
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("carbon-molecule-dance")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Carbon Molecule Dance
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("climate-infographic")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Climate Infographic
                       </Button>
                     </div>
                   </CardContent>

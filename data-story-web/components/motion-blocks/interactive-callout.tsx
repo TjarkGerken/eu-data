@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
@@ -36,7 +36,6 @@ export function InteractiveCallout() {
         : "Scientists warn we are approaching a critical tipping point. Without drastic action by 2030, irreversible climate changes could occur. Europe has already made significant progress, but the pace of change must double to meet Paris climate goals.",
     action: {
       label: language === "de" ? "Mehr erfahren" : "Learn More",
-      url: "https://www.ipcc.ch/",
     },
     stats: [
       {

@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
@@ -142,7 +142,6 @@ export function ClimateMetamorphosis() {
 
       <Card className="overflow-hidden bg-gradient-to-br from-white/80 to-gray-50/80 dark:from-gray-800/80 dark:to-gray-900/80 backdrop-blur-sm">
         <CardContent className="p-8">
-          {/* Main visualization */}
           <div
             className="relative h-64 mb-8 rounded-lg overflow-hidden"
             style={{ backgroundColor: currentStageData.color + "20" }}
@@ -156,7 +155,6 @@ export function ClimateMetamorphosis() {
                 transition={{ duration: 0.8, ease: "easeInOut" }}
                 className="absolute inset-0 flex flex-col items-center justify-center"
               >
-                {/* Year display */}
                 <motion.div
                   className="text-6xl font-bold mb-4"
                   style={{ color: currentStageData.color }}
@@ -166,7 +164,6 @@ export function ClimateMetamorphosis() {
                   {currentStageData.year}
                 </motion.div>
 
-                {/* Landscape */}
                 <motion.div
                   className="text-4xl mb-4 tracking-wider"
                   animate={{ y: [0, -5, 0] }}
@@ -175,7 +172,6 @@ export function ClimateMetamorphosis() {
                   {currentStageData.landscape}
                 </motion.div>
 
-                {/* Stage info */}
                 <div className="text-center">
                   <h4 className="text-2xl font-bold text-[#2d5a3d] mb-2">
                     {currentStageData.emoji} {currentStageData.title}
@@ -183,7 +179,6 @@ export function ClimateMetamorphosis() {
                   <p className="text-muted-foreground max-w-md">{currentStageData.description}</p>
                 </div>
 
-                {/* Climate indicators */}
                 <motion.div
                   className="absolute bottom-4 left-4 right-4 flex justify-between text-sm"
                   initial={{ opacity: 0, y: 20 }}
@@ -204,7 +199,6 @@ export function ClimateMetamorphosis() {
               </motion.div>
             </AnimatePresence>
 
-            {/* Progress bar */}
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
               <motion.div
                 className="h-full bg-[#2d5a3d]"
@@ -214,7 +208,6 @@ export function ClimateMetamorphosis() {
             </div>
           </div>
 
-          {/* Controls */}
           <div className="flex justify-center gap-4 mb-6">
             <Button onClick={handlePlayPause} className="bg-[#2d5a3d] hover:bg-[#2d5a3d]/90">
               {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
@@ -226,7 +219,6 @@ export function ClimateMetamorphosis() {
             </Button>
           </div>
 
-          {/* Timeline */}
           <div className="flex justify-between items-center">
             {stages.map((stage, index) => (
               <motion.button
@@ -247,7 +239,6 @@ export function ClimateMetamorphosis() {
         </CardContent>
       </Card>
 
-      {/* Impact summary */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}

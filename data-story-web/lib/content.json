@@ -189,6 +189,107 @@
         "content": "This is an interactive callout with enhanced features.",
         "variant": "success",
         "interactive": true
+      },
+      {
+        "type": "neural-climate-network",
+        "title": "Neural Climate Network",
+        "description": "Interactive neural network visualization",
+        "intensity": 1,
+        "speed": 1
+      },
+      {
+        "type": "earth-pulse",
+        "title": "Earth Pulse",
+        "description": "Earth heartbeat visualization",
+        "intensity": 1,
+        "speed": 1
+      },
+      {
+        "type": "impact-comparison",
+        "title": "Climate Impact Comparison",
+        "description": "Compare different climate scenarios",
+        "scenarios": [
+          {
+            "name": "Current",
+            "temperature": 1.2,
+            "seaLevel": 0.1,
+            "precipitation": 5,
+            "extremeEvents": 10
+          }
+        ]
+      },
+      {
+        "type": "kpi-showcase",
+        "title": "Key Performance Indicators",
+        "description": "Important climate metrics",
+        "kpis": [
+          {
+            "label": "Temperature",
+            "value": "+1.2°C",
+            "change": "+0.1°C",
+            "trend": "up",
+            "icon": "thermometer"
+          }
+        ]
+      },
+      {
+        "type": "climate-map-static",
+        "title": "Climate Map",
+        "description": "Regional climate visualization",
+        "mapType": "temperature",
+        "region": "europe"
+      },
+      {
+        "type": "climate-metamorphosis",
+        "title": "Climate Metamorphosis",
+        "description": "Evolution of climate over time",
+        "stages": [
+          {
+            "year": 2020,
+            "title": "Current State",
+            "description": "Current climate conditions",
+            "data": 100
+          }
+        ]
+      },
+      {
+        "type": "climate-timeline-minimal",
+        "title": "Climate Timeline",
+        "description": "Minimal timeline view",
+        "events": [
+          {
+            "year": 2024,
+            "title": "Event",
+            "description": "Description"
+          }
+        ]
+      },
+      {
+        "type": "data-storm",
+        "title": "Data Storm",
+        "description": "Dynamic data visualization",
+        "intensity": 1,
+        "particles": 100
+      },
+      {
+        "type": "carbon-molecule-dance",
+        "title": "Carbon Molecule Dance",
+        "description": "Carbon molecule animation",
+        "molecules": 50,
+        "speed": 1
+      },
+      {
+        "type": "climate-infographic",
+        "title": "Climate Infographic",
+        "description": "Visual climate information",
+        "sections": [
+          {
+            "title": "Temperature",
+            "value": "+1.2°C",
+            "description": "Global average increase",
+            "icon": "thermometer"
+          }
+        ]
       }
     ]
   },

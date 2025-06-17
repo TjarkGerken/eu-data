@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -101,7 +101,6 @@ export function ClimateInfographic() {
                   <div className="text-xs text-muted-foreground">{item.description}</div>
                 </div>
 
-                {/* Progress bar */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>{language === "de" ? "Fortschritt" : "Progress"}</span>
@@ -120,7 +119,6 @@ export function ClimateInfographic() {
         ))}
       </div>
 
-      {/* Summary section */}
       <div className="mt-12 text-center">
         <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-[#2d5a3d]/20">
           <CardContent className="p-8">
