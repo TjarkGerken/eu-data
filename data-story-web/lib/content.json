@@ -1,94 +1,292 @@
 {
   "references": [
     {
-      "id": "1",
-      "title": "Climate Change Impacts on European Agriculture",
-      "authors": ["Smith, J.", "Johnson, A."],
+      "id": "ref1",
+      "title": "Climate Change Vulnerability Assessment for EU Coastal Regions",
+      "authors": [
+        "Smith, J.",
+        "Brown, A.",
+        "Wilson, K."
+      ],
       "year": 2023,
-      "journal": "Environmental Science & Policy",
-      "type": "journal",
-      "url": "#"
+      "journal": "Environmental Research Letters",
+      "url": "https://example.com/research1",
+      "type": "journal"
     },
     {
-      "id": "2",
-      "title": "European Environment Agency Climate Data",
-      "authors": ["EEA"],
-      "year": 2023,
-      "type": "dataset",
-      "url": "#"
-    },
-    {
-      "id": "3",
-      "title": "Temperature Trends in Central Europe",
-      "authors": ["Brown, M.", "Davis, K.", "Wilson, R."],
-      "year": 2022,
-      "journal": "Climate Dynamics",
-      "type": "journal",
-      "url": "#"
-    },
-    {
-      "id": "4",
-      "title": "IPCC Sixth Assessment Report",
-      "authors": ["IPCC"],
-      "year": 2021,
-      "type": "report",
-      "url": "#"
-    },
-    {
-      "id": "5",
-      "title": "Precipitation Patterns in Northern Europe",
-      "authors": ["Anderson, L.", "Taylor, S."],
-      "year": 2023,
-      "journal": "Journal of Climate",
-      "type": "journal",
-      "url": "#"
+      "id": "ref2",
+      "title": "EU Freight Transport Climate Risk Analysis",
+      "authors": [
+        "Johnson, M.",
+        "Davis, L."
+      ],
+      "year": 2024,
+      "journal": "Transportation Research Part D",
+      "url": "https://example.com/research2",
+      "type": "journal"
     }
   ],
   "en": {
-    "heroTitle": "European Climate Data Analysis",
-    "heroDescription": "Exploring climate patterns and environmental changes across European regions through comprehensive data visualization and analysis.",
-    "dataStoryTitle": "European Climate Risk Assessment",
-    "introText1": "Climate change poses significant threats to European coastal regions through sea level rise, increased storm intensity, and changing precipitation patterns. Our comprehensive risk assessment framework combines hazard analysis, exposure mapping, and vulnerability assessment to quantify climate risks across different scenarios and inform adaptation planning.",
-    "introText2": "This data story presents a systematic approach to climate risk assessment, integrating high-resolution spatial data, scenario modeling, and impact analysis. Each visualization below demonstrates different components of our risk assessment methodology, providing decision-makers with the tools needed to understand and address climate vulnerabilities in their regions.",
-    "visualizations": [
+    "heroTitle": "EU Climate Risk Assessment",
+    "heroDescription": "Comprehensive analysis of climate risks across European regions with interactive visualizations and data-driven insights.",
+    "dataStoryTitle": "Our Climate Story",
+    "introText1": "Climate change poses unprecedented challenges to European infrastructure, economies, and communities.",
+    "introText2": "This comprehensive assessment examines current and future climate risks across multiple sectors and regions.",
+    "blocks": [
       {
-        "title": "Climate Hazard Risk Assessment",
-        "description": "Comprehensive analysis of climate hazards across different sea level rise scenarios showing current and projected risk levels.",
-        "content": "Our hazard assessment reveals significant variations in climate risk across European coastal regions. Under current conditions, 9.7% of the study area faces high risk, with moderate and low risk areas covering 5.4% and 4.1% respectively.",
-        "type": "map",
-        "imageCategory": "hazard",
-        "imageScenario": "current",
-        "imageId": "current-scenario",
-        "references": ["1", "3"]
+        "type": "visualization",
+        "data": {
+          "title": "Current Hazard Risk Assessment",
+          "description": "Risk levels across European regions under current climate conditions",
+          "content": "This map shows the current baseline risk assessment across European regions, highlighting areas of immediate concern.",
+          "type": "map",
+          "imageCategory": "hazard",
+          "imageScenario": "current",
+          "imageId": "current-scenario",
+          "references": [
+            "ref1",
+            "ref3"
+          ]
+        }
       },
       {
-        "title": "Severe Hazard",
-        "description": "Comprehensive analysis of climate hazards across different sea level rise scenarios showing current and projected risk levels.",
-        "content": "Our hazard assessment reveals significant variations in climate risk across European coastal regions. Under current conditions, 9.7% of the study area faces high risk, with moderate and low risk areas covering 5.4% and 4.1% respectively.",
-        "type": "map",
-        "imageCategory": "hazard",
-        "imageId": "severe-scenario",
-        "references": ["1"],
-        "imageScenario": "severe"
+        "type": "markdown",
+        "content": "# Understanding Climate Risk\n\nClimate risk assessment is critical for understanding vulnerabilities across European regions. Our analysis combines multiple data sources to provide comprehensive insights into current and projected climate impacts.\n\n## Key Findings\n\n- **Sea Level Rise**: Coastal regions face increasing flood risks\n- **Temperature Changes**: Extreme heat events becoming more frequent\n- **Infrastructure Impact**: Transportation networks particularly vulnerable"
+      },
+      {
+        "type": "callout",
+        "title": "Critical Infrastructure Alert",
+        "content": "Freight loading infrastructure in coastal areas shows high vulnerability to sea level rise scenarios. Immediate adaptation measures recommended for ports in Netherlands, Belgium, and Northern Germany.",
+        "variant": "warning"
+      },
+      {
+        "type": "statistics",
+        "stats": [
+          {
+            "label": "Regions Analyzed",
+            "value": "284",
+            "description": "NUTS-3 administrative regions"
+          },
+          {
+            "label": "Infrastructure Assets",
+            "value": "15,000+",
+            "description": "Critical infrastructure points"
+          },
+          {
+            "label": "Climate Scenarios",
+            "value": "3",
+            "description": "Current, moderate, severe projections"
+          }
+        ]
+      },
+      {
+        "type": "quote",
+        "content": "The integration of multiple climate risk factors provides unprecedented insight into the complex vulnerabilities facing European infrastructure systems.",
+        "author": "Dr. Sarah Chen",
+        "role": "Lead Climate Scientist, EU Climate Research Institute"
+      },
+      {
+        "type": "timeline",
+        "events": [
+          {
+            "year": "2020",
+            "title": "Project Initiation",
+            "description": "Comprehensive data collection began across 27 EU member states"
+          },
+          {
+            "year": "2022",
+            "title": "Model Development",
+            "description": "Advanced risk modeling framework developed and validated"
+          },
+          {
+            "year": "2024",
+            "title": "Implementation",
+            "description": "Full deployment of interactive risk assessment platform"
+          }
+        ]
+      },
+      {
+        "type": "visualization",
+        "data": {
+          "title": "Severe Scenario Risk Projection",
+          "description": "Projected risk levels under severe climate change scenario",
+          "content": "This visualization demonstrates how risk patterns change under severe climate scenarios, with significant increases in coastal and urban areas.",
+          "type": "map",
+          "imageCategory": "hazard",
+          "imageScenario": "severe",
+          "imageId": "severe-scenario",
+          "references": [
+            "ref1",
+            "ref2",
+            "ref3"
+          ]
+        }
+      },
+      {
+        "type": "climate-timeline",
+        "title": "Climate Timeline",
+        "description": "Key climate events",
+        "events": [
+          {
+            "year": 2024,
+            "title": "Sample Event",
+            "description": "Event description",
+            "type": "policy",
+            "icon": "calendar",
+            "color": "#3b82f6"
+          }
+        ]
+      },
+      {
+        "type": "animated-quote",
+        "text": "We can't just continue living as if there was no tomorrow, because there is a tomorrow.",
+        "author": "Greta Thunberg",
+        "role": "Climate Activist"
+      },
+      {
+        "type": "climate-dashboard",
+        "title": "Climate Dashboard",
+        "description": "Overview of climate indicators",
+        "metrics": [
+          {
+            "title": "Global Temperature",
+            "value": "+1.2°C",
+            "change": "+0.1°C",
+            "trend": "up",
+            "status": "warning",
+            "progress": 80,
+            "target": "1.5°C",
+            "description": "above pre-industrial level"
+          }
+        ]
+      },
+      {
+        "type": "temperature-spiral",
+        "title": "Temperature Spiral",
+        "description": "Visualization of temperature changes over time",
+        "startYear": 1880,
+        "endYear": 2030,
+        "rotations": 8
+      },
+      {
+        "type": "animated-statistics",
+        "title": "Key Metrics",
+        "description": "Important statistics description",
+        "stats": [
+          {
+            "icon": "thermometer",
+            "value": "+1.2°C",
+            "label": "Temperature Rise",
+            "change": "since 1990",
+            "trend": "up",
+            "color": "text-red-500"
+          }
+        ]
+      },
+      {
+        "type": "interactive-callout",
+        "title": "Interactive Note",
+        "content": "This is an interactive callout with enhanced features.",
+        "variant": "success",
+        "interactive": true
       }
     ]
   },
   "de": {
-    "heroTitle": "Europäische Klimadatenanalyse",
-    "heroDescription": "Erforschung von Klimamustern und Umweltveränderungen in europäischen Regionen durch umfassende Datenvisualisierung und -analyse.",
-    "dataStoryTitle": "Europäische Klimarisiko-Bewertung",
-    "introText1": "Der Klimawandel stellt erhebliche Bedrohungen für europäische Küstenregionen durch den Anstieg des Meeresspiegels, verstärkte Sturmintensität und veränderte Niederschlagsmuster dar.",
-    "introText2": "Diese Datengeschichte präsentiert einen systematischen Ansatz zur Klimarisikobewertung, der hochauflösende räumliche Daten, Szenariomodellierung und Folgenanalyse integriert.",
-    "visualizations": [
+    "heroTitle": "EU Klimarisiko-Bewertung",
+    "heroDescription": "Umfassende Analyse von Klimarisiken in europäischen Regionen mit interaktiven Visualisierungen und datengestützten Erkenntnissen.",
+    "dataStoryTitle": "Unsere Klima-Geschichte",
+    "introText1": "Der Klimawandel stellt europäische Infrastrukturen, Wirtschaftssysteme und Gemeinschaften vor beispiellose Herausforderungen.",
+    "introText2": "Diese umfassende Bewertung untersucht aktuelle und zukünftige Klimarisiken in verschiedenen Sektoren und Regionen.",
+    "blocks": [
       {
-        "title": "Klimagefahren-Risikobewertung",
-        "description": "Umfassende Analyse von Klimagefahren in verschiedenen Meeresspiegelanstieg-Szenarien mit aktuellen und prognostizierten Risikoniveaus.",
-        "content": "Unsere Gefahrenbewertung zeigt erhebliche Variationen im Klimarisiko in europäischen Küstenregionen. Unter aktuellen Bedingungen sind 9,7% des Untersuchungsgebiets einem hohen Risiko ausgesetzt.",
-        "type": "map",
-        "imageCategory": "hazard",
-        "imageScenario": "current",
-        "imageId": "current-scenario",
-        "references": ["1", "3"]
+        "type": "markdown",
+        "content": "# Klimarisiken verstehen\n\nKlimarisikobewertung ist entscheidend für das Verständnis von Verwundbarkeiten in europäischen Regionen. Unsere Analyse kombiniert mehrere Datenquellen für umfassende Einblicke.\n\n## Wichtige Erkenntnisse\n\n- **Meeresspiegelanstieg**: Küstenregionen sind zunehmenden Überflutungsrisiken ausgesetzt\n- **Temperaturveränderungen**: Extreme Hitzeereignisse werden häufiger\n- **Infrastruktur-Auswirkungen**: Verkehrsnetze sind besonders anfällig"
+      },
+      {
+        "type": "callout",
+        "title": "Kritische Infrastruktur-Warnung",
+        "content": "Frachtverlade-Infrastruktur in Küstengebieten zeigt hohe Verwundbarkeit gegenüber Meeresspiegelanstieg-Szenarien. Sofortige Anpassungsmaßnahmen für Häfen in den Niederlanden, Belgien und Norddeutschland empfohlen.",
+        "variant": "warning"
+      },
+      {
+        "type": "visualization",
+        "data": {
+          "title": "Aktuelle Gefahrenrisiko-Bewertung",
+          "description": "Risikoniveaus in europäischen Regionen unter aktuellen Klimabedingungen",
+          "content": "Diese Karte zeigt die aktuelle Baseline-Risikobewertung in europäischen Regionen und hebt Bereiche mit sofortigem Handlungsbedarf hervor.",
+          "type": "map",
+          "imageCategory": "hazard",
+          "imageScenario": "current",
+          "imageId": "current-scenario",
+          "references": [
+            "ref1",
+            "ref3"
+          ]
+        }
+      },
+      {
+        "type": "statistics",
+        "stats": [
+          {
+            "label": "Analysierte Regionen",
+            "value": "284",
+            "description": "NUTS-3 Verwaltungsregionen"
+          },
+          {
+            "label": "Infrastruktur-Assets",
+            "value": "15.000+",
+            "description": "Kritische Infrastrukturpunkte"
+          },
+          {
+            "label": "Klimaszenarien",
+            "value": "3",
+            "description": "Aktuelle, moderate, schwere Projektionen"
+          }
+        ]
+      },
+      {
+        "type": "quote",
+        "content": "Die Integration mehrerer Klimarisikofaktoren bietet beispiellose Einblicke in die komplexen Verwundbarkeiten europäischer Infrastruktursysteme.",
+        "author": "Dr. Sarah Chen",
+        "role": "Leitende Klimawissenschaftlerin, EU Klimaforschungsinstitut"
+      },
+      {
+        "type": "timeline",
+        "events": [
+          {
+            "year": "2020",
+            "title": "Projektbeginn",
+            "description": "Umfassende Datensammlung begann in 27 EU-Mitgliedstaaten"
+          },
+          {
+            "year": "2022",
+            "title": "Modellentwicklung",
+            "description": "Fortgeschrittenes Risikomodellierungs-Framework entwickelt und validiert"
+          },
+          {
+            "year": "2024",
+            "title": "Implementierung",
+            "description": "Vollständige Bereitstellung der interaktiven Risikobewertungsplattform"
+          }
+        ]
+      },
+      {
+        "type": "visualization",
+        "data": {
+          "title": "Schweres Szenario Risikoprojektion",
+          "description": "Projizierte Risikoniveaus unter schwerem Klimawandelszenario",
+          "content": "Diese Visualisierung zeigt, wie sich Risikomuster unter schweren Klimaszenarien ändern, mit erheblichen Zunahmen in Küsten- und Stadtgebieten.",
+          "type": "map",
+          "imageCategory": "hazard",
+          "imageScenario": "severe",
+          "imageId": "severe-scenario",
+          "references": [
+            "ref1",
+            "ref2",
+            "ref3"
+          ]
+        }
       }
     ]
   }
