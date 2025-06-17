@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/language-context";
 import { DynamicContent } from "@/lib/types";
+import { fetchContentByLanguage, ContentData } from "@/lib/content-service";
 
 export function useDynamicContent() {
   const { language } = useLanguage();
@@ -8,29 +9,120 @@ export function useDynamicContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const transformContentData = (data: any): DynamicContent => {
+    const transformBlock = (block: any) => {
+      // Handle specific block type transformations
+      switch (block.blockType) {
+        case "visualization":
+          return {
+            type: "visualization",
+            data: {
+              title: block.data.title || "",
+              description: block.data.description || "",
+              content: block.data.content || "",
+              type: block.data.type || "map",
+              imageCategory: block.data.imageCategory || "",
+              imageScenario: block.data.imageScenario || "",
+              imageId: block.data.imageId || "",
+              references: block.references?.map((ref: any) => ref.id) || [],
+            },
+          };
+
+        case "markdown":
+          return {
+            type: "markdown",
+            content: block.data.content,
+          };
+
+        case "callout":
+          return {
+            type: "callout",
+            title: block.data.title,
+            content: block.data.content,
+            variant: block.data.variant,
+          };
+
+        case "quote":
+          return {
+            type: "quote",
+            content: block.data.content,
+            author: block.data.author,
+            role: block.data.role,
+          };
+
+        case "statistics":
+          return {
+            type: "statistics",
+            stats: block.data.stats,
+          };
+
+        case "timeline":
+          return {
+            type: "timeline",
+            events: block.data.events,
+          };
+
+        case "animated-quote":
+          return {
+            type: "animated-quote",
+            text: block.data.text,
+            author: block.data.author,
+            role: block.data.role,
+          };
+
+        default:
+          return {
+            type: block.blockType,
+            ...block.data,
+          };
+      }
+    };
+
+    const transformedBlocks = data.blocks.map(transformBlock);
+
+    const visualizations = data.blocks
+      .filter((block: any) => block.blockType === "visualization")
+      .map((block: any) => ({
+        title: block.data.title || "",
+        description: block.data.description || "",
+        content: block.data.content || "",
+        type: block.data.type || "map",
+        imageCategory: block.data.imageCategory || "",
+        imageScenario: block.data.imageScenario || "",
+        imageId: block.data.imageId || "",
+        references: block.references?.map((ref: any) => ref.id) || [],
+      }));
+
+    return {
+      heroTitle: data.story.heroTitle,
+      heroDescription: data.story.heroDescription || "",
+      dataStoryTitle: data.story.dataStoryTitle || "",
+      introText1: data.story.introText1 || "",
+      introText2: data.story.introText2 || "",
+      blocks: transformedBlocks,
+      visualizations,
+      references: data.references,
+    };
+  };
+
   const loadContent = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch("/api/content");
+      const response = await fetch(`/api/content?language=${language}`);
       if (!response.ok) {
         throw new Error("Failed to fetch content");
       }
 
-      const data = await response.json();
-      const languageContent = data[language];
+      const contentData = await response.json();
 
-      if (!languageContent) {
+      if (!contentData) {
         throw new Error(`Content not found for language: ${language}`);
       }
 
-      const contentWithReferences = {
-        ...languageContent,
-        references: data.references || [],
-      };
-
-      setContent(contentWithReferences);
+      const transformedContent = transformContentData(contentData);
+      setContent(transformedContent);
     } catch (err) {
       console.error("Error loading content:", err);
       setError(err instanceof Error ? err.message : "Failed to load content");

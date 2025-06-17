@@ -9,9 +9,31 @@ import { useDynamicContent } from "@/hooks/use-dynamic-content";
 import { motion } from "motion/react";
 
 export default function HomePage() {
-  const { content } = useDynamicContent();
+  const { content, loading, error } = useDynamicContent();
 
-  if (!content) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-lg">Loading content...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-lg text-red-600">Error: {error}</div>
+      </div>
+    );
+  }
+
+  if (!content) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-lg">No content available</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

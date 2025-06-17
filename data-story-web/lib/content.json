@@ -221,13 +221,6 @@
         ]
       },
       {
-        "type": "climate-map-static",
-        "title": "Static Exposure Map",
-        "description": "Snapshot of 2100 risk zones and economic areas",
-        "mapType": "seaLevel",
-        "region": "netherlands"
-      },
-      {
         "type": "climate-metamorphosis",
         "title": "Urban Resilience Evolution",
         "description": "Transformation of Dutch regions through climate adaptation",
