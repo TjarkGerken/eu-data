@@ -495,16 +495,7 @@ export default function ContentAdminPage() {
             },
           ],
         };
-      case "climate-map-static":
-        return {
-          type: "climate-map-static",
-          title: isGerman ? "Klimakarte" : "Climate Map",
-          description: isGerman
-            ? "Regionale Klimavisualisierung"
-            : "Regional climate visualization",
-          mapType: "temperature",
-          region: "europe",
-        };
+
       case "climate-metamorphosis":
         return {
           type: "climate-metamorphosis",
@@ -1446,49 +1437,6 @@ export default function ContentAdminPage() {
           </div>
         );
 
-      case "climate-map-static":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Map Type</Label>
-              <Select
-                value={blockData.mapType || "temperature"}
-                onValueChange={(value) => updateField("mapType", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="temperature">Temperature</SelectItem>
-                  <SelectItem value="precipitation">Precipitation</SelectItem>
-                  <SelectItem value="risk">Risk</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Region</Label>
-              <Input
-                value={blockData.region || ""}
-                onChange={(e) => updateField("region", e.target.value)}
-              />
-            </div>
-          </div>
-        );
-
       case "climate-metamorphosis":
         return (
           <div className="space-y-4">
@@ -2051,13 +1999,7 @@ export default function ContentAdminPage() {
                         <Plus className="h-4 w-4 mr-2" />
                         KPI Showcase
                       </Button>
-                      <Button
-                        onClick={() => addBlock("climate-map-static")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Climate Map Static
-                      </Button>
+
                       <Button
                         onClick={() => addBlock("climate-metamorphosis")}
                         variant="outline"

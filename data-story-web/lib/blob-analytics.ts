@@ -1,4 +1,4 @@
-import { list } from "@vercel/blob";
+import { supabase } from "./supabase";
 
 export interface ImageViewEvent {
   imageUrl: string;
@@ -17,8 +17,8 @@ export interface UsageStats {
   topImages: Array<{ url: string; views: number; category: string }>;
 }
 
-export class BlobAnalytics {
-  private static PREFIX = "climate-data";
+export class SupabaseAnalytics {
+  private static BUCKET = "climate-images";
   private static events: ImageViewEvent[] = [];
 
   static async trackImageView(
@@ -51,23 +51,37 @@ export class BlobAnalytics {
 
   static async getUsageStats(): Promise<UsageStats> {
     try {
-      const { blobs } = await list({
-        prefix: this.PREFIX,
-        token: process.env.BLOB_READ_WRITE_TOKEN,
-      });
+      const categories = ["risk", "exposition", "hazard", "combined"];
+      let totalImages = 0;
+      let totalSize = 0;
+      const categoryCounts: Record<string, number> = {};
 
-      const imageBlobs = blobs.filter(
-        (blob) => !blob.pathname.includes("/metadata/")
-      );
+      for (const category of categories) {
+        const { data: files, error } = await supabase.storage
+          .from(this.BUCKET)
+          .list(category, {
+            limit: 1000,
+            sortBy: { column: "name", order: "asc" },
+          });
 
-      const totalSize = imageBlobs.reduce((sum, blob) => sum + blob.size, 0);
+        if (!error && files) {
+          const imageFiles = files.filter(
+            (file) =>
+              !file.name.endsWith(".json") &&
+              (file.name.endsWith(".png") ||
+                file.name.endsWith(".jpg") ||
+                file.name.endsWith(".jpeg") ||
+                file.name.endsWith(".webp"))
+          );
 
-      const categoryCounts = imageBlobs.reduce((acc, blob) => {
-        const pathParts = blob.pathname.split("/");
-        const category = pathParts[1] || "unknown";
-        acc[category] = (acc[category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+          categoryCounts[category] = imageFiles.length;
+          totalImages += imageFiles.length;
+          totalSize += imageFiles.reduce(
+            (sum, file) => sum + (file.metadata?.size || 0),
+            0
+          );
+        }
+      }
 
       const recentViews = this.events.slice(-100);
 
@@ -86,7 +100,7 @@ export class BlobAnalytics {
         });
 
       return {
-        totalImages: imageBlobs.length,
+        totalImages,
         totalSize,
         categoryCounts,
         recentViews,

@@ -3,9 +3,7 @@
 import { DataStoryBlock } from "@/lib/types";
 import { MarkdownBlock } from "./markdown-block";
 import { CalloutBlock } from "./callout-block";
-import { QuoteBlock } from "./quote-block";
-import { StatisticsBlock } from "./statistics-block";
-import { TimelineBlock } from "./timeline-block";
+
 import { VisualizationCard } from "@/components/visualization-card";
 import { AnimatedQuoteBlock } from "./animated-quote-block";
 import { AnimatedStatisticsBlock } from "./animated-statistics-block";
@@ -13,15 +11,9 @@ import { ClimateTimelineBlock } from "./climate-timeline-block";
 import { ClimateDashboardBlock } from "./climate-dashboard-block";
 import { TemperatureSpiralBlock } from "./temperature-spiral-block";
 import { InteractiveCalloutBlock } from "./interactive-callout-block";
-import NeuralClimateNetworkBlockComponent from "./neural-climate-network-block";
-import EarthPulseBlockComponent from "./earth-pulse-block";
 import ImpactComparisonBlockComponent from "./impact-comparison-block";
 import KpiShowcaseBlockComponent from "./kpi-showcase-block";
-import ClimateMapStaticBlockComponent from "./climate-map-static-block";
-import ClimateMetamorphosisBlockComponent from "./climate-metamorphosis-block";
 import ClimateTimelineMinimalBlockComponent from "./climate-timeline-minimal-block";
-import DataStormBlockComponent from "./data-storm-block";
-import CarbonMoleculeDanceBlockComponent from "./carbon-molecule-dance-block";
 import ClimateInfographicBlockComponent from "./climate-infographic-block";
 
 interface DataStoryRendererProps {
@@ -43,22 +35,6 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             variant={block.variant}
           />
         );
-
-      case "quote":
-        return (
-          <QuoteBlock
-            key={index}
-            content={block.content}
-            author={block.author}
-            role={block.role}
-          />
-        );
-
-      case "statistics":
-        return <StatisticsBlock key={index} stats={block.stats} />;
-
-      case "timeline":
-        return <TimelineBlock key={index} events={block.events} />;
 
       case "visualization":
         return (
@@ -147,34 +123,16 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
           />
         );
 
-      case "neural-climate-network":
-        return <NeuralClimateNetworkBlockComponent key={index} block={block} />;
-
-      case "earth-pulse":
-        return <EarthPulseBlockComponent key={index} block={block} />;
-
       case "impact-comparison":
         return <ImpactComparisonBlockComponent key={index} block={block} />;
 
       case "kpi-showcase":
         return <KpiShowcaseBlockComponent key={index} block={block} />;
 
-      case "climate-map-static":
-        return <ClimateMapStaticBlockComponent key={index} block={block} />;
-
-      case "climate-metamorphosis":
-        return <ClimateMetamorphosisBlockComponent key={index} block={block} />;
-
       case "climate-timeline-minimal":
         return (
           <ClimateTimelineMinimalBlockComponent key={index} block={block} />
         );
-
-      case "data-storm":
-        return <DataStormBlockComponent key={index} block={block} />;
-
-      case "carbon-molecule-dance":
-        return <CarbonMoleculeDanceBlockComponent key={index} block={block} />;
 
       case "climate-infographic":
         return <ClimateInfographicBlockComponent key={index} block={block} />;
@@ -183,6 +141,16 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
         return null;
     }
   };
+
+  if (!blocks || blocks.length === 0) {
+    return (
+      <div className="space-y-8">
+        <div className="text-center text-muted-foreground py-8">
+          No content blocks available.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
