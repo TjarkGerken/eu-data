@@ -10,7 +10,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, TrendingUp, Globe, Thermometer } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
-import Image from "next/image";
+import ClimateImage from "@/components/climate-image";
+import { ImageCategory, ImageScenario } from "@/lib/blob-config";
 
 interface VisualizationCardProps {
   title: string;
@@ -19,6 +20,9 @@ interface VisualizationCardProps {
   type: "chart" | "map" | "trend" | "gauge";
   references: string[];
   imagePath?: string;
+  imageCategory?: ImageCategory;
+  imageScenario?: ImageScenario;
+  imageId?: string;
 }
 
 const iconMap = {
@@ -35,6 +39,9 @@ export function VisualizationCard({
   type,
   references,
   imagePath,
+  imageCategory,
+  imageScenario,
+  imageId,
 }: VisualizationCardProps) {
   const Icon = iconMap[type];
   const { t } = useLanguage();
@@ -51,14 +58,24 @@ export function VisualizationCard({
       <CardContent className="space-y-6">
         {/* Visualization Area */}
         <div className="aspect-[16/9] bg-gradient-to-br from-[#2d5a3d]/10 to-[#c4a747]/10 rounded-lg flex items-center justify-center overflow-hidden">
-          {imagePath ? (
+          {imageCategory ? (
             <div className="relative w-full h-full">
-              <Image
-                src={imagePath}
+              <ClimateImage
+                category={imageCategory}
+                scenario={imageScenario}
+                id={imageId}
                 alt={title}
-                fill
                 className="object-contain"
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 75vw, 60vw"
+                priority={false}
+              />
+            </div>
+          ) : imagePath ? (
+            <div className="relative w-full h-full">
+              <ClimateImage
+                category="combined"
+                alt={title}
+                className="object-contain"
+                priority={false}
               />
             </div>
           ) : (

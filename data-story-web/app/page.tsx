@@ -16,7 +16,9 @@ export default function Page() {
       description: t.hazardAssessmentDesc,
       content: t.hazardAssessmentContent,
       type: "map" as const,
-      imagePath: "/hazard_risk_current_scenario.png",
+      imageCategory: "hazard" as const,
+      imageScenario: "current" as const,
+      imageId: "current-scenario",
       references: ["1", "3"],
     },
     {
@@ -24,7 +26,9 @@ export default function Page() {
       description: t.seaLevelRiseCurrentDesc,
       content: t.seaLevelRiseCurrentContent,
       type: "map" as const,
-      imagePath: "/risk_SLR-0-Current_COMBINED.png",
+      imageCategory: "risk" as const,
+      imageScenario: "current" as const,
+      imageId: "slr-current",
       references: ["2", "5"],
     },
     {
@@ -32,7 +36,9 @@ export default function Page() {
       description: t.seaLevelRiseSevereDesc,
       content: t.seaLevelRiseSevereContent,
       type: "map" as const,
-      imagePath: "/risk_SLR-3-Severe_COMBINED.png",
+      imageCategory: "risk" as const,
+      imageScenario: "severe" as const,
+      imageId: "slr-severe",
       references: ["1", "4"],
     },
     {
@@ -40,7 +46,8 @@ export default function Page() {
       description: t.expositionLayerDesc,
       content: t.expositionLayerContent,
       type: "map" as const,
-      imagePath: "/exposition_layer.png",
+      imageCategory: "exposition" as const,
+      imageId: "layer-overview",
       references: ["2", "4"],
     },
     {
@@ -48,7 +55,8 @@ export default function Page() {
       description: t.freightExpositionDesc,
       content: t.freightExpositionContent,
       type: "chart" as const,
-      imagePath: "/exposition_freight_loading.png",
+      imageCategory: "exposition" as const,
+      imageId: "freight-loading",
       references: ["3", "4", "5"],
     },
     {
@@ -56,7 +64,8 @@ export default function Page() {
       description: t.floodRiskScenariosDesc,
       content: t.floodRiskScenariosContent,
       type: "trend" as const,
-      imagePath: "/flood_risk_relative_by_scenario.png",
+      imageCategory: "risk" as const,
+      imageId: "flood-relative",
       references: ["2", "4"],
     },
   ];
@@ -95,7 +104,9 @@ export default function Page() {
                     content={viz.content}
                     type={viz.type}
                     references={viz.references}
-                    imagePath={viz.imagePath}
+                    imageCategory={viz.imageCategory}
+                    imageScenario={viz.imageScenario}
+                    imageId={viz.imageId}
                   />
 
                   {/* Add narrative sections between some visualizations */}
