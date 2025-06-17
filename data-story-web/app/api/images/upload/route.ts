@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from "next/server";
+import { BlobImageManager } from "@/lib/blob-manager";
+import { BLOB_CONFIG } from "@/lib/blob-config";
+
+export async function POST(request: NextRequest) {
+  try {
+    console.log(
+      "API: Upload request, token available:",
+      !!process.env.BLOB_READ_WRITE_TOKEN
+    );
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+    const category = formData.get("category") as string;
+    const scenario = formData.get("scenario") as string;
+    const description = formData.get("description") as string;
+    const id = formData.get("id") as string;
+
+    if (!file || !category || !description || !id) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    if (file.size > BLOB_CONFIG.maxFileSize) {
+      return NextResponse.json({ error: "File too large" }, { status: 400 });
+    }
+
+    if (!BLOB_CONFIG.allowedTypes.includes(file.type)) {
+      return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
+    }
+
+    if (!BLOB_CONFIG.categories.includes(category as any)) {
+      return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+    }
+
+    const result = await BlobImageManager.uploadImage(file, {
+      id,
+      category: category as any,
+      scenario: scenario === "" ? undefined : (scenario as any),
+      description,
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("Upload error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Upload failed" },
+      { status: 500 }
+    );
+  }
+}
