@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
@@ -87,7 +87,6 @@ export function AnimatedQuote() {
               <div className="text-sm text-muted-foreground">{quote.role}</div>
             </motion.div>
 
-            {/* Decorative elements */}
             <motion.div
               animate={{
                 rotate: 360,

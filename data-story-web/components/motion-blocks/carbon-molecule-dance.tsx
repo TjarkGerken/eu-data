@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion, useAnimationFrame } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,10 +21,9 @@ export function CarbonMoleculeDance() {
   const [molecules, setMolecules] = useState<Molecule[]>(() => {
     const initialMolecules: Molecule[] = []
 
-    // Add CO2 molecules
-    for (let i = 0; i < 15; i++) {
+    for (let index = 0; index < 15; index++) {
       initialMolecules.push({
-        id: i,
+        id: index,
         x: Math.random() * 800,
         y: Math.random() * 400,
         vx: (Math.random() - 0.5) * 2,
@@ -34,10 +33,9 @@ export function CarbonMoleculeDance() {
       })
     }
 
-    // Add O2 molecules
-    for (let i = 15; i < 25; i++) {
+    for (let index = 15; index < 25; index++) {
       initialMolecules.push({
-        id: i,
+        id: index,
         x: Math.random() * 800,
         y: Math.random() * 400,
         vx: (Math.random() - 0.5) * 1.5,
@@ -47,10 +45,9 @@ export function CarbonMoleculeDance() {
       })
     }
 
-    // Add trees
-    for (let i = 25; i < 30; i++) {
+    for (let index = 25; index < 30; index++) {
       initialMolecules.push({
-        id: i,
+        id: index,
         x: Math.random() * 800,
         y: 350 + Math.random() * 50,
         vx: 0,
@@ -73,15 +70,12 @@ export function CarbonMoleculeDance() {
         let newVx = molecule.vx
         let newVy = molecule.vy
 
-        // Bounce off walls
         if (newX <= 0 || newX >= 800) newVx = -newVx
         if (newY <= 0 || newY >= 400) newVy = -newVy
 
-        // Keep in bounds
         newX = Math.max(0, Math.min(800, newX))
         newY = Math.max(0, Math.min(400, newY))
 
-        // Trees attract CO2
         if (molecule.type === "co2") {
           prev.forEach((other) => {
             if (other.type === "tree") {
@@ -100,7 +94,6 @@ export function CarbonMoleculeDance() {
           ...molecule,
           x: newX,
           y: newY,
-          vx: newVx * 0.99, // Slight friction
           vy: newVy * 0.99,
         }
       }),
@@ -214,7 +207,6 @@ export function CarbonMoleculeDance() {
             className="relative w-full h-96 overflow-hidden"
             style={{ background: "linear-gradient(to bottom, #87CEEB 0%, #98FB98 100%)" }}
           >
-            {/* Sky background with clouds */}
             <motion.div
               className="absolute top-4 left-10 w-16 h-8 bg-white/60 rounded-full"
               animate={{
@@ -238,7 +230,6 @@ export function CarbonMoleculeDance() {
               }}
             />
 
-            {/* Sun */}
             <motion.div
               className="absolute top-6 right-6 w-12 h-12 bg-yellow-400 rounded-full"
               animate={{
@@ -251,13 +242,10 @@ export function CarbonMoleculeDance() {
               }}
             />
 
-            {/* Ground */}
             <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-green-600 to-green-400" />
 
-            {/* Molecules */}
             {molecules.map((molecule) => getMoleculeComponent(molecule))}
 
-            {/* Absorption effects */}
             {molecules
               .filter((m) => m.type === "tree")
               .map((tree) => (
@@ -285,7 +273,6 @@ export function CarbonMoleculeDance() {
         </CardContent>
       </Card>
 
-      {/* Legend */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}

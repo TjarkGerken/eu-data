@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion, useAnimationFrame } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
@@ -34,10 +34,10 @@ export function DataStorm() {
       { value: "+20%", type: "precipitation" as const, color: "#2563eb" },
     ]
 
-    return Array.from({ length: 50 }, (_, i) => {
-      const dataPoint = dataPoints[i % dataPoints.length]
+    return Array.from({ length: 50 }, (_, index) => {
+      const dataPoint = dataPoints[index % dataPoints.length]
       return {
-        id: i,
+        id: index,
         x: Math.random() * 800,
         y: Math.random() * 600,
         vx: (Math.random() - 0.5) * 3,
@@ -60,7 +60,6 @@ export function DataStorm() {
         let newVx = particle.vx
         let newVy = particle.vy
 
-        // Create swirling motion
         const centerX = 400
         const centerY = 300
         const dx = newX - centerX
@@ -74,19 +73,15 @@ export function DataStorm() {
           newVy += Math.cos(angle) * swirl
         }
 
-        // Bounce off walls
         if (newX <= 0 || newX >= 800) newVx = -newVx * 0.8
         if (newY <= 0 || newY >= 600) newVy = -newVy * 0.8
 
-        // Keep in bounds
         newX = Math.max(particle.size, Math.min(800 - particle.size, newX))
         newY = Math.max(particle.size, Math.min(600 - particle.size, newY))
 
-        // Add some randomness
         newVx += (Math.random() - 0.5) * 0.1
         newVy += (Math.random() - 0.5) * 0.1
 
-        // Limit velocity
         const maxVel = 4
         const vel = Math.sqrt(newVx * newVx + newVy * newVy)
         if (vel > maxVel) {
@@ -122,7 +117,6 @@ export function DataStorm() {
 
   return (
     <div className="my-16 p-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-lg overflow-hidden relative">
-      {/* Animated background grid */}
       <motion.div
         className="absolute inset-0 opacity-20"
         animate={{
@@ -165,7 +159,6 @@ export function DataStorm() {
             ref={containerRef}
             className="relative w-full h-96 overflow-hidden bg-gradient-to-br from-purple-900/50 to-blue-900/50"
           >
-            {/* Central vortex */}
             <motion.div
               className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
               animate={{
@@ -186,7 +179,6 @@ export function DataStorm() {
               </div>
             </motion.div>
 
-            {/* Data particles */}
             {particles.map((particle) => (
               <motion.div
                 key={particle.id}
@@ -221,10 +213,9 @@ export function DataStorm() {
               </motion.div>
             ))}
 
-            {/* Energy waves */}
-            {[...Array(3)].map((_, i) => (
+            {[...Array(3)].map((_, index) => (
               <motion.div
-                key={i}
+                key={index}
                 className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border border-purple-400/30 rounded-full"
                 animate={{
                   scale: [0, 3],
@@ -233,7 +224,7 @@ export function DataStorm() {
                 transition={{
                   duration: 4,
                   repeat: Number.POSITIVE_INFINITY,
-                  delay: i * 1.3,
+                  delay: index * 1.3,
                   ease: "easeOut",
                 }}
                 style={{
@@ -246,7 +237,6 @@ export function DataStorm() {
         </CardContent>
       </Card>
 
-      {/* Data legend */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}

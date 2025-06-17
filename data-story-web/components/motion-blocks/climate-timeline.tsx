@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import type React from "react"
 
@@ -124,13 +124,11 @@ export function ClimateTimeline() {
         variants={containerVariants}
         className="relative"
       >
-        {/* Timeline line */}
         <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#2d5a3d] to-[#c4a747]" />
 
         <div className="space-y-8">
           {events.map((event, index) => (
             <motion.div key={event.year} variants={itemVariants} className="relative flex items-start gap-6">
-              {/* Timeline dot */}
               <motion.div
                 whileHover={{ scale: 1.2 }}
                 className={`relative z-10 flex items-center justify-center w-16 h-16 rounded-full ${event.color} shadow-lg`}
@@ -138,7 +136,6 @@ export function ClimateTimeline() {
                 <event.icon className="h-6 w-6 text-white" />
               </motion.div>
 
-              {/* Content */}
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}

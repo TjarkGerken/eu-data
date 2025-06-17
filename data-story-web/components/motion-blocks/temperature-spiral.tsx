@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { Card, CardContent } from "@/components/ui/card"
 import { useLanguage } from "@/contexts/language-context"
@@ -7,29 +7,21 @@ import { useMemo } from "react"
 export function TemperatureSpiral() {
   const { language } = useLanguage()
 
-  // Generate temperature spiral data (simplified version)
   const spiralData = useMemo(() => {
     const data = []
-    const years = 150 // 1880-2030
     const centerX = 200
     const centerY = 200
 
-    for (let i = 0; i < years; i++) {
-      const year = 1880 + i
-      const angle = (i / years) * 8 * Math.PI // 8 full rotations
+    for (let index = 0; index < years; index++) {
+      const year = 1880 + index
       const baseRadius = 20
-      const tempAnomaly = Math.sin(i * 0.1) * 0.5 + (i / years) * 1.5 // Simulated warming trend
-      const radius = baseRadius + (i / years) * 120 + tempAnomaly * 20
+      const radius = baseRadius + (index / years) * 120 + tempAnomaly * 20
 
       const x = centerX + Math.cos(angle) * radius
       const y = centerY + Math.sin(angle) * radius
 
-      // Color based on temperature
       const temp = tempAnomaly
-      let color = "#3b82f6" // Blue for cold
       if (temp > 0.5)
-        color = "#ef4444" // Red for hot
-      else if (temp > 0) color = "#f59e0b" // Orange for warm
 
       data.push({
         x,
@@ -62,7 +54,6 @@ export function TemperatureSpiral() {
         <CardContent className="p-8">
           <div className="relative w-full max-w-lg mx-auto">
             <svg width="400" height="400" className="w-full h-auto">
-              {/* Background circles for reference */}
               {[50, 100, 150, 200].map((radius) => (
                 <circle
                   key={radius}
@@ -76,7 +67,6 @@ export function TemperatureSpiral() {
                 />
               ))}
 
-              {/* Decade labels */}
               {decades.map((decade, index) => {
                 const angle = (index / decades.length) * 8 * Math.PI
                 const radius = 20 + (index / decades.length) * 120
@@ -97,14 +87,12 @@ export function TemperatureSpiral() {
                 )
               })}
 
-              {/* Temperature spiral */}
               {spiralData.map((point, index) => (
                 <circle key={index} cx={point.x} cy={point.y} r={point.radius} fill={point.color} opacity="0.8">
                   <title>{`${point.year}: ${point.temp > 0 ? "+" : ""}${point.temp.toFixed(2)}°C`}</title>
                 </circle>
               ))}
 
-              {/* Center point */}
               <circle cx="200" cy="200" r="8" fill="#2d5a3d" className="drop-shadow-lg" />
               <text
                 x="200"
@@ -118,7 +106,6 @@ export function TemperatureSpiral() {
             </svg>
           </div>
 
-          {/* Legend */}
           <div className="mt-8 flex justify-center gap-8 text-sm">
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 bg-blue-500 rounded-full"></div>

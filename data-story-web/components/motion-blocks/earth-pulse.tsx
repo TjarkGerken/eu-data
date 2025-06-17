@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion, useAnimationFrame } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,10 +17,6 @@ export function EarthPulse() {
   })
 
   const getTemperatureColor = (temp: number) => {
-    if (temp < 1.0) return "#3b82f6" // Blue
-    if (temp < 1.5) return "#f59e0b" // Orange
-    if (temp < 2.0) return "#ef4444" // Red
-    return "#dc2626" // Dark red
   }
 
   const continents = [
@@ -34,10 +30,9 @@ export function EarthPulse() {
 
   return (
     <div className="my-16 p-8 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 rounded-lg overflow-hidden relative">
-      {/* Animated stars background */}
-      {[...Array(50)].map((_, i) => (
+      {[...Array(50)].map((_, index) => (
         <motion.div
-          key={i}
+          key={index}
           className="absolute w-1 h-1 bg-white rounded-full"
           style={{
             left: `${Math.random() * 100}%`,
@@ -73,7 +68,6 @@ export function EarthPulse() {
       </motion.div>
 
       <div className="relative max-w-4xl mx-auto">
-        {/* Earth visualization */}
         <motion.div
           className="relative w-80 h-80 mx-auto rounded-full overflow-hidden"
           style={{
@@ -92,7 +86,6 @@ export function EarthPulse() {
             ease: "easeInOut",
           }}
         >
-          {/* Continent heat spots */}
           {continents.map((continent, index) => (
             <motion.div
               key={continent.name}
@@ -114,7 +107,6 @@ export function EarthPulse() {
             />
           ))}
 
-          {/* Atmospheric layers */}
           <motion.div
             className="absolute inset-0 rounded-full border-4 border-white/20"
             animate={{
@@ -142,7 +134,6 @@ export function EarthPulse() {
           />
         </motion.div>
 
-        {/* Temperature display */}
         <motion.div
           className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center"
           animate={{
@@ -158,7 +149,6 @@ export function EarthPulse() {
           <div className="text-sm text-blue-200 mt-2">{language === "de" ? "Globale Erwärmung" : "Global Warming"}</div>
         </motion.div>
 
-        {/* Data points around the earth */}
         <div className="absolute inset-0 pointer-events-none">
           {continents.map((continent, index) => (
             <motion.div
@@ -184,7 +174,6 @@ export function EarthPulse() {
         </div>
       </div>
 
-      {/* Bottom stats */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}

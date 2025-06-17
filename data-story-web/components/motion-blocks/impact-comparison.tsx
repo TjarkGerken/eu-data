@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -115,7 +115,6 @@ export function ImpactComparison() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Before */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">{comparison.before.label}</span>
@@ -127,7 +126,6 @@ export function ImpactComparison() {
                   <Progress value={comparison.before.value} className="h-2" />
                 </div>
 
-                {/* Arrow */}
                 <motion.div
                   animate={{ x: [0, 10, 0] }}
                   transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
@@ -136,7 +134,6 @@ export function ImpactComparison() {
                   <ArrowRight className="h-6 w-6 text-[#2d5a3d]" />
                 </motion.div>
 
-                {/* After */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">{comparison.after.label}</span>
@@ -155,7 +152,6 @@ export function ImpactComparison() {
                   </motion.div>
                 </div>
 
-                {/* Change indicator */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   whileInView={{ opacity: 1, scale: 1 }}

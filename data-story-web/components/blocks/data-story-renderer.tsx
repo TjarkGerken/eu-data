@@ -13,6 +13,16 @@ import { ClimateTimelineBlock } from "./climate-timeline-block";
 import { ClimateDashboardBlock } from "./climate-dashboard-block";
 import { TemperatureSpiralBlock } from "./temperature-spiral-block";
 import { InteractiveCalloutBlock } from "./interactive-callout-block";
+import NeuralClimateNetworkBlockComponent from "./neural-climate-network-block";
+import EarthPulseBlockComponent from "./earth-pulse-block";
+import ImpactComparisonBlockComponent from "./impact-comparison-block";
+import KpiShowcaseBlockComponent from "./kpi-showcase-block";
+import ClimateMapStaticBlockComponent from "./climate-map-static-block";
+import ClimateMetamorphosisBlockComponent from "./climate-metamorphosis-block";
+import ClimateTimelineMinimalBlockComponent from "./climate-timeline-minimal-block";
+import DataStormBlockComponent from "./data-storm-block";
+import CarbonMoleculeDanceBlockComponent from "./carbon-molecule-dance-block";
+import ClimateInfographicBlockComponent from "./climate-infographic-block";
 
 interface DataStoryRendererProps {
   blocks: DataStoryBlock[];
@@ -127,6 +137,38 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             interactive={block.interactive}
           />
         );
+
+      case "neural-climate-network":
+        return <NeuralClimateNetworkBlockComponent key={index} block={block} />;
+
+      case "earth-pulse":
+        return <EarthPulseBlockComponent key={index} block={block} />;
+
+      case "impact-comparison":
+        return <ImpactComparisonBlockComponent key={index} block={block} />;
+
+      case "kpi-showcase":
+        return <KpiShowcaseBlockComponent key={index} block={block} />;
+
+      case "climate-map-static":
+        return <ClimateMapStaticBlockComponent key={index} block={block} />;
+
+      case "climate-metamorphosis":
+        return <ClimateMetamorphosisBlockComponent key={index} block={block} />;
+
+      case "climate-timeline-minimal":
+        return (
+          <ClimateTimelineMinimalBlockComponent key={index} block={block} />
+        );
+
+      case "data-storm":
+        return <DataStormBlockComponent key={index} block={block} />;
+
+      case "carbon-molecule-dance":
+        return <CarbonMoleculeDanceBlockComponent key={index} block={block} />;
+
+      case "climate-infographic":
+        return <ClimateInfographicBlockComponent key={index} block={block} />;
 
       default:
         return null;

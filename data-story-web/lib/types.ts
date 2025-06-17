@@ -129,6 +129,107 @@ export interface InteractiveCalloutBlock {
   interactive?: boolean;
 }
 
+export interface NeuralClimateNetworkBlock {
+  type: "neural-climate-network";
+  title?: string;
+  description?: string;
+  intensity?: number;
+  speed?: number;
+}
+
+export interface EarthPulseBlock {
+  type: "earth-pulse";
+  title?: string;
+  description?: string;
+  intensity?: number;
+  speed?: number;
+}
+
+export interface ImpactComparisonBlock {
+  type: "impact-comparison";
+  title?: string;
+  description?: string;
+  scenarios: Array<{
+    name: string;
+    temperature: number;
+    seaLevel: number;
+    precipitation: number;
+    extremeEvents: number;
+  }>;
+}
+
+export interface KpiShowcaseBlock {
+  type: "kpi-showcase";
+  title?: string;
+  description?: string;
+  kpis: Array<{
+    label: string;
+    value: string;
+    change: string;
+    trend: "up" | "down";
+    icon: string;
+  }>;
+}
+
+export interface ClimateMapStaticBlock {
+  type: "climate-map-static";
+  title?: string;
+  description?: string;
+  mapType: "temperature" | "precipitation" | "risk";
+  region: string;
+}
+
+export interface ClimateMetamorphosisBlock {
+  type: "climate-metamorphosis";
+  title?: string;
+  description?: string;
+  stages: Array<{
+    year: number;
+    title: string;
+    description: string;
+    data: number;
+  }>;
+}
+
+export interface ClimateTimelineMinimalBlock {
+  type: "climate-timeline-minimal";
+  title?: string;
+  description?: string;
+  events: Array<{
+    year: number;
+    title: string;
+    description: string;
+  }>;
+}
+
+export interface DataStormBlock {
+  type: "data-storm";
+  title?: string;
+  description?: string;
+  intensity?: number;
+  particles?: number;
+}
+
+export interface CarbonMoleculeDanceBlock {
+  type: "carbon-molecule-dance";
+  title?: string;
+  description?: string;
+  molecules?: number;
+  speed?: number;
+}
+
+export interface ClimateInfographicBlock {
+  type: "climate-infographic";
+  title?: string;
+  description?: string;
+  sections: Array<{
+    title: string;
+    value: string;
+    description: string;
+    icon: string;
+  }>;
+}
+
 export type DataStoryBlock =
   | MarkdownBlock
   | CalloutBlock
@@ -141,7 +242,17 @@ export type DataStoryBlock =
   | ClimateTimelineBlock
   | ClimateDashboardBlock
   | TemperatureSpiralBlock
-  | InteractiveCalloutBlock;
+  | InteractiveCalloutBlock
+  | NeuralClimateNetworkBlock
+  | EarthPulseBlock
+  | ImpactComparisonBlock
+  | KpiShowcaseBlock
+  | ClimateMapStaticBlock
+  | ClimateMetamorphosisBlock
+  | ClimateTimelineMinimalBlock
+  | DataStormBlock
+  | CarbonMoleculeDanceBlock
+  | ClimateInfographicBlock;
 
 export interface LanguageContent {
   heroTitle: string;

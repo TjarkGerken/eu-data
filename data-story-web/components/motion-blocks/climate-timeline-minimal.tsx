@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -103,20 +103,17 @@ export function ClimateTimelineMinimal() {
       </div>
 
       <div className="relative">
-        {/* Timeline line */}
         <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#2d5a3d] via-[#c4a747] to-[#2d5a3d]"></div>
 
         <div className="space-y-8">
           {events.map((event, index) => (
             <div key={event.year} className="relative flex items-start gap-6">
-              {/* Timeline dot */}
               <div
                 className={`relative z-10 flex items-center justify-center w-16 h-16 rounded-full ${event.color} shadow-lg flex-shrink-0`}
               >
                 <event.icon className="h-6 w-6 text-white" />
               </div>
 
-              {/* Content */}
               <Card className="flex-1 hover:shadow-md transition-shadow duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-3">
@@ -138,7 +135,6 @@ export function ClimateTimelineMinimal() {
         </div>
       </div>
 
-      {/* Summary */}
       <div className="mt-12 text-center">
         <Card className="bg-gradient-to-r from-[#2d5a3d]/5 to-[#c4a747]/5 border-none">
           <CardContent className="p-8">

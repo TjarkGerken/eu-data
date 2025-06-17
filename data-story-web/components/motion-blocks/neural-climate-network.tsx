@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion, useAnimationFrame } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
@@ -29,7 +29,6 @@ export function NeuralClimateNetwork() {
   const timeRef = useRef(0)
 
   const [nodes] = useState<Node[]>([
-    // Input layer
     {
       id: 0,
       x: 100,
@@ -61,12 +60,10 @@ export function NeuralClimateNetwork() {
       connections: [3, 4, 5],
     },
 
-    // Hidden layer
     { id: 3, x: 300, y: 80, type: "hidden", label: "H1", value: 0.6, active: false, connections: [6, 7] },
     { id: 4, x: 300, y: 200, type: "hidden", label: "H2", value: 0.8, active: false, connections: [6, 7] },
     { id: 5, x: 300, y: 320, type: "hidden", label: "H3", value: 0.5, active: false, connections: [6, 7] },
 
-    // Output layer
     {
       id: 6,
       x: 500,
@@ -113,33 +110,26 @@ export function NeuralClimateNetwork() {
   useAnimationFrame(() => {
     timeRef.current += 0.05
 
-    // Create wave of activation
     const wavePosition = (Math.sin(timeRef.current) + 1) / 2
     const newActiveNodes = new Set<number>()
     const newActiveConnections = new Set<string>()
 
-    // Activate nodes based on wave position
     if (wavePosition < 0.3) {
-      // Input layer
       newActiveNodes.add(0)
       newActiveNodes.add(1)
       newActiveNodes.add(2)
     } else if (wavePosition < 0.7) {
-      // Hidden layer
       newActiveNodes.add(3)
       newActiveNodes.add(4)
       newActiveNodes.add(5)
-      // Activate connections from input to hidden
       connections.forEach((conn) => {
         if (conn.from < 3 && conn.to >= 3 && conn.to < 6) {
           newActiveConnections.add(`${conn.from}-${conn.to}`)
         }
       })
     } else {
-      // Output layer
       newActiveNodes.add(6)
       newActiveNodes.add(7)
-      // Activate connections from hidden to output
       connections.forEach((conn) => {
         if (conn.from >= 3 && conn.from < 6 && conn.to >= 6) {
           newActiveConnections.add(`${conn.from}-${conn.to}`)
@@ -171,7 +161,6 @@ export function NeuralClimateNetwork() {
 
   return (
     <div className="my-16 p-8 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 rounded-lg overflow-hidden relative">
-      {/* Animated circuit background */}
       <motion.div
         className="absolute inset-0 opacity-10"
         animate={{
@@ -212,7 +201,6 @@ export function NeuralClimateNetwork() {
         <CardContent className="p-8">
           <div className="relative w-full h-96">
             <svg width="100%" height="100%" className="absolute inset-0">
-              {/* Render connections */}
               {connections.map((conn, index) => {
                 const fromNode = nodes.find((n) => n.id === conn.from)
                 const toNode = nodes.find((n) => n.id === conn.to)
@@ -246,7 +234,6 @@ export function NeuralClimateNetwork() {
               })}
             </svg>
 
-            {/* Render nodes */}
             {nodes.map((node) => {
               const isActive = activeNodes.has(node.id)
               const nodeSize = getNodeSize(node)
@@ -285,7 +272,6 @@ export function NeuralClimateNetwork() {
                   >
                     <span className="text-xs">{node.label}</span>
 
-                    {/* Value indicator */}
                     <motion.div
                       className="absolute -bottom-6 left-1/2 transform -translate-x-1/2"
                       animate={{
@@ -302,28 +288,26 @@ export function NeuralClimateNetwork() {
               )
             })}
 
-            {/* Data flow particles */}
             {activeConnections.size > 0 &&
-              [...Array(5)].map((_, i) => (
+              [...Array(5)].map((_, index) => (
                 <motion.div
-                  key={i}
+                  key={index}
                   className="absolute w-2 h-2 bg-yellow-400 rounded-full"
                   animate={{
                     x: [100, 300, 500],
-                    y: [150 + i * 20, 200, 200],
+                    y: [150 + index * 20, 200, 200],
                     opacity: [0, 1, 0],
                   }}
                   transition={{
                     duration: 2,
                     repeat: Number.POSITIVE_INFINITY,
-                    delay: i * 0.2,
+                    delay: index * 0.2,
                     ease: "easeInOut",
                   }}
                 />
               ))}
           </div>
 
-          {/* Layer labels */}
           <div className="flex justify-between mt-8 text-white text-sm">
             <div className="text-center">
               <div className="font-bold text-blue-300">{language === "de" ? "Eingabe" : "Input"}</div>
@@ -343,7 +327,6 @@ export function NeuralClimateNetwork() {
         </CardContent>
       </Card>
 
-      {/* AI insights */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
