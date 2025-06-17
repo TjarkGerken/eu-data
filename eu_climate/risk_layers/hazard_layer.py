@@ -57,11 +57,9 @@ class HazardLayer:
         self.config = config
         self.dem_path = self.config.dem_path
         self.river_polygons_path = self.config.river_polygons_path
-        self.river_nodes_path = self.config.river_nodes_path
         self.scenarios = SeaLevelScenario.get_default_scenarios()
         
         self.river_polygon_network = None
-        self.river_nodes = None
 
         self.transformer = RasterTransformer(
             target_crs=self.config.target_crs,
@@ -73,7 +71,7 @@ class HazardLayer:
         # Initialize sophisticated normalizer for hazard data
         self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.HAZARD_SOPHISTICATED)
         
-        for path in [self.dem_path, self.river_polygons_path, self.river_nodes_path]:
+        for path in [self.dem_path, self.river_polygons_path]:
             if not path.exists():
                 raise FileNotFoundError(f"Required file not found: {path}")
         
@@ -158,7 +156,7 @@ class HazardLayer:
         
         return dem_data, transform, crs, land_mask
     
-    def load_river_polygon_data(self) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    def load_river_polygon_data(self) -> gpd.GeoDataFrame:
         """Load and prepare river polygon network data."""
         logger.info("Loading river polygon network data...")
         
@@ -168,38 +166,30 @@ class HazardLayer:
             
             # Load river polygons with explicit CRS
             river_polygon_network = gpd.read_file(self.river_polygons_path)
-            river_nodes = gpd.read_file(self.river_nodes_path)
             
             # Set CRS if not already set
             if river_polygon_network.crs is None:
                 river_polygon_network.set_crs(target_crs, inplace=True)
                 logger.info(f"Set river polygon network CRS to {target_crs}")
-            if river_nodes.crs is None:
-                river_nodes.set_crs(target_crs, inplace=True)
-                logger.info(f"Set river nodes CRS to {target_crs}")
             
             # Transform to target CRS if different
             if river_polygon_network.crs != target_crs:
                 river_polygon_network = river_polygon_network.to_crs(target_crs)
                 logger.info(f"Transformed river polygon network to {target_crs}")
-            if river_nodes.crs != target_crs:
-                river_nodes = river_nodes.to_crs(target_crs)
-                logger.info(f"Transformed river nodes to {target_crs}")
             
             self.river_polygon_network = river_polygon_network
-            self.river_nodes = river_nodes
             
             # Log the coordinate ranges to verify correct transformation
             bounds = river_polygon_network.total_bounds
             logger.info(f"River polygon network bounds: [{bounds[0]:.2f}, {bounds[2]:.2f}] x [{bounds[1]:.2f}, {bounds[3]:.2f}]")
             
-            logger.info(f"Loaded {len(river_polygon_network)} river polygons and {len(river_nodes)} nodes")
-            return river_polygon_network, river_nodes
+            logger.info(f"Loaded {len(river_polygon_network)} river polygons")
+            return river_polygon_network
             
         except Exception as e:
             logger.warning(f"Could not process river polygon data: {str(e)}")
             logger.warning("Proceeding with basic flood model without river polygon influence")
-            return None, None
+            return None
     
     def calculate_flood_extent(self, dem_data: np.ndarray, sea_level_rise: float, transform: rasterio.Affine, land_mask: np.ndarray) -> np.ndarray:
         """
@@ -1153,8 +1143,7 @@ class HazardLayer:
             stats_text += f"Mean: {np.mean(valid_elevations):.1f}m\n"
             if self.river_polygon_network is not None:
                 stats_text += f"\nRiver Polygon Network:\n"
-                stats_text += f"Polygons: {len(self.river_polygon_network)}\n"
-                stats_text += f"Nodes: {len(self.river_nodes)}"
+                stats_text += f"Polygons: {len(self.river_polygon_network)}"
             
             ax6.text(0.98, 0.98, stats_text, transform=ax6.transAxes,
                     verticalalignment='top', horizontalalignment='right',

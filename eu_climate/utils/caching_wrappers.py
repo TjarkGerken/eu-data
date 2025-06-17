@@ -63,7 +63,7 @@ class CachingLayerWrapper:
             },
             'load_river_data': {
                 'cache_type': 'calculations',
-                'input_files_attr': ['river_segments_path', 'river_nodes_path'],
+                'input_files_attr': ['river_polygons_path'],
                 'config_attrs': base_config_attrs
             },
             'calculate_flood_extent': {
