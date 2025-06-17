@@ -6,11 +6,13 @@ import { VisualizationCard } from "@/components/visualization-card";
 import { ReferencesSidebar } from "@/components/references-sidebar";
 import { TechnicalSection } from "@/components/technical-section";
 import { useLanguage } from "@/contexts/language-context";
+import { useDynamicContent } from "@/hooks/use-dynamic-content";
 
 export default function Page() {
   const { t } = useLanguage();
+  const { content: dynamicContent, loading } = useDynamicContent();
 
-  const visualizations = [
+  const visualizations = dynamicContent?.visualizations || [
     {
       title: t.hazardAssessmentTitle,
       description: t.hazardAssessmentDesc,
@@ -70,6 +72,17 @@ export default function Page() {
     },
   ];
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2d5a3d] mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading content...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center">
       <Header />
@@ -82,14 +95,14 @@ export default function Page() {
           <div className="lg:col-span-3">
             <div className="mb-12">
               <h2 className="text-4xl font-bold text-[#2d5a3d] mb-6">
-                {t.dataStoryTitle}
+                {dynamicContent?.dataStoryTitle || t.dataStoryTitle}
               </h2>
               <div className="prose prose-lg max-w-none">
                 <p className="text-xl text-muted-foreground leading-relaxed">
-                  {t.introText1}
+                  {dynamicContent?.introText1 || t.introText1}
                 </p>
                 <p className="text-lg text-muted-foreground leading-relaxed mt-4">
-                  {t.introText2}
+                  {dynamicContent?.introText2 || t.introText2}
                 </p>
               </div>
             </div>
@@ -104,8 +117,16 @@ export default function Page() {
                     content={viz.content}
                     type={viz.type}
                     references={viz.references}
-                    imageCategory={viz.imageCategory}
-                    imageScenario={viz.imageScenario}
+                    imageCategory={
+                      viz.imageCategory as
+                        | "hazard"
+                        | "risk"
+                        | "exposition"
+                        | "combined"
+                    }
+                    imageScenario={
+                      viz.imageScenario as "current" | "severe" | undefined
+                    }
                     imageId={viz.imageId}
                   />
 
