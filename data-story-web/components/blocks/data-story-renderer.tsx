@@ -66,8 +66,17 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             key={index}
             title={block.data.title}
             description={block.data.description}
-            imageCategory={block.data.imageCategory}
-            imageScenario={block.data.imageScenario}
+            imageCategory={
+              block.data.imageCategory as
+                | "risk"
+                | "exposition"
+                | "hazard"
+                | "combined"
+                | undefined
+            }
+            imageScenario={
+              block.data.imageScenario as "current" | "severe" | undefined
+            }
             imageId={block.data.imageId}
             content={block.data.content}
             type={block.data.type}

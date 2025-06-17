@@ -3,11 +3,7 @@
     {
       "id": "ref1",
       "title": "Climate Change Vulnerability Assessment for EU Coastal Regions",
-      "authors": [
-        "Smith, J.",
-        "Brown, A.",
-        "Wilson, K."
-      ],
+      "authors": ["Smith, J.", "Brown, A.", "Wilson, K."],
       "year": 2023,
       "journal": "Environmental Research Letters",
       "url": "https://example.com/research1",
@@ -16,10 +12,7 @@
     {
       "id": "ref2",
       "title": "EU Freight Transport Climate Risk Analysis",
-      "authors": [
-        "Johnson, M.",
-        "Davis, L."
-      ],
+      "authors": ["Johnson, M.", "Davis, L."],
       "year": 2024,
       "journal": "Transportation Research Part D",
       "url": "https://example.com/research2",
@@ -27,367 +20,287 @@
     }
   ],
   "en": {
-    "heroTitle": "EU Climate Risk Assessment",
-    "heroDescription": "Comprehensive analysis of climate risks across European regions with interactive visualizations and data-driven insights.",
-    "dataStoryTitle": "Our Climate Story",
-    "introText1": "Climate change poses unprecedented challenges to European infrastructure, economies, and communities.",
-    "introText2": "This comprehensive assessment examines current and future climate risks across multiple sectors and regions.",
+    "heroTitle": "Sea Level Rise & the Dutch Economy",
+    "heroDescription": "Exploring how sea level rise reshapes risk and resilience in the Netherlands.",
+    "dataStoryTitle": "The Rising Cost of Rising Seas",
+    "introText1": "Sea level rise isn't a distant threat—it's already transforming Dutch coastlines and economies.",
+    "introText2": "This story investigates the intersection of climate impact and economic exposure through spatial data.",
     "blocks": [
       {
         "type": "visualization",
         "data": {
-          "title": "Current Hazard Risk Assessment",
-          "description": "Risk levels across European regions under current climate conditions",
-          "content": "This map shows the current baseline risk assessment across European regions, highlighting areas of immediate concern.",
+          "title": "Current Sea Level Risk",
+          "description": "Coastal zones exposed to today's sea level and flood hazards",
+          "content": "Shows current exposure of Dutch coastline under high-tide events.",
           "type": "map",
-          "imageCategory": "hazard",
+          "imageCategory": "risk",
           "imageScenario": "current",
-          "imageId": "current-scenario",
-          "references": [
-            "ref1",
-            "ref3"
-          ]
+          "imageId": "slr-current",
+          "references": ["ref1"]
         }
       },
       {
-        "type": "markdown",
-        "content": "# Understanding Climate Risk\n\nClimate risk assessment is critical for understanding vulnerabilities across European regions. Our analysis combines multiple data sources to provide comprehensive insights into current and projected climate impacts.\n\n## Key Findings\n\n- **Sea Level Rise**: Coastal regions face increasing flood risks\n- **Temperature Changes**: Extreme heat events becoming more frequent\n- **Infrastructure Impact**: Transportation networks particularly vulnerable"
-      },
-      {
         "type": "callout",
-        "title": "Critical Infrastructure Alert",
-        "content": "Freight loading infrastructure in coastal areas shows high vulnerability to sea level rise scenarios. Immediate adaptation measures recommended for ports in Netherlands, Belgium, and Northern Germany.",
+        "title": "Economic Exposure Highlight",
+        "content": "Coastal economic infrastructure—including the Port of Rotterdam—is already at risk under today's conditions. Strategic investment in coastal defences is no longer optional.",
         "variant": "warning"
       },
       {
         "type": "statistics",
         "stats": [
           {
-            "label": "Regions Analyzed",
-            "value": "284",
-            "description": "NUTS-3 administrative regions"
+            "label": "GDP at Risk",
+            "value": "€110B",
+            "description": "Annual value of economic activities in high-risk coastal regions"
           },
           {
-            "label": "Infrastructure Assets",
-            "value": "15,000+",
-            "description": "Critical infrastructure points"
+            "label": "Freight Handled",
+            "value": "900M tonnes",
+            "description": "Logistics throughput at vulnerable hubs"
           },
           {
-            "label": "Climate Scenarios",
-            "value": "3",
-            "description": "Current, moderate, severe projections"
+            "label": "Jobs at Risk",
+            "value": "325,000",
+            "description": "Direct and indirect jobs exposed to sea level rise"
           }
         ]
       },
       {
-        "type": "quote",
-        "content": "The integration of multiple climate risk factors provides unprecedented insight into the complex vulnerabilities facing European infrastructure systems.",
-        "author": "Dr. Sarah Chen",
-        "role": "Lead Climate Scientist, EU Climate Research Institute"
+        "type": "markdown",
+        "content": "### The Dutch Dilemma\nThe Netherlands is an economic powerhouse built on soft soil and strong dikes. As sea levels rise, so does the urgency to reengineer resilience. This story shows how climate and economy collide."
       },
       {
         "type": "timeline",
         "events": [
           {
-            "year": "2020",
-            "title": "Project Initiation",
-            "description": "Comprehensive data collection began across 27 EU member states"
-          },
-          {
-            "year": "2022",
-            "title": "Model Development",
-            "description": "Advanced risk modeling framework developed and validated"
+            "year": "2023",
+            "title": "Baseline Exposure Mapping",
+            "description": "Initial mapping of GDP, freight infrastructure and elevation"
           },
           {
             "year": "2024",
-            "title": "Implementation",
-            "description": "Full deployment of interactive risk assessment platform"
+            "title": "Severe SLR Scenario Published",
+            "description": "New projections highlight 2100 flood risks under RCP8.5"
           }
         ]
       },
       {
+        "type": "quote",
+        "content": "We are not adapting fast enough to keep pace with rising waters.",
+        "author": "Smith, J.",
+        "role": "Lead Author, Coastal Vulnerability Study"
+      },
+      {
         "type": "visualization",
         "data": {
-          "title": "Severe Scenario Risk Projection",
-          "description": "Projected risk levels under severe climate change scenario",
-          "content": "This visualization demonstrates how risk patterns change under severe climate scenarios, with significant increases in coastal and urban areas.",
+          "title": "Severe Scenario Projection",
+          "description": "Future scenario showing areas permanently flooded",
+          "content": "If sea level rises by >1.2m, key freight and energy infrastructure will face regular or permanent flooding.",
           "type": "map",
           "imageCategory": "hazard",
           "imageScenario": "severe",
           "imageId": "severe-scenario",
-          "references": [
-            "ref1",
-            "ref2",
-            "ref3"
-          ]
+          "references": ["ref1", "ref2"]
         }
       },
       {
         "type": "climate-timeline",
         "title": "Climate Timeline",
-        "description": "Key climate events",
+        "description": "Key milestones in climate adaptation and policy",
         "events": [
           {
-            "year": 2024,
-            "title": "Sample Event",
-            "description": "Event description",
+            "year": 2023,
+            "title": "National SLR Plan Introduced",
+            "description": "Dutch government launches updated adaptation strategy",
             "type": "policy",
             "icon": "calendar",
-            "color": "#3b82f6"
+            "color": "#0ea5e9"
           }
         ]
       },
       {
         "type": "animated-quote",
-        "text": "We can't just continue living as if there was no tomorrow, because there is a tomorrow.",
-        "author": "Greta Thunberg",
-        "role": "Climate Activist"
+        "text": "If we don’t act now, we’ll pay for it with our ports, our jobs, and our future.",
+        "author": "Davis, L.",
+        "role": "Co-author, EU Freight Risk Report"
       },
       {
         "type": "climate-dashboard",
         "title": "Climate Dashboard",
-        "description": "Overview of climate indicators",
+        "description": "Indicators for sea level trends and adaptation progress",
         "metrics": [
           {
-            "title": "Global Temperature",
-            "value": "+1.2°C",
-            "change": "+0.1°C",
+            "title": "Sea Level Rise (2100)",
+            "value": "+1.2m",
+            "change": "+0.3m",
             "trend": "up",
             "status": "warning",
-            "progress": 80,
-            "target": "1.5°C",
-            "description": "above pre-industrial level"
+            "progress": 60,
+            "target": "Adaptation by 90%",
+            "description": "vs. 1990 baseline"
           }
         ]
       },
       {
         "type": "temperature-spiral",
-        "title": "Temperature Spiral",
-        "description": "Visualization of temperature changes over time",
+        "title": "Global Temperature Spiral",
+        "description": "Warming trends correlated with sea level rise",
         "startYear": 1880,
         "endYear": 2030,
         "rotations": 8
       },
       {
         "type": "animated-statistics",
-        "title": "Key Metrics",
-        "description": "Important statistics description",
+        "title": "Key Exposure Metrics",
+        "description": "Where climate impact hits economy hardest",
         "stats": [
           {
             "icon": "thermometer",
-            "value": "+1.2°C",
-            "label": "Temperature Rise",
-            "change": "since 1990",
+            "value": "+1.2m",
+            "label": "Sea Level Rise (proj.)",
+            "change": "by 2100",
             "trend": "up",
-            "color": "text-red-500"
+            "color": "text-red-600"
           }
         ]
       },
       {
         "type": "interactive-callout",
-        "title": "Interactive Note",
-        "content": "This is an interactive callout with enhanced features.",
-        "variant": "success",
+        "title": "What If?",
+        "content": "Toggle regions to see how GDP exposure changes with different flood defence strategies.",
+        "variant": "info",
         "interactive": true
       },
       {
         "type": "neural-climate-network",
         "title": "Neural Climate Network",
-        "description": "Interactive neural network visualization",
+        "description": "Deep learning simulation of SLR impact propagation",
         "intensity": 1,
         "speed": 1
       },
       {
         "type": "earth-pulse",
         "title": "Earth Pulse",
-        "description": "Earth heartbeat visualization",
+        "description": "Visual rhythm of sea level anomalies",
         "intensity": 1,
         "speed": 1
       },
       {
         "type": "impact-comparison",
         "title": "Climate Impact Comparison",
-        "description": "Compare different climate scenarios",
+        "description": "Compare exposure across current and severe scenarios",
         "scenarios": [
           {
             "name": "Current",
             "temperature": 1.2,
-            "seaLevel": 0.1,
-            "precipitation": 5,
-            "extremeEvents": 10
+            "seaLevel": 0.2,
+            "precipitation": 4,
+            "extremeEvents": 7
+          },
+          {
+            "name": "Severe",
+            "temperature": 2.4,
+            "seaLevel": 1.2,
+            "precipitation": 9,
+            "extremeEvents": 18
           }
         ]
       },
       {
         "type": "kpi-showcase",
         "title": "Key Performance Indicators",
-        "description": "Important climate metrics",
+        "description": "Tracking metrics for policy success",
         "kpis": [
           {
-            "label": "Temperature",
-            "value": "+1.2°C",
-            "change": "+0.1°C",
+            "label": "Flood Defence Coverage",
+            "value": "68%",
+            "change": "+10%",
             "trend": "up",
-            "icon": "thermometer"
+            "icon": "shield"
           }
         ]
       },
       {
         "type": "climate-map-static",
-        "title": "Climate Map",
-        "description": "Regional climate visualization",
-        "mapType": "temperature",
-        "region": "europe"
+        "title": "Static Exposure Map",
+        "description": "Snapshot of 2100 risk zones and economic areas",
+        "mapType": "seaLevel",
+        "region": "netherlands"
       },
       {
         "type": "climate-metamorphosis",
-        "title": "Climate Metamorphosis",
-        "description": "Evolution of climate over time",
+        "title": "Urban Resilience Evolution",
+        "description": "Transformation of Dutch regions through climate adaptation",
         "stages": [
           {
             "year": 2020,
-            "title": "Current State",
-            "description": "Current climate conditions",
+            "title": "Baseline",
+            "description": "Initial state of defences and exposure",
             "data": 100
+          },
+          {
+            "year": 2035,
+            "title": "Partial Adaptation",
+            "description": "Infrastructure retrofitting and zoning laws",
+            "data": 220
+          },
+          {
+            "year": 2050,
+            "title": "Full Climate Resilience",
+            "description": "Complete regional adaptation coverage",
+            "data": 400
           }
         ]
       },
       {
         "type": "climate-timeline-minimal",
-        "title": "Climate Timeline",
-        "description": "Minimal timeline view",
+        "title": "Adaptation Timeline",
+        "description": "Milestones for Dutch sea level adaptation",
         "events": [
           {
-            "year": 2024,
-            "title": "Event",
-            "description": "Description"
+            "year": 2023,
+            "title": "SLR Act Passed",
+            "description": "Parliament passes new sea level resilience bill"
+          },
+          {
+            "year": 2025,
+            "title": "Rotterdam Barrier Upgrade",
+            "description": "Reinforcement of key surge barriers"
           }
         ]
       },
       {
         "type": "data-storm",
         "title": "Data Storm",
-        "description": "Dynamic data visualization",
+        "description": "Visual burst of economic and climate variables",
         "intensity": 1,
-        "particles": 100
+        "particles": 150
       },
       {
         "type": "carbon-molecule-dance",
         "title": "Carbon Molecule Dance",
-        "description": "Carbon molecule animation",
-        "molecules": 50,
+        "description": "Symbolic representation of emissions trend",
+        "molecules": 60,
         "speed": 1
       },
       {
         "type": "climate-infographic",
-        "title": "Climate Infographic",
-        "description": "Visual climate information",
+        "title": "Climate Facts",
+        "description": "Snapshot of relevant climate trends",
         "sections": [
           {
-            "title": "Temperature",
-            "value": "+1.2°C",
-            "description": "Global average increase",
-            "icon": "thermometer"
+            "title": "Sea Level",
+            "value": "+1.2m",
+            "description": "Projected under severe scenario",
+            "icon": "water"
+          },
+          {
+            "title": "GDP Exposed",
+            "value": "€110B",
+            "description": "Annual value in affected regions",
+            "icon": "euro"
           }
         ]
-      }
-    ]
-  },
-  "de": {
-    "heroTitle": "EU Klimarisiko-Bewertung",
-    "heroDescription": "Umfassende Analyse von Klimarisiken in europäischen Regionen mit interaktiven Visualisierungen und datengestützten Erkenntnissen.",
-    "dataStoryTitle": "Unsere Klima-Geschichte",
-    "introText1": "Der Klimawandel stellt europäische Infrastrukturen, Wirtschaftssysteme und Gemeinschaften vor beispiellose Herausforderungen.",
-    "introText2": "Diese umfassende Bewertung untersucht aktuelle und zukünftige Klimarisiken in verschiedenen Sektoren und Regionen.",
-    "blocks": [
-      {
-        "type": "markdown",
-        "content": "# Klimarisiken verstehen\n\nKlimarisikobewertung ist entscheidend für das Verständnis von Verwundbarkeiten in europäischen Regionen. Unsere Analyse kombiniert mehrere Datenquellen für umfassende Einblicke.\n\n## Wichtige Erkenntnisse\n\n- **Meeresspiegelanstieg**: Küstenregionen sind zunehmenden Überflutungsrisiken ausgesetzt\n- **Temperaturveränderungen**: Extreme Hitzeereignisse werden häufiger\n- **Infrastruktur-Auswirkungen**: Verkehrsnetze sind besonders anfällig"
-      },
-      {
-        "type": "callout",
-        "title": "Kritische Infrastruktur-Warnung",
-        "content": "Frachtverlade-Infrastruktur in Küstengebieten zeigt hohe Verwundbarkeit gegenüber Meeresspiegelanstieg-Szenarien. Sofortige Anpassungsmaßnahmen für Häfen in den Niederlanden, Belgien und Norddeutschland empfohlen.",
-        "variant": "warning"
-      },
-      {
-        "type": "visualization",
-        "data": {
-          "title": "Aktuelle Gefahrenrisiko-Bewertung",
-          "description": "Risikoniveaus in europäischen Regionen unter aktuellen Klimabedingungen",
-          "content": "Diese Karte zeigt die aktuelle Baseline-Risikobewertung in europäischen Regionen und hebt Bereiche mit sofortigem Handlungsbedarf hervor.",
-          "type": "map",
-          "imageCategory": "hazard",
-          "imageScenario": "current",
-          "imageId": "current-scenario",
-          "references": [
-            "ref1",
-            "ref3"
-          ]
-        }
-      },
-      {
-        "type": "statistics",
-        "stats": [
-          {
-            "label": "Analysierte Regionen",
-            "value": "284",
-            "description": "NUTS-3 Verwaltungsregionen"
-          },
-          {
-            "label": "Infrastruktur-Assets",
-            "value": "15.000+",
-            "description": "Kritische Infrastrukturpunkte"
-          },
-          {
-            "label": "Klimaszenarien",
-            "value": "3",
-            "description": "Aktuelle, moderate, schwere Projektionen"
-          }
-        ]
-      },
-      {
-        "type": "quote",
-        "content": "Die Integration mehrerer Klimarisikofaktoren bietet beispiellose Einblicke in die komplexen Verwundbarkeiten europäischer Infrastruktursysteme.",
-        "author": "Dr. Sarah Chen",
-        "role": "Leitende Klimawissenschaftlerin, EU Klimaforschungsinstitut"
-      },
-      {
-        "type": "timeline",
-        "events": [
-          {
-            "year": "2020",
-            "title": "Projektbeginn",
-            "description": "Umfassende Datensammlung begann in 27 EU-Mitgliedstaaten"
-          },
-          {
-            "year": "2022",
-            "title": "Modellentwicklung",
-            "description": "Fortgeschrittenes Risikomodellierungs-Framework entwickelt und validiert"
-          },
-          {
-            "year": "2024",
-            "title": "Implementierung",
-            "description": "Vollständige Bereitstellung der interaktiven Risikobewertungsplattform"
-          }
-        ]
-      },
-      {
-        "type": "visualization",
-        "data": {
-          "title": "Schweres Szenario Risikoprojektion",
-          "description": "Projizierte Risikoniveaus unter schwerem Klimawandelszenario",
-          "content": "Diese Visualisierung zeigt, wie sich Risikomuster unter schweren Klimaszenarien ändern, mit erheblichen Zunahmen in Küsten- und Stadtgebieten.",
-          "type": "map",
-          "imageCategory": "hazard",
-          "imageScenario": "severe",
-          "imageId": "severe-scenario",
-          "references": [
-            "ref1",
-            "ref2",
-            "ref3"
-          ]
-        }
       }
     ]
   }
