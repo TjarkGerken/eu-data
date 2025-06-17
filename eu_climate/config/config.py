@@ -75,6 +75,9 @@ class ProjectConfig:
         # Store exposition weights
         self.exposition_weights = self.config['exposition']
         
+        # Store vierkant stats multipliers
+        self.vierkant_stats_multipliers = self.config['exposition']['vierkant_stats_multipliers']
+        
         # Store relevance configuration
         relevance_config = self.config.get('relevance', {})
         self.relevance_weights = relevance_config.get('economic_datasets')
@@ -92,6 +95,7 @@ class ProjectConfig:
         hazard_config = self.config.get('hazard', {})
         
         self.river_zones = hazard_config.get('river_zones')
+        self.river_risk_decay = hazard_config.get('river_risk_decay')
         self.elevation_risk = hazard_config.get('elevation_risk')
         
         # Store coastline risk parameters
@@ -99,6 +103,7 @@ class ProjectConfig:
         
         # Log loaded hazard configuration for debugging
         logger.debug(f"Loaded river zones config: {self.river_zones}")
+        logger.debug(f"Loaded river risk decay config: {self.river_risk_decay}")
         logger.debug(f"Loaded elevation risk config: {self.elevation_risk}")
         logger.debug(f"Loaded coastline risk config: {self.coastline_risk}")
 
@@ -136,10 +141,28 @@ class ProjectConfig:
     
     def _validate_config(self):
         """Validate configuration values."""
+        # Use higher precision tolerance for decimal validation (up to 6 decimal places)
+        tolerance = 1e-6
+        
+        # Validate risk weights
         weights = self.risk_weights
         total_weight = sum(weights.values())
-        if not np.isclose(total_weight, 1.0):
-            raise ValueError(f"Risk weights must sum to 1.0, got {total_weight}")
+        if not np.isclose(total_weight, 1.0, atol=tolerance):
+            raise ValueError(f"Risk weights must sum to 1.0, got {total_weight:.6f}")
+        
+        # Validate exposition weights
+        exposition_weights = self.exposition_weights
+        main_exposition_weight_keys = ['ghs_built_c_weight', 'ghs_built_v_weight', 'population_weight', 'electricity_consumption_weight', 'vierkant_stats_weight']
+        main_exposition_total = sum(exposition_weights.get(key, 0) for key in main_exposition_weight_keys)
+        if not np.isclose(main_exposition_total, 1.0, atol=tolerance):
+            raise ValueError(f"Main exposition weights must sum to 1.0, got {main_exposition_total:.6f}")
+        
+        # Validate economic dataset exposition weights
+        economic_weights = self.economic_exposition_weights
+        for dataset_name, dataset_weights in economic_weights.items():
+            economic_exposition_total = sum(dataset_weights.values())
+            if not np.isclose(economic_exposition_total, 1.0, atol=tolerance):
+                raise ValueError(f"Economic dataset '{dataset_name}' exposition weights must sum to 1.0, got {economic_exposition_total:.6f}")
     
     @property
     def dem_path(self) -> Path:
@@ -162,6 +185,16 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['ghs_built_v_file']
     
     @property
+    def electricity_consumption_path(self) -> Path:
+        """Get path to electricity consumption file."""
+        return self.data_dir / self.config['file_paths']['electricity_consumption_file']
+    
+    @property
+    def vierkant_stats_path(self) -> Path:
+        """Get path to vierkant stats file."""
+        return self.data_dir / self.config['file_paths']['vierkant_stats_file']
+    
+    @property
     def nuts_paths(self) -> Dict[str, Path]:
         """Get paths to NUTS shapefiles."""
         return {
@@ -172,14 +205,9 @@ class ProjectConfig:
 
     
     @property
-    def river_segments_path(self) -> Path:
-        """Get path to river segments shapefile."""
-        return self.data_dir / self.config['file_paths']['river_segments_file']
-    
-    @property
-    def river_nodes_path(self) -> Path:
-        """Get path to river nodes shapefile."""
-        return self.data_dir / self.config['file_paths']['river_nodes_file']
+    def river_polygons_path(self) -> Path:
+        """Get path to river polygons shapefile."""
+        return self.data_dir / self.config['file_paths']['river_polygons_file']
     
     @property
     def land_mass_path(self) -> Path:
@@ -210,6 +238,11 @@ class ProjectConfig:
     def coastline_path(self) -> Path:
         """Get path to coastline shapefile."""
         return self.data_dir / self.config['file_paths']['coastline_file']
+    
+    @property
+    def nl_forecast_path(self) -> Path:
+        """Get path to NL forecast/risk zone GML file."""
+        return self.data_dir / self.config['file_paths']['nl_forecast_file']
     
     @property
     def nuts_l0_file_path(self) -> str:
@@ -257,8 +290,9 @@ class ProjectConfig:
             (self.ghs_built_c_path, "GHS Built C"),
             (self.ghs_built_v_path, "GHS Built V"),
             (self.population_path, "Population Density"),
-            (self.river_segments_path, "River Segments"),
-            (self.river_nodes_path, "River Nodes"),
+            (self.electricity_consumption_path, "Electricity Consumption"),
+            (self.vierkant_stats_path, "Vierkant Stats"),
+            (self.river_polygons_path, "River Polygons"),
             (self.land_mass_path, "Land Mass"),
             (self.coastline_path, "Coastline"),
             *[(path, f"NUTS {level}") for level, path in self.nuts_paths.items()],

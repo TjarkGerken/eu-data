@@ -62,7 +62,7 @@ def validate_upload_requirements():
     # Validate repository exists or create it
     try:
         api = HfApi(token=api_token)
-        repo_id = config['huggingface_repo']
+        repo_id = config.config['huggingface_repo']
         logger.info(f"Checking repository: {repo_id}")
         
         # Check if repo exists first
@@ -132,11 +132,11 @@ def main():
     # Initialize Hugging Face API
     api = HfApi(token=api_token)
     logger.debug(f"Token: {str(api_token[:4])}... (masked)")
-    repo_id = config['huggingface_repo']
+    repo_id = config.config['huggingface_repo']
     
     # Get directories to upload
-    data_dir = Path(config['data_paths']['local_data_dir'])
-    output_dir = Path(config['data_paths']['local_output_dir'])
+    data_dir = Path(config.config['data_paths']['local_data_dir'])
+    output_dir = Path(config.config['data_paths']['local_output_dir'])
     
     # Upload directories
     success = True
