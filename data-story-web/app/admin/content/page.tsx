@@ -79,10 +79,31 @@ export default function ContentAdminPage() {
 
     setSaving(true);
     try {
+      // Automatically synchronize both languages before saving
+      const synchronizedContent = { ...content };
+
+      // Ensure both languages have the same block structure
+      const enBlocks = [...synchronizedContent.en.blocks];
+      const deBlocks = [...synchronizedContent.de.blocks];
+
+      // Use the language with more blocks as the reference, or English as fallback
+      const referenceBlocks =
+        enBlocks.length >= deBlocks.length ? enBlocks : deBlocks;
+      const referenceLanguage =
+        enBlocks.length >= deBlocks.length ? "en" : "de";
+      const targetLanguage = referenceLanguage === "en" ? "de" : "en";
+      const targetBlocks = referenceLanguage === "en" ? deBlocks : enBlocks;
+
+      // Synchronize target language with reference language structure
+      ensureBlocksSynchronized(targetBlocks, referenceBlocks);
+
+      // Update the synchronized content
+      synchronizedContent[targetLanguage].blocks = targetBlocks;
+
       const response = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(content),
+        body: JSON.stringify(synchronizedContent),
       });
 
       if (!response.ok) {
@@ -96,7 +117,10 @@ export default function ContentAdminPage() {
       }
 
       const result = await response.json();
-      console.log("Content saved successfully:", result);
+      console.log("Content saved successfully with automatic sync:", result);
+
+      // Update local state with synchronized content
+      setContent(synchronizedContent);
     } catch (error) {
       console.error("Failed to save content:", error);
       alert(
@@ -121,7 +145,7 @@ export default function ContentAdminPage() {
     });
   };
 
-  const moveBlock = (index: number, direction: "up" | "down") => {
+  const moveBlock = async (index: number, direction: "up" | "down") => {
     if (!content) return;
 
     const blocks = [...content[activeLanguage].blocks];
@@ -131,285 +155,466 @@ export default function ContentAdminPage() {
 
     [blocks[index], blocks[newIndex]] = [blocks[newIndex], blocks[index]];
 
-    setContent({
+    // Apply the same ordering to both languages
+    const otherLanguage = activeLanguage === "en" ? "de" : "en";
+    const otherBlocks = [...content[otherLanguage].blocks];
+
+    // Ensure both languages have the same number of blocks
+    ensureBlocksSynchronized(otherBlocks, blocks);
+
+    [otherBlocks[index], otherBlocks[newIndex]] = [
+      otherBlocks[newIndex],
+      otherBlocks[index],
+    ];
+
+    const updatedContent = {
       ...content,
       [activeLanguage]: {
         ...content[activeLanguage],
         blocks,
       },
-    });
+      [otherLanguage]: {
+        ...content[otherLanguage],
+        blocks: otherBlocks,
+      },
+    };
+
+    setContent(updatedContent);
+
+    // Auto-save after moving block to persist synchronization
+    try {
+      const response = await fetch("/api/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedContent),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      console.log("Block moved and synchronized successfully");
+    } catch (error) {
+      console.error("Failed to save after moving block:", error);
+    }
   };
 
-  const moveBlockToPosition = (fromIndex: number, toIndex: number) => {
+  const moveBlockToPosition = async (fromIndex: number, toIndex: number) => {
     if (!content) return;
 
     const blocks = [...content[activeLanguage].blocks];
     const [movedBlock] = blocks.splice(fromIndex, 1);
     blocks.splice(toIndex, 0, movedBlock);
 
-    setContent({
-      ...content,
-      [activeLanguage]: {
-        ...content[activeLanguage],
-        blocks,
-      },
-    });
-  };
+    // Apply the same ordering to both languages
+    const otherLanguage = activeLanguage === "en" ? "de" : "en";
+    const otherBlocks = [...content[otherLanguage].blocks];
 
-  const addBlock = (type: DataStoryBlock["type"]) => {
-    const createNewBlock = (): Partial<DataStoryBlock> => {
-      switch (type) {
-        case "markdown":
-          return {
-            type: "markdown",
-            content: "# New Section\n\nEnter your markdown content here.",
-          };
-        case "callout":
-          return {
-            type: "callout",
-            title: "Important Note",
-            content: "Enter callout content here.",
-            variant: "info",
-          };
-        case "quote":
-          return {
-            type: "quote",
-            content: "Enter quote text here.",
-            author: "Author Name",
-            role: "",
-          };
-        case "statistics":
-          return {
-            type: "statistics",
-            stats: [
-              { label: "Metric", value: "100", description: "Description" },
-            ],
-          };
-        case "timeline":
-          return {
-            type: "timeline",
-            events: [
-              { year: "2024", title: "Event", description: "Description" },
-            ],
-          };
-        case "visualization":
-          return {
-            type: "visualization",
-            data: {
-              title: "New Visualization",
-              description: "Description",
-              content: "Content",
-              type: "map",
-              imageCategory: "",
-              imageId: "",
-              references: [],
-            } as Visualization,
-          };
-        case "animated-quote":
-          return {
-            type: "animated-quote",
-            text: "Enter your quote text here.",
-            author: "Author Name",
-            role: "Title or Role",
-          };
-        case "animated-statistics":
-          return {
-            type: "animated-statistics",
-            title: "Key Metrics",
-            description: "Important statistics description",
-            stats: [
-              {
-                icon: "thermometer",
-                value: "+1.2°C",
-                label: "Temperature Rise",
-                change: "since 1990",
-                trend: "up",
-                color: "text-red-500",
-              },
-            ],
-          };
-        case "climate-timeline":
-          return {
-            type: "climate-timeline",
-            title: "Climate Timeline",
-            description: "Key climate events",
-            events: [
-              {
-                year: 2024,
-                title: "Sample Event",
-                description: "Event description",
-                type: "policy",
-                icon: "calendar",
-                color: "#3b82f6",
-              },
-            ],
-          };
-        case "climate-dashboard":
-          return {
-            type: "climate-dashboard",
-            title: "Climate Dashboard",
-            description: "Overview of climate indicators",
-            metrics: [
-              {
-                title: "Global Temperature",
-                value: "+1.2°C",
-                change: "+0.1°C",
-                trend: "up",
-                status: "warning",
-                progress: 80,
-                target: "1.5°C",
-                description: "above pre-industrial level",
-              },
-            ],
-          };
-        case "temperature-spiral":
-          return {
-            type: "temperature-spiral",
-            title: "Temperature Spiral",
-            description: "Visualization of temperature changes over time",
-            startYear: 1880,
-            endYear: 2030,
-            rotations: 8,
-          };
-        case "interactive-callout":
-          return {
-            type: "interactive-callout",
-            title: "Interactive Note",
-            content: "This is an interactive callout with enhanced features.",
-            variant: "info",
-            interactive: true,
-          };
-        case "neural-climate-network":
-          return {
-            type: "neural-climate-network",
-            title: "Neural Climate Network",
-            description: "Interactive neural network visualization",
-            intensity: 1.0,
-            speed: 1.0,
-          };
-        case "earth-pulse":
-          return {
-            type: "earth-pulse",
-            title: "Earth Pulse",
-            description: "Earth heartbeat visualization",
-            intensity: 1.0,
-            speed: 1.0,
-          };
-        case "impact-comparison":
-          return {
-            type: "impact-comparison",
-            title: "Climate Impact Comparison",
-            description: "Compare different climate scenarios",
-            scenarios: [
-              {
-                name: "Current",
-                temperature: 1.2,
-                seaLevel: 0.1,
-                precipitation: 5,
-                extremeEvents: 10,
-              },
-            ],
-          };
-        case "kpi-showcase":
-          return {
-            type: "kpi-showcase",
-            title: "Key Performance Indicators",
-            description: "Important climate metrics",
-            kpis: [
-              {
-                label: "Temperature",
-                value: "+1.2°C",
-                change: "+0.1°C",
-                trend: "up",
-                icon: "thermometer",
-              },
-            ],
-          };
-        case "climate-map-static":
-          return {
-            type: "climate-map-static",
-            title: "Climate Map",
-            description: "Regional climate visualization",
-            mapType: "temperature",
-            region: "europe",
-          };
-        case "climate-metamorphosis":
-          return {
-            type: "climate-metamorphosis",
-            title: "Climate Metamorphosis",
-            description: "Evolution of climate over time",
-            stages: [
-              {
-                year: 2020,
-                title: "Current State",
-                description: "Current climate conditions",
-                data: 100,
-              },
-            ],
-          };
-        case "climate-timeline-minimal":
-          return {
-            type: "climate-timeline-minimal",
-            title: "Climate Timeline",
-            description: "Minimal timeline view",
-            events: [
-              {
-                year: 2024,
-                title: "Event",
-                description: "Description",
-              },
-            ],
-          };
-        case "data-storm":
-          return {
-            type: "data-storm",
-            title: "Data Storm",
-            description: "Dynamic data visualization",
-            intensity: 1.0,
-            particles: 100,
-          };
-        case "carbon-molecule-dance":
-          return {
-            type: "carbon-molecule-dance",
-            title: "Carbon Molecule Dance",
-            description: "Carbon molecule animation",
-            molecules: 50,
-            speed: 1.0,
-          };
-        case "climate-infographic":
-          return {
-            type: "climate-infographic",
-            title: "Climate Infographic",
-            description: "Visual climate information",
-            sections: [
-              {
-                title: "Temperature",
-                value: "+1.2°C",
-                description: "Global average increase",
-                icon: "thermometer",
-              },
-            ],
-          };
-        default:
-          return { type: "markdown", content: "" };
-      }
-    };
+    // Ensure both languages have the same number of blocks
+    ensureBlocksSynchronized(otherBlocks, blocks);
 
-    setNewBlock(createNewBlock());
-  };
+    const [movedOtherBlock] = otherBlocks.splice(fromIndex, 1);
+    otherBlocks.splice(toIndex, 0, movedOtherBlock);
 
-  const saveNewBlock = async () => {
-    if (!content || !newBlock) return;
-
-    const blocks = [
-      ...content[activeLanguage].blocks,
-      newBlock as DataStoryBlock,
-    ];
     const updatedContent = {
       ...content,
       [activeLanguage]: {
         ...content[activeLanguage],
         blocks,
+      },
+      [otherLanguage]: {
+        ...content[otherLanguage],
+        blocks: otherBlocks,
+      },
+    };
+
+    setContent(updatedContent);
+
+    // Auto-save after moving block to persist synchronization
+    try {
+      const response = await fetch("/api/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedContent),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      console.log("Block moved and synchronized successfully");
+    } catch (error) {
+      console.error("Failed to save after moving block:", error);
+    }
+  };
+
+  const ensureBlocksSynchronized = (
+    targetBlocks: DataStoryBlock[],
+    sourceBlocks: DataStoryBlock[]
+  ) => {
+    // If target has fewer blocks, add placeholder blocks of the same type
+    while (targetBlocks.length < sourceBlocks.length) {
+      const sourceBlock = sourceBlocks[targetBlocks.length];
+      const placeholderBlock = createPlaceholderBlock(
+        sourceBlock.type,
+        activeLanguage === "en" ? "de" : "en"
+      );
+      targetBlocks.push(placeholderBlock);
+    }
+
+    // If target has more blocks, remove excess blocks
+    while (targetBlocks.length > sourceBlocks.length) {
+      targetBlocks.pop();
+    }
+
+    // Ensure block types match
+    for (let i = 0; i < sourceBlocks.length; i++) {
+      if (targetBlocks[i].type !== sourceBlocks[i].type) {
+        targetBlocks[i] = createPlaceholderBlock(
+          sourceBlocks[i].type,
+          activeLanguage === "en" ? "de" : "en"
+        );
+      }
+    }
+  };
+
+  const createPlaceholderBlock = (
+    type: DataStoryBlock["type"],
+    language: "en" | "de"
+  ): DataStoryBlock => {
+    const isGerman = language === "de";
+
+    switch (type) {
+      case "markdown":
+        return {
+          type: "markdown",
+          content: isGerman
+            ? "# Neuer Abschnitt\n\nGeben Sie hier Ihren Markdown-Inhalt ein."
+            : "# New Section\n\nEnter your markdown content here.",
+        };
+      case "callout":
+        return {
+          type: "callout",
+          title: isGerman ? "Wichtiger Hinweis" : "Important Note",
+          content: isGerman
+            ? "Geben Sie hier den Callout-Inhalt ein."
+            : "Enter callout content here.",
+          variant: "info",
+        };
+      case "quote":
+        return {
+          type: "quote",
+          content: isGerman
+            ? "Geben Sie hier den Zitattext ein."
+            : "Enter quote text here.",
+          author: isGerman ? "Autor Name" : "Author Name",
+          role: "",
+        };
+      case "statistics":
+        return {
+          type: "statistics",
+          stats: [
+            {
+              label: isGerman ? "Metrik" : "Metric",
+              value: "100",
+              description: isGerman ? "Beschreibung" : "Description",
+            },
+          ],
+        };
+      case "timeline":
+        return {
+          type: "timeline",
+          events: [
+            {
+              year: "2024",
+              title: isGerman ? "Ereignis" : "Event",
+              description: isGerman ? "Beschreibung" : "Description",
+            },
+          ],
+        };
+      case "visualization":
+        return {
+          type: "visualization",
+          data: {
+            title: isGerman ? "Neue Visualisierung" : "New Visualization",
+            description: isGerman ? "Beschreibung" : "Description",
+            content: isGerman ? "Inhalt" : "Content",
+            type: "map",
+            imageCategory: "",
+            imageId: "",
+            references: [],
+          } as Visualization,
+        };
+      case "animated-quote":
+        return {
+          type: "animated-quote",
+          text: isGerman
+            ? "Geben Sie hier Ihren Zitattext ein."
+            : "Enter your quote text here.",
+          author: isGerman ? "Autor Name" : "Author Name",
+          role: isGerman ? "Titel oder Rolle" : "Title or Role",
+        };
+      case "animated-statistics":
+        return {
+          type: "animated-statistics",
+          title: isGerman ? "Schlüsselkennzahlen" : "Key Metrics",
+          description: isGerman
+            ? "Beschreibung wichtiger Statistiken"
+            : "Important statistics description",
+          stats: [
+            {
+              icon: "thermometer",
+              value: "+1.2°C",
+              label: isGerman ? "Temperaturanstieg" : "Temperature Rise",
+              change: isGerman ? "seit 1990" : "since 1990",
+              trend: "up",
+              color: "text-red-500",
+            },
+          ],
+        };
+      case "climate-timeline":
+        return {
+          type: "climate-timeline",
+          title: isGerman ? "Klima-Zeitachse" : "Climate Timeline",
+          description: isGerman
+            ? "Wichtige Klimaereignisse"
+            : "Key climate events",
+          events: [
+            {
+              year: 2024,
+              title: isGerman ? "Beispielereignis" : "Sample Event",
+              description: isGerman
+                ? "Ereignisbeschreibung"
+                : "Event description",
+              type: "policy",
+              icon: "calendar",
+              color: "#3b82f6",
+            },
+          ],
+        };
+      case "climate-dashboard":
+        return {
+          type: "climate-dashboard",
+          title: isGerman ? "Klima-Dashboard" : "Climate Dashboard",
+          description: isGerman
+            ? "Überblick über Klimaindikatoren"
+            : "Overview of climate indicators",
+          metrics: [
+            {
+              title: isGerman ? "Globale Temperatur" : "Global Temperature",
+              value: "+1.2°C",
+              change: "+0.1°C",
+              trend: "up",
+              status: "warning",
+              progress: 80,
+              target: "1.5°C",
+              description: isGerman
+                ? "über vorindustriellem Niveau"
+                : "above pre-industrial level",
+            },
+          ],
+        };
+      case "temperature-spiral":
+        return {
+          type: "temperature-spiral",
+          title: isGerman ? "Temperaturspirale" : "Temperature Spiral",
+          description: isGerman
+            ? "Visualisierung von Temperaturveränderungen über die Zeit"
+            : "Visualization of temperature changes over time",
+          startYear: 1880,
+          endYear: 2030,
+          rotations: 8,
+        };
+      case "interactive-callout":
+        return {
+          type: "interactive-callout",
+          title: isGerman ? "Interaktiver Hinweis" : "Interactive Note",
+          content: isGerman
+            ? "Dies ist ein interaktiver Callout mit erweiterten Funktionen."
+            : "This is an interactive callout with enhanced features.",
+          variant: "info",
+          interactive: true,
+        };
+      case "neural-climate-network":
+        return {
+          type: "neural-climate-network",
+          title: isGerman
+            ? "Neurales Klima-Netzwerk"
+            : "Neural Climate Network",
+          description: isGerman
+            ? "Interaktive neurale Netzwerk-Visualisierung"
+            : "Interactive neural network visualization",
+          intensity: 1.0,
+          speed: 1.0,
+        };
+      case "earth-pulse":
+        return {
+          type: "earth-pulse",
+          title: isGerman ? "Erdpuls" : "Earth Pulse",
+          description: isGerman
+            ? "Erdschlag-Visualisierung"
+            : "Earth heartbeat visualization",
+          intensity: 1.0,
+          speed: 1.0,
+        };
+      case "impact-comparison":
+        return {
+          type: "impact-comparison",
+          title: isGerman
+            ? "Klimaauswirkungen-Vergleich"
+            : "Climate Impact Comparison",
+          description: isGerman
+            ? "Verschiedene Klimaszenarien vergleichen"
+            : "Compare different climate scenarios",
+          scenarios: [
+            {
+              name: isGerman ? "Aktuell" : "Current",
+              temperature: 1.2,
+              seaLevel: 0.1,
+              precipitation: 5,
+              extremeEvents: 10,
+            },
+          ],
+        };
+      case "kpi-showcase":
+        return {
+          type: "kpi-showcase",
+          title: isGerman
+            ? "Schlüsselleistungsindikatoren"
+            : "Key Performance Indicators",
+          description: isGerman
+            ? "Wichtige Klimakennzahlen"
+            : "Important climate metrics",
+          kpis: [
+            {
+              label: isGerman ? "Temperatur" : "Temperature",
+              value: "+1.2°C",
+              change: "+0.1°C",
+              trend: "up",
+              icon: "thermometer",
+            },
+          ],
+        };
+      case "climate-map-static":
+        return {
+          type: "climate-map-static",
+          title: isGerman ? "Klimakarte" : "Climate Map",
+          description: isGerman
+            ? "Regionale Klimavisualisierung"
+            : "Regional climate visualization",
+          mapType: "temperature",
+          region: "europe",
+        };
+      case "climate-metamorphosis":
+        return {
+          type: "climate-metamorphosis",
+          title: isGerman ? "Klima-Metamorphose" : "Climate Metamorphosis",
+          description: isGerman
+            ? "Evolution des Klimas über die Zeit"
+            : "Evolution of climate over time",
+          stages: [
+            {
+              year: 2020,
+              title: isGerman ? "Aktueller Zustand" : "Current State",
+              description: isGerman
+                ? "Aktuelle Klimabedingungen"
+                : "Current climate conditions",
+              data: 100,
+            },
+          ],
+        };
+      case "climate-timeline-minimal":
+        return {
+          type: "climate-timeline-minimal",
+          title: isGerman ? "Klima-Zeitachse" : "Climate Timeline",
+          description: isGerman
+            ? "Minimale Zeitachsenansicht"
+            : "Minimal timeline view",
+          events: [
+            {
+              year: 2024,
+              title: isGerman ? "Ereignis" : "Event",
+              description: isGerman ? "Beschreibung" : "Description",
+            },
+          ],
+        };
+      case "data-storm":
+        return {
+          type: "data-storm",
+          title: isGerman ? "Datensturm" : "Data Storm",
+          description: isGerman
+            ? "Dynamische Datenvisualisierung"
+            : "Dynamic data visualization",
+          intensity: 1,
+          particles: 100,
+        };
+      case "carbon-molecule-dance":
+        return {
+          type: "carbon-molecule-dance",
+          title: isGerman ? "Kohlenstoffmolekül-Tanz" : "Carbon Molecule Dance",
+          description: isGerman
+            ? "Kohlenstoffmolekül-Animation"
+            : "Carbon molecule animation",
+          molecules: 50,
+          speed: 1,
+        };
+      case "climate-infographic":
+        return {
+          type: "climate-infographic",
+          title: isGerman ? "Klima-Infografik" : "Climate Infographic",
+          description: isGerman
+            ? "Visuelle Klimainformationen"
+            : "Visual climate information",
+          sections: [
+            {
+              title: isGerman ? "Temperatur" : "Temperature",
+              value: "+1.2°C",
+              description: isGerman
+                ? "Globaler Durchschnittsanstieg"
+                : "Global average increase",
+              icon: "thermometer",
+            },
+          ],
+        };
+      default:
+        return {
+          type: "markdown",
+          content: isGerman
+            ? "# Neuer Abschnitt\n\nGeben Sie hier Ihren Markdown-Inhalt ein."
+            : "# New Section\n\nEnter your markdown content here.",
+        };
+    }
+  };
+
+  const addBlock = (type: DataStoryBlock["type"]) => {
+    const newBlock = createPlaceholderBlock(type, activeLanguage);
+    setNewBlock(newBlock);
+  };
+
+  const saveNewBlock = async () => {
+    if (!content || !newBlock || !newBlock.type) return;
+
+    const blocks = [
+      ...content[activeLanguage].blocks,
+      newBlock as DataStoryBlock,
+    ];
+
+    // Also add a corresponding block to the other language
+    const otherLanguage = activeLanguage === "en" ? "de" : "en";
+    const otherBlocks = [
+      ...content[otherLanguage].blocks,
+      createPlaceholderBlock(newBlock.type, otherLanguage),
+    ];
+
+    const updatedContent = {
+      ...content,
+      [activeLanguage]: {
+        ...content[activeLanguage],
+        blocks,
+      },
+      [otherLanguage]: {
+        ...content[otherLanguage],
+        blocks: otherBlocks,
       },
     };
     setContent(updatedContent);
@@ -451,16 +656,27 @@ export default function ContentAdminPage() {
     if (!content) return;
 
     const blocks = content[activeLanguage].blocks.filter((_, i) => i !== index);
+
+    // Also delete the corresponding block from the other language
+    const otherLanguage = activeLanguage === "en" ? "de" : "en";
+    const otherBlocks = content[otherLanguage].blocks.filter(
+      (_, i) => i !== index
+    );
+
     setContent({
       ...content,
       [activeLanguage]: {
         ...content[activeLanguage],
         blocks,
       },
+      [otherLanguage]: {
+        ...content[otherLanguage],
+        blocks: otherBlocks,
+      },
     });
   };
 
-  const updateBlock = async (index: number, updatedBlock: DataStoryBlock) => {
+  const updateBlock = (index: number, updatedBlock: DataStoryBlock) => {
     if (!content) return;
 
     const blocks = [...content[activeLanguage].blocks];
@@ -474,15 +690,20 @@ export default function ContentAdminPage() {
       },
     };
     setContent(updatedContent);
+  };
+
+  const saveBlockAndClose = async (index: number) => {
+    if (!content) return;
+
     setEditingBlockIndex(null);
 
-    // Auto-save after updating block
+    // Auto-save after closing block editor
     setSaving(true);
     try {
       const response = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedContent),
+        body: JSON.stringify(content),
       });
 
       if (!response.ok) {
@@ -495,11 +716,11 @@ export default function ContentAdminPage() {
         );
       }
 
-      console.log("Block updated and saved successfully");
+      console.log("Block saved successfully");
     } catch (error) {
-      console.error("Failed to auto-save after updating block:", error);
+      console.error("Failed to save block:", error);
       alert(
-        `Failed to save block update: ${
+        `Failed to save block: ${
           error instanceof Error ? error.message : "Unknown error"
         }`
       );
@@ -1655,7 +1876,7 @@ export default function ContentAdminPage() {
                         <div className="space-y-4">
                           {renderBlockEditor(block)}
                           <div className="flex space-x-2">
-                            <Button onClick={() => setEditingBlockIndex(null)}>
+                            <Button onClick={() => saveBlockAndClose(index)}>
                               <Save className="h-4 w-4 mr-2" />
                               Save
                             </Button>
