@@ -1,4 +1,4 @@
-import { put, list, del } from "@vercel/blob";
+import { supabase } from "./supabase";
 import { ImageCategory, ImageScenario } from "./blob-config";
 
 export interface ImageMetadata {
@@ -10,29 +10,38 @@ export interface ImageMetadata {
   size: number;
 }
 
-export interface BlobImage {
+export interface SupabaseImage {
   url: string;
-  pathname: string;
-  downloadUrl: string;
+  path: string;
   metadata?: ImageMetadata;
 }
 
-export class BlobImageManager {
-  private static PREFIX = "climate-data";
+export class SupabaseImageManager {
+  private static BUCKET = "climate-images";
 
   static async uploadImage(
     file: File,
     metadata: Omit<ImageMetadata, "uploadedAt" | "size">
   ): Promise<{ url: string; metadata: ImageMetadata }> {
-    const filename = `${this.PREFIX}/${metadata.category}/${
+    const fileExt = file.name.split(".").pop();
+    const filename = `${metadata.category}/${metadata.scenario || "default"}/${
       metadata.id
-    }.${file.name.split(".").pop()}`;
+    }.${fileExt}`;
 
-    const blob = await put(filename, file, {
-      access: "public",
-      addRandomSuffix: false,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(this.BUCKET)
+      .upload(filename, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw new Error(`Failed to upload image: ${uploadError.message}`);
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(this.BUCKET).getPublicUrl(filename);
 
     const fullMetadata: ImageMetadata = {
       ...metadata,
@@ -40,28 +49,42 @@ export class BlobImageManager {
       size: file.size,
     };
 
-    await this.saveMetadata(blob.url, fullMetadata);
+    await this.saveMetadata(metadata.id, fullMetadata);
 
-    return { url: blob.url, metadata: fullMetadata };
+    return { url: publicUrl, metadata: fullMetadata };
   }
 
   static async getImagesByCategory(
     category: ImageCategory
-  ): Promise<BlobImage[]> {
-    const { blobs } = await list({
-      prefix: `${this.PREFIX}/${category}/`,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+  ): Promise<SupabaseImage[]> {
+    const { data: files, error } = await supabase.storage
+      .from(this.BUCKET)
+      .list(category, {
+        limit: 100,
+        sortBy: { column: "name", order: "asc" },
+      });
+
+    if (error) {
+      throw new Error(`Failed to list images: ${error.message}`);
+    }
+
+    if (!files) return [];
 
     const images = await Promise.all(
-      blobs
-        .filter((blob) => !blob.pathname.includes("/metadata/"))
-        .map(async (blob) => {
-          const metadata = await this.getMetadata(blob.pathname);
+      files
+        .filter((file) => !file.name.endsWith(".json"))
+        .map(async (file) => {
+          const fullPath = `${category}/${file.name}`;
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from(this.BUCKET).getPublicUrl(fullPath);
+
+          const id = file.name.split(".")[0];
+          const metadata = await this.getMetadata(id);
+
           return {
-            url: blob.url,
-            pathname: blob.pathname,
-            downloadUrl: blob.downloadUrl,
+            url: publicUrl,
+            path: fullPath,
             metadata,
           };
         })
@@ -74,84 +97,115 @@ export class BlobImageManager {
     id: string,
     category: ImageCategory,
     scenario?: ImageScenario
-  ): Promise<BlobImage | null> {
-    const images = await this.getImagesByCategory(category);
-    return (
-      images.find(
-        (img) =>
-          img.pathname.includes(`/${id}.`) &&
-          (!scenario || img.metadata?.scenario === scenario)
-      ) || null
+  ): Promise<SupabaseImage | null> {
+    const searchPath = scenario ? `${category}/${scenario}` : category;
+
+    const { data: files, error } = await supabase.storage
+      .from(this.BUCKET)
+      .list(searchPath, {
+        limit: 100,
+      });
+
+    if (error || !files) return null;
+
+    const matchingFile = files.find(
+      (file) => file.name.startsWith(`${id}.`) && !file.name.endsWith(".json")
     );
+
+    if (!matchingFile) return null;
+
+    const fullPath = `${searchPath}/${matchingFile.name}`;
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(this.BUCKET).getPublicUrl(fullPath);
+
+    const metadata = await this.getMetadata(id);
+
+    return {
+      url: publicUrl,
+      path: fullPath,
+      metadata,
+    };
   }
 
-  static async deleteImage(pathname: string): Promise<void> {
-    await del(pathname, { token: process.env.BLOB_READ_WRITE_TOKEN });
+  static async deleteImage(path: string): Promise<void> {
+    const { error } = await supabase.storage.from(this.BUCKET).remove([path]);
 
-    const metadataPath = pathname
-      .replace(/\.[^/.]+$/, ".json")
-      .replace(`/${this.PREFIX}/`, `/${this.PREFIX}/metadata/`);
-    try {
-      await del(metadataPath, { token: process.env.BLOB_READ_WRITE_TOKEN });
-    } catch (error) {
-      console.warn("Failed to delete metadata:", error);
+    if (error) {
+      throw new Error(`Failed to delete image: ${error.message}`);
+    }
+
+    const id = path.split("/").pop()?.split(".")[0];
+    if (id) {
+      try {
+        await this.deleteMetadata(id);
+      } catch (error) {
+        console.warn("Failed to delete metadata:", error);
+      }
     }
   }
 
-  static async getAllImages(): Promise<BlobImage[]> {
-    const { blobs } = await list({
-      prefix: this.PREFIX,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+  static async getAllImages(): Promise<SupabaseImage[]> {
+    const categories: ImageCategory[] = [
+      "risk",
+      "exposition",
+      "hazard",
+      "combined",
+    ];
+    const allImages: SupabaseImage[] = [];
 
-    const images = await Promise.all(
-      blobs
-        .filter((blob) => !blob.pathname.includes("/metadata/"))
-        .map(async (blob) => {
-          const metadata = await this.getMetadata(blob.pathname);
-          return {
-            url: blob.url,
-            pathname: blob.pathname,
-            downloadUrl: blob.downloadUrl,
-            metadata,
-          };
-        })
-    );
+    for (const category of categories) {
+      try {
+        const categoryImages = await this.getImagesByCategory(category);
+        allImages.push(...categoryImages);
+      } catch (error) {
+        console.warn(`Failed to fetch images for category ${category}:`, error);
+      }
+    }
 
-    return images;
+    return allImages;
   }
 
   private static async saveMetadata(
-    imageUrl: string,
+    id: string,
     metadata: ImageMetadata
   ): Promise<void> {
-    const metadataPath = `${this.PREFIX}/metadata/${metadata.id}.json`;
+    const metadataPath = `metadata/${id}.json`;
 
     try {
-      await put(metadataPath, JSON.stringify(metadata), {
-        access: "public",
-        token: process.env.BLOB_READ_WRITE_TOKEN,
+      const metadataBlob = new Blob([JSON.stringify(metadata)], {
+        type: "application/json",
       });
+
+      const { error } = await supabase.storage
+        .from(this.BUCKET)
+        .upload(metadataPath, metadataBlob, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (error) {
+        throw new Error(`Failed to save metadata: ${error.message}`);
+      }
     } catch (error) {
       console.warn("Failed to save metadata:", error);
     }
   }
 
   private static async getMetadata(
-    pathname: string
+    id: string
   ): Promise<ImageMetadata | undefined> {
     try {
-      const id = pathname.split("/").pop()?.split(".")[0];
-      if (!id) return undefined;
+      const metadataPath = `metadata/${id}.json`;
 
-      const { blobs } = await list({
-        prefix: `${this.PREFIX}/metadata/${id}.json`,
-        token: process.env.BLOB_READ_WRITE_TOKEN,
-      });
-      if (blobs.length === 0) return undefined;
+      const { data, error } = await supabase.storage
+        .from(this.BUCKET)
+        .download(metadataPath);
 
-      const response = await fetch(blobs[0].downloadUrl);
-      const metadata = await response.json();
+      if (error || !data) return undefined;
+
+      const text = await data.text();
+      const metadata = JSON.parse(text);
 
       return {
         ...metadata,
@@ -160,6 +214,18 @@ export class BlobImageManager {
     } catch (error) {
       console.warn("Failed to load metadata:", error);
       return undefined;
+    }
+  }
+
+  private static async deleteMetadata(id: string): Promise<void> {
+    const metadataPath = `metadata/${id}.json`;
+
+    const { error } = await supabase.storage
+      .from(this.BUCKET)
+      .remove([metadataPath]);
+
+    if (error) {
+      throw new Error(`Failed to delete metadata: ${error.message}`);
     }
   }
 }

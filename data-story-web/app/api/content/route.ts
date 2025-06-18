@@ -1,73 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import { fetchContentByLanguage } from "@/lib/content-service";
 
-const CONTENT_FILE_PATH = path.join(process.cwd(), "lib", "content.json");
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const fileExists = await fs
-      .access(CONTENT_FILE_PATH)
-      .then(() => true)
-      .catch(() => false);
+    const { searchParams } = new URL(request.url);
+    const language = searchParams.get("language") || "en";
 
-    if (!fileExists) {
-      const defaultContent = {
-        references: [
-          {
-            id: "ref1",
-            title: "Climate Change Vulnerability Assessment",
-            authors: ["Smith, J.", "Brown, A."],
-            year: 2023,
-            journal: "Environmental Research Letters",
-            type: "journal",
-          },
-        ],
-        en: {
-          heroTitle: "European Climate Data Analysis",
-          heroDescription:
-            "Exploring climate patterns and environmental changes across European regions through comprehensive data visualization and analysis.",
-          dataStoryTitle: "European Climate Risk Assessment",
-          introText1:
-            "Climate change poses significant threats to European coastal regions through sea level rise, increased storm intensity, and changing precipitation patterns.",
-          introText2:
-            "This data story presents a systematic approach to climate risk assessment, integrating high-resolution spatial data, scenario modeling, and impact analysis.",
-          blocks: [
-            {
-              type: "markdown",
-              content:
-                "# Climate Risk Assessment\n\nWelcome to our comprehensive climate risk analysis.",
-            },
-          ],
-        },
-        de: {
-          heroTitle: "Europäische Klimadatenanalyse",
-          heroDescription:
-            "Erforschung von Klimamustern und Umweltveränderungen in europäischen Regionen durch umfassende Datenvisualisierung und -analyse.",
-          dataStoryTitle: "Europäische Klimarisiko-Bewertung",
-          introText1:
-            "Der Klimawandel stellt erhebliche Bedrohungen für europäische Küstenregionen durch den Anstieg des Meeresspiegels dar.",
-          introText2:
-            "Diese Datengeschichte präsentiert einen systematischen Ansatz zur Klimarisikobewertung.",
-          blocks: [
-            {
-              type: "markdown",
-              content:
-                "# Klimarisiko-Bewertung\n\nWillkommen zu unserer umfassenden Klimarisikoanalyse.",
-            },
-          ],
-        },
-      };
+    const contentData = await fetchContentByLanguage(language);
 
-      await fs.writeFile(
-        CONTENT_FILE_PATH,
-        JSON.stringify(defaultContent, null, 2)
+    if (!contentData) {
+      return NextResponse.json(
+        { error: `Content not found for language: ${language}` },
+        { status: 404 }
       );
-      return NextResponse.json(defaultContent);
     }
 
-    const content = await fs.readFile(CONTENT_FILE_PATH, "utf8");
-    return NextResponse.json(JSON.parse(content));
+    return NextResponse.json({
+      story: contentData.story,
+      blocks: contentData.blocks,
+      references: contentData.references,
+    });
   } catch (error) {
     console.error("Error reading content:", error);
     return NextResponse.json(

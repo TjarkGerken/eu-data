@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { BlobAnalytics } from "@/lib/blob-analytics";
+import { SupabaseAnalytics } from "@/lib/blob-analytics";
 
 export async function GET() {
   try {
     const [usageStats, cachePerformance] = await Promise.all([
-      BlobAnalytics.getUsageStats(),
-      BlobAnalytics.getCachePerformance(),
+      SupabaseAnalytics.getUsageStats(),
+      SupabaseAnalytics.getCachePerformance(),
     ]);
 
     return NextResponse.json({
