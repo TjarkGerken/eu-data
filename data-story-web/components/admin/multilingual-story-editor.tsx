@@ -15,8 +15,8 @@ interface StoryData {
   heroTitle: string;
   heroDescription: string;
   dataStoryTitle: string;
-  dataStorySubtitle: string;
-  introText: string;
+  introText1: string;
+  introText2: string;
 }
 
 interface Story {
@@ -34,16 +34,16 @@ export default function MultilingualStoryEditor() {
     heroTitle: "",
     heroDescription: "",
     dataStoryTitle: "",
-    dataStorySubtitle: "",
-    introText: "",
+    introText1: "",
+    introText2: "",
   });
 
   const [germanData, setGermanData] = useState<StoryData>({
     heroTitle: "",
     heroDescription: "",
     dataStoryTitle: "",
-    dataStorySubtitle: "",
-    introText: "",
+    introText1: "",
+    introText2: "",
   });
 
   const [loading, setLoading] = useState(true);
@@ -78,8 +78,8 @@ export default function MultilingualStoryEditor() {
           heroTitle: englishStory.hero_title || "",
           heroDescription: englishStory.hero_description || "",
           dataStoryTitle: englishStory.data_story_title || "",
-          dataStorySubtitle: englishStory.data_story_subtitle || "",
-          introText: englishStory.intro_text || "",
+          introText1: englishStory.intro_text_1 || "",
+          introText2: englishStory.intro_text_2 || "",
         });
       }
 
@@ -88,8 +88,8 @@ export default function MultilingualStoryEditor() {
           heroTitle: germanStory.hero_title || "",
           heroDescription: germanStory.hero_description || "",
           dataStoryTitle: germanStory.data_story_title || "",
-          dataStorySubtitle: germanStory.data_story_subtitle || "",
-          introText: germanStory.intro_text || "",
+          introText1: germanStory.intro_text_1 || "",
+          introText2: germanStory.intro_text_2 || "",
         });
       }
     } catch (err) {
@@ -113,9 +113,8 @@ export default function MultilingualStoryEditor() {
         hero_title: data.heroTitle,
         hero_description: data.heroDescription,
         data_story_title: data.dataStoryTitle,
-        data_story_subtitle: data.dataStorySubtitle,
-        intro_text: data.introText,
-        updated_at: new Date().toISOString(),
+        intro_text_1: data.introText1,
+        intro_text_2: data.introText2,
       };
 
       if (existingStory) {
@@ -193,27 +192,28 @@ export default function MultilingualStoryEditor() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={`dataStorySubtitle-${languageCode}`}>
-          Data Story Subtitle
+        <Label htmlFor={`introText1-${languageCode}`}>
+          Introduction Text 1
         </Label>
-        <Input
-          id={`dataStorySubtitle-${languageCode}`}
-          value={data.dataStorySubtitle}
-          onChange={(e) =>
-            setData({ ...data, dataStorySubtitle: e.target.value })
-          }
-          placeholder={`Enter data story subtitle in ${language}...`}
+        <Textarea
+          id={`introText1-${languageCode}`}
+          value={data.introText1}
+          onChange={(e) => setData({ ...data, introText1: e.target.value })}
+          placeholder={`Enter first introduction paragraph in ${language}...`}
+          rows={3}
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={`introText-${languageCode}`}>Introduction Text</Label>
+        <Label htmlFor={`introText2-${languageCode}`}>
+          Introduction Text 2
+        </Label>
         <Textarea
-          id={`introText-${languageCode}`}
-          value={data.introText}
-          onChange={(e) => setData({ ...data, introText: e.target.value })}
-          placeholder={`Enter introduction text in ${language}...`}
-          rows={4}
+          id={`introText2-${languageCode}`}
+          value={data.introText2}
+          onChange={(e) => setData({ ...data, introText2: e.target.value })}
+          placeholder={`Enter second introduction paragraph in ${language}...`}
+          rows={3}
         />
       </div>
 
