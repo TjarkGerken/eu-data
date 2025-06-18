@@ -116,8 +116,8 @@ export function MultiSelectReferences({
                     className="text-xs"
                   >
                     {formatReferenceShort(reference)}
-                    <button
-                      className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5 transition-colors"
+                    <span
+                      className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5 transition-colors cursor-pointer"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -125,7 +125,7 @@ export function MultiSelectReferences({
                       }}
                     >
                       <X className="h-3 w-3" />
-                    </button>
+                    </span>
                   </Badge>
                 ))
               )}
