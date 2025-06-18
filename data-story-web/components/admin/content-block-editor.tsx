@@ -418,14 +418,20 @@ export default function ContentBlockEditor() {
 
     [updatedPair.english, updatedPair.german].forEach((block) => {
       if (block) {
-        let current = block.data;
+        if (fieldPath.length === 0) {
+          // Replace entire data object
+          block.data = value;
+        } else {
+          // Update specific field path
+          let current = block.data;
 
-        for (let i = 0; i < fieldPath.length - 1; i++) {
-          if (!current[fieldPath[i]]) current[fieldPath[i]] = {};
-          current = current[fieldPath[i]];
+          for (let i = 0; i < fieldPath.length - 1; i++) {
+            if (!current[fieldPath[i]]) current[fieldPath[i]] = {};
+            current = current[fieldPath[i]];
+          }
+
+          current[fieldPath[fieldPath.length - 1]] = value;
         }
-
-        current[fieldPath[fieldPath.length - 1]] = value;
       }
     });
 
@@ -524,6 +530,7 @@ export default function ContentBlockEditor() {
       return null;
 
     const currentData = (selectedPair.english || selectedPair.german)!.data;
+    const blockType = selectedPair.blockType;
 
     return (
       <Card className="mb-6">
@@ -534,16 +541,15 @@ export default function ContentBlockEditor() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label className="text-sm font-medium">References</Label>
-            <MultiSelectReferences
-              selectedReferenceIds={currentData.references || []}
-              onSelectionChange={(referenceIds) =>
-                updateSharedField(["references"], referenceIds)
-              }
-              placeholder="Select references for this block..."
-            />
-          </div>
+          <BlockTypeFields
+            blockType={blockType}
+            data={currentData}
+            onDataChange={(newData) => {
+              updateSharedField([], newData);
+            }}
+            validationErrors={[]}
+            mode="shared"
+          />
         </CardContent>
       </Card>
     );
@@ -566,6 +572,7 @@ export default function ContentBlockEditor() {
         content={block.content}
         onTitleChange={(title) => updateBlock({ ...block, title })}
         onContentChange={(content) => updateBlock({ ...block, content })}
+        mode="language-specific"
       />
     );
   };

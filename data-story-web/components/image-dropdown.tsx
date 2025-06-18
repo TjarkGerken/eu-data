@@ -44,53 +44,53 @@ export function ImageDropdown({
 
   useEffect(() => {
     loadImages();
-  }, [category]);
+  }, []);
 
   const loadImages = async () => {
     try {
-      const categories = ["hazard", "risk", "exposition", "combined"];
-      const imagePromises = categories.map(async (cat) => {
-        try {
-          const response = await fetch(`/api/images/${cat}`);
-          const data = await response.json();
-          return (
-            data.images
-              ?.map((img: any) => {
-                const filename = img.pathname?.split("/").pop() || "";
-                const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
-                return {
-                  id:
-                    nameWithoutExt ||
-                    img.metadata?.id ||
-                    `${cat}-${Math.random()}`,
-                  name: filename || "Unknown Image",
-                  url: img.url,
-                  category: cat,
-                  scenario: filename?.includes("current")
-                    ? "current"
-                    : filename?.includes("severe")
-                    ? "severe"
-                    : undefined,
-                };
-              })
-              .filter((img) => img.name !== "Unknown Image" && img.url) || []
-          );
-        } catch (error) {
-          console.error(`Failed to load images for category ${cat}:`, error);
-          return [];
-        }
-      });
+      console.log("Loading all images from API...");
+      const response = await fetch("/api/images");
+      const data = await response.json();
 
-      const allImages = (await Promise.all(imagePromises)).flat();
-      setImages(allImages);
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch images");
+      }
+
+      console.log("Received images data:", data);
+
+      const formattedImages = (data.images || [])
+        .map((img: any) => {
+          const filename =
+            img.path?.split("/").pop() || img.metadata?.id || "unknown";
+          return {
+            id: img.metadata?.id || filename,
+            name: filename,
+            url: img.url,
+            category: img.metadata?.category || "unknown",
+            scenario: img.metadata?.scenario,
+            description: img.metadata?.description,
+          };
+        })
+        .filter((img: any) => img.url && img.name !== "unknown");
+
+      console.log("Formatted images:", formattedImages);
+      setImages(formattedImages);
     } catch (error) {
       console.error("Failed to load images:", error);
+      setImages([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedImage = images.find((img) => img.id === selectedImageId);
+  // Filter images by category if specified
+  const filteredImages = category
+    ? images.filter((img) => img.category === category)
+    : images;
+
+  const selectedImage = filteredImages.find(
+    (img) => img.id === selectedImageId
+  );
 
   if (loading) {
     return (
@@ -136,7 +136,10 @@ export function ImageDropdown({
             ) : (
               <>
                 <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">{placeholder}</span>
+                <span className="text-muted-foreground">
+                  {placeholder}
+                  {!loading && ` (${filteredImages.length} available)`}
+                </span>
               </>
             )}
           </div>
@@ -147,15 +150,21 @@ export function ImageDropdown({
         <Command>
           <CommandInput placeholder="Search images..." />
           <CommandList>
-            <CommandEmpty>No images found.</CommandEmpty>
+            <CommandEmpty>
+              {loading
+                ? "Loading images..."
+                : `No images found${
+                    category ? ` for category "${category}"` : ""
+                  }.`}
+            </CommandEmpty>
             <CommandGroup>
-              {images.map((image) => (
+              {filteredImages.map((image) => (
                 <CommandItem
                   key={image.id}
                   value={`${image.name} ${image.category} ${
                     image.scenario || ""
                   }`}
-                  onSelect={() => {
+                  onSelect={(value) => {
                     onImageChange(image.id, {
                       category: image.category,
                       scenario: image.scenario,
