@@ -5,6 +5,7 @@ import { HeroVideoSection } from "@/components/hero-video-section";
 import { TechnicalSection } from "@/components/technical-section";
 import { ReferencesSidebar } from "@/components/references-sidebar";
 import { DataStoryRenderer } from "@/components/blocks/data-story-renderer";
+import { ClimateLoading } from "@/components/climate-loading";
 import { useDynamicContent } from "@/hooks/use-dynamic-content";
 import { motion } from "motion/react";
 
@@ -12,11 +13,7 @@ export default function HomePage() {
   const { content, loading, error } = useDynamicContent();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-lg">Loading content...</div>
-      </div>
-    );
+    return <ClimateLoading />;
   }
 
   if (error) {
