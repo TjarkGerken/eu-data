@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import AuthWrapper from "@/components/admin/auth-wrapper";
 import MultilingualStoryEditor from "@/components/admin/multilingual-story-editor";
-import PairedBlockEditor from "@/components/admin/paired-block-editor";
+import ContentBlockEditor from "@/components/admin/content-block-editor";
 import ContentReferencesAdmin from "@/components/admin/content-references-admin";
 import ClimateImagesAdmin from "@/components/admin/climate-images-admin";
 import { Shield, BookOpen, Blocks, FileText, Image } from "lucide-react";
@@ -68,12 +68,12 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle>Content Blocks</CardTitle>
                 <CardDescription>
-                  Edit paired blocks side by side - ensuring identical structure
-                  across languages with only content differences
+                  Create, edit, and manage content blocks with ordering
+                  controls, validation, and reference management
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <PairedBlockEditor />
+                <ContentBlockEditor />
               </CardContent>
             </Card>
           </TabsContent>
