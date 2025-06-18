@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BlobImageManager } from "@/lib/blob-manager";
+import { SupabaseImageManager } from "@/lib/blob-manager";
 import { BLOB_CONFIG } from "@/lib/blob-config";
 
 export async function POST(request: NextRequest) {
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
 
-    const result = await BlobImageManager.uploadImage(file, {
+    const result = await SupabaseImageManager.uploadImage(file, {
       id,
       category: category as any,
       scenario: scenario === "" ? undefined : (scenario as any),

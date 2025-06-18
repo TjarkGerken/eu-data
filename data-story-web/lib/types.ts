@@ -171,14 +171,6 @@ export interface KpiShowcaseBlock {
   }>;
 }
 
-export interface ClimateMapStaticBlock {
-  type: "climate-map-static";
-  title?: string;
-  description?: string;
-  mapType: "temperature" | "precipitation" | "risk";
-  region: string;
-}
-
 export interface ClimateMetamorphosisBlock {
   type: "climate-metamorphosis";
   title?: string;
@@ -271,6 +263,7 @@ export interface ContentData {
 
 export interface DynamicContent extends LanguageContent {
   references?: Reference[];
+  visualizations?: Visualization[];
 }
 
 export interface ImageOption {

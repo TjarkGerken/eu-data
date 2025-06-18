@@ -5,13 +5,32 @@ import { HeroVideoSection } from "@/components/hero-video-section";
 import { TechnicalSection } from "@/components/technical-section";
 import { ReferencesSidebar } from "@/components/references-sidebar";
 import { DataStoryRenderer } from "@/components/blocks/data-story-renderer";
+import { ClimateLoading } from "@/components/climate-loading";
 import { useDynamicContent } from "@/hooks/use-dynamic-content";
 import { motion } from "motion/react";
 
 export default function HomePage() {
-  const { content } = useDynamicContent();
+  const { content, loading, error } = useDynamicContent();
 
-  if (!content) return null;
+  if (loading) {
+    return <ClimateLoading />;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-lg text-red-600">Error: {error}</div>
+      </div>
+    );
+  }
+
+  if (!content) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-lg">No content available</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

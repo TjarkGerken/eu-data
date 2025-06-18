@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { BlobImage } from "@/lib/blob-manager";
+import { SupabaseImage } from "@/lib/blob-manager";
 import { ImageCategory, ImageScenario } from "@/lib/blob-config";
-import { BlobAnalytics } from "@/lib/blob-analytics";
+import { SupabaseAnalytics } from "@/lib/blob-analytics";
 
 interface ClimateImageProps {
   category: ImageCategory;
@@ -36,7 +36,7 @@ export default function ClimateImage({
   useEffect(() => {
     async function loadImage() {
       try {
-        let targetImage: BlobImage | null = null;
+        let targetImage: SupabaseImage | null = null;
 
         // Use API routes instead of direct blob manager calls
         const response = await fetch(`/api/images/${category}`);
@@ -45,13 +45,13 @@ export default function ClimateImage({
         }
 
         const data = await response.json();
-        const images = data.images as BlobImage[];
+        const images = data.images as SupabaseImage[];
 
         if (id) {
           targetImage =
             images.find(
               (img) =>
-                img.pathname.includes(`/${id}.`) &&
+                img.metadata?.id === id &&
                 (!scenario || img.metadata?.scenario === scenario)
             ) || null;
         } else {
@@ -67,10 +67,15 @@ export default function ClimateImage({
           setImageUrl(targetImage.url);
 
           // Track analytics
-          BlobAnalytics.trackImageView(targetImage.url, category, scenario, {
-            userAgent: navigator.userAgent,
-            referrer: document.referrer,
-          });
+          SupabaseAnalytics.trackImageView(
+            targetImage.url,
+            category,
+            scenario,
+            {
+              userAgent: navigator.userAgent,
+              referrer: document.referrer,
+            }
+          );
         } else {
           setError(
             `No image found for ${category}${scenario ? ` - ${scenario}` : ""}${
