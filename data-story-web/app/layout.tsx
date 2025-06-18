@@ -10,6 +10,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "EU Geolytics",
   description: "EU Geolytics - Sea Level Rise Risk Assessment",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({

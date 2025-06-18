@@ -865,7 +865,7 @@ export default function ContentAdminPage() {
         return (
           <div className="space-y-4">
             <Label>Statistics</Label>
-            {blockData.stats?.map((stat, index) => (
+            {blockData.stats?.map((stat: any, index: number) => (
               <div key={index} className="grid grid-cols-3 gap-2">
                 <Input
                   placeholder="Label"
@@ -920,7 +920,7 @@ export default function ContentAdminPage() {
         return (
           <div className="space-y-4">
             <Label>Timeline Events</Label>
-            {blockData.events?.map((event, index) => (
+            {blockData.events?.map((event: any, index: number) => (
               <div key={index} className="grid grid-cols-3 gap-2">
                 <Input
                   placeholder="Year"
