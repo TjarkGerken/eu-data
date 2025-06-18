@@ -43,7 +43,7 @@ import {
   ContentData,
   Visualization,
 } from "@/lib/types";
-import { ReferencesDropdown } from "@/components/references-dropdown";
+import { MultiSelectReferences } from "@/components/ui/multi-select-references";
 import { ImageDropdown } from "@/components/image-dropdown";
 
 export default function ContentAdminPage() {
@@ -1045,14 +1045,15 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>References</Label>
-              <ReferencesDropdown
-                selectedReferences={blockData.data.references}
-                onReferencesChange={(selectedIds) => {
+              <MultiSelectReferences
+                selectedReferenceIds={blockData.data.references || []}
+                onSelectionChange={(selectedIds) => {
                   updateField("data", {
                     ...blockData.data,
                     references: selectedIds,
                   });
                 }}
+                placeholder="Select references for this block..."
               />
             </div>
           </div>

@@ -86,10 +86,29 @@ export default function ContentStoriesAdmin() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStory.hero_title) {
+
+    if (!newStory.hero_title?.trim()) {
       toast({
-        title: "Error",
-        description: "Hero title is required",
+        title: "Validation Error",
+        description: "Hero title is required and cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newStory.hero_title.length > 200) {
+      toast({
+        title: "Validation Error",
+        description: "Hero title must be 200 characters or less",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!newStory.language_code) {
+      toast({
+        title: "Validation Error",
+        description: "Language code is required",
         variant: "destructive",
       });
       return;
@@ -118,9 +137,11 @@ export default function ContentStoriesAdmin() {
       fetchStories();
     } catch (error) {
       console.error("Create error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
       toast({
-        title: "Error",
-        description: "Failed to create content story",
+        title: "Failed to create story",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -139,6 +160,24 @@ export default function ContentStoriesAdmin() {
   };
 
   const handleUpdate = async (id: string) => {
+    if (!editForm.hero_title?.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Hero title is required and cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (editForm.hero_title && editForm.hero_title.length > 200) {
+      toast({
+        title: "Validation Error",
+        description: "Hero title must be 200 characters or less",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("content_stories")
@@ -157,9 +196,11 @@ export default function ContentStoriesAdmin() {
       fetchStories();
     } catch (error) {
       console.error("Update error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
       toast({
-        title: "Error",
-        description: "Failed to update content story",
+        title: "Failed to update story",
+        description: errorMessage,
         variant: "destructive",
       });
     }
