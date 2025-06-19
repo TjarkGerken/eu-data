@@ -87,6 +87,9 @@ class ProjectConfig:
         self.base_floor_height = self.config['building']['base_floor_height']
         self.max_floors = self.config['building']['max_floors']
         
+        # Store clustering parameters
+        self.clustering = self.config.get('clustering', {})
+        
         # Store visualization parameters
         self.figure_size = tuple(self.config['visualization']['figure_size'])
         self.dpi = self.config['visualization']['dpi']
@@ -235,6 +238,16 @@ class ProjectConfig:
         return self.data_dir / self.config['file_paths']['port_file']
     
     @property
+    def zeevart_freight_path(self) -> Path:
+        """Get path to Zeevart freight Excel file."""
+        return self.data_dir / self.config['file_paths']['zeevart_freight_file']
+    
+    @property
+    def port_mapping_path(self) -> Path:
+        """Get path to port mapping Excel file."""
+        return self.data_dir / self.config['file_paths']['port_mapping_file']
+    
+    @property
     def coastline_path(self) -> Path:
         """Get path to coastline shapefile."""
         return self.data_dir / self.config['file_paths']['coastline_file']
@@ -299,7 +312,9 @@ class ProjectConfig:
             (self.data_dir / self.hrst_file_path, "HRST Data"),
             (self.ghs_duc_path, "GHS DUC Excel"),
             (self.gadm_l2_path, "GADM L2 Shapefile"),
-            (self.port_path, "Port Shapefile")
+            (self.port_path, "Port Shapefile"),
+            (self.zeevart_freight_path, "Zeevart Freight Data"),
+            (self.port_mapping_path, "Port Mapping Data")
         ]
         
         missing_files = []

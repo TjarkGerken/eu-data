@@ -265,6 +265,11 @@ class RiskLayer:
         logger.info(f"Using flood risk threshold: {max_safe_flood_risk}")
         logger.info(f"Using minimum economic value threshold: {min_economic_value}")
         
+        # Clip hazard data: set values below threshold to 0
+        clipped_hazard_data = np.where(hazard_data > max_safe_flood_risk, hazard_data, 0.0)
+        logger.info(f"Clipped hazard values below {max_safe_flood_risk} to 0")
+        logger.info(f"Hazard cells above threshold: {np.sum(clipped_hazard_data > 0)} / {clipped_hazard_data.size}")
+        
         # Use current GDP levels (multiplier = 1.0)
         economic_multiplier = 1.0
         
@@ -280,20 +285,20 @@ class RiskLayer:
             logger.error("Economic data should be either a numpy array or a dictionary with exactly one variable")
             combined_economic = np.zeros_like(land_mask, dtype=np.float32) if isinstance(land_mask, np.ndarray) else np.zeros((100, 100))
         
-        if hazard_data.shape != combined_economic.shape:
+        if clipped_hazard_data.shape != combined_economic.shape:
             logger.info("Aligning economic data to hazard grid...")
             from scipy.ndimage import zoom
             zoom_factors = (
-                hazard_data.shape[0] / combined_economic.shape[0],
-                hazard_data.shape[1] / combined_economic.shape[1]
+                clipped_hazard_data.shape[0] / combined_economic.shape[0],
+                clipped_hazard_data.shape[1] / combined_economic.shape[1]
             )
             combined_economic = zoom(combined_economic, zoom_factors, order=1)
         
         # Initialize risk data with zeros
-        risk_data = np.zeros_like(hazard_data, dtype=np.float32)
+        risk_data = np.zeros_like(clipped_hazard_data, dtype=np.float32)
         
         # Create masks for filtered calculation
-        flood_risk_mask = hazard_data > max_safe_flood_risk
+        flood_risk_mask = clipped_hazard_data > 0
         economic_relevance_mask = combined_economic > min_economic_value
         land_valid_mask = land_mask > 0
         
@@ -303,7 +308,7 @@ class RiskLayer:
         # Apply weighted calculation only where both conditions are met
         if np.any(calculation_mask):
             risk_data[calculation_mask] = (
-                hazard_weight * hazard_data[calculation_mask] + 
+                hazard_weight * clipped_hazard_data[calculation_mask] + 
                 economic_weight * combined_economic[calculation_mask]
             )
             
@@ -492,21 +497,26 @@ class RiskLayer:
         logger.info(f"Using flood risk threshold: {max_safe_flood_risk}")
         logger.info(f"Using minimum population threshold: {min_population_threshold}")
         
+        # Clip hazard data: set values below threshold to 0
+        clipped_hazard_data = np.where(hazard_data > max_safe_flood_risk, hazard_data, 0.0)
+        logger.info(f"Clipped hazard values below {max_safe_flood_risk} to 0")
+        logger.info(f"Hazard cells above threshold: {np.sum(clipped_hazard_data > 0)} / {clipped_hazard_data.size}")
+        
         # Align population data to hazard grid if needed
-        if hazard_data.shape != population_data.shape:
+        if clipped_hazard_data.shape != population_data.shape:
             logger.info("Aligning population data to hazard grid...")
             from scipy.ndimage import zoom
             zoom_factors = (
-                hazard_data.shape[0] / population_data.shape[0],
-                hazard_data.shape[1] / population_data.shape[1]
+                clipped_hazard_data.shape[0] / population_data.shape[0],
+                clipped_hazard_data.shape[1] / population_data.shape[1]
             )
             population_data = zoom(population_data, zoom_factors, order=1)
         
         # Initialize risk data with zeros
-        risk_data = np.zeros_like(hazard_data, dtype=np.float32)
+        risk_data = np.zeros_like(clipped_hazard_data, dtype=np.float32)
         
         # Create masks for filtered calculation
-        flood_risk_mask = hazard_data > max_safe_flood_risk
+        flood_risk_mask = clipped_hazard_data > 0
         population_relevance_mask = population_data > min_population_threshold
         land_valid_mask = land_mask > 0
         
@@ -516,7 +526,7 @@ class RiskLayer:
         # Apply weighted calculation only where both conditions are met
         if np.any(calculation_mask):
             risk_data[calculation_mask] = (
-                hazard_weight * hazard_data[calculation_mask] + 
+                hazard_weight * clipped_hazard_data[calculation_mask] + 
                 population_weight * population_data[calculation_mask]
             )
             

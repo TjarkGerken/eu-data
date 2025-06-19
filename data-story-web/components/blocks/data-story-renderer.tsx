@@ -5,6 +5,7 @@ import { MarkdownBlock } from "./markdown-block";
 import { CalloutBlock } from "./callout-block";
 
 import { VisualizationCard } from "@/components/visualization-card";
+import { InteractiveMap } from "@/components/interactive-map";
 import { AnimatedQuoteBlock } from "./animated-quote-block";
 import { AnimatedStatisticsBlock } from "./animated-statistics-block";
 import { ClimateTimelineBlock } from "./climate-timeline-block";
@@ -136,6 +137,18 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
 
       case "climate-infographic":
         return <ClimateInfographicBlockComponent key={index} block={block} />;
+
+      case "interactive-map":
+        return (
+          <InteractiveMap
+            key={index}
+            title={block.title}
+            description={block.description}
+            selectedLayers={block.selectedLayers || []}
+            height={block.height || "600px"}
+            enableLayerControls={block.enableLayerControls !== false}
+          />
+        );
 
       default:
         return null;

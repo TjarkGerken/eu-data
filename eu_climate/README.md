@@ -93,11 +93,12 @@ This section outlines all geospatial and statistical datasets used for the case 
 
 ## 🚛 Transportation & Infrastructure
 
-| Dataset                          | Description                      | Scope/Resolution | Used in Layers | Files                                          | Source                                                                                   |
-| -------------------------------- | -------------------------------- | ---------------- | -------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Freight Loading Statistics**   | Road freight loading by NUTS-3   | NUTS L3          | Relevance      | `road_go_loading/`, `unified_freight_data.csv` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table) |
-| **Freight Unloading Statistics** | Road freight unloading by NUTS-3 | NUTS L3          | Relevance      | `L3-estat_road_go_unloading/`                  | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table) |
-| **European Ports**               | Location and attributes of ports | Point data       | Exposition     | `Port/PORT_RG_2009.shp`                        | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks)     |
+| Dataset                          | Description                       | Scope/Resolution | Used in Layers         | Files                                          | Source                                                                                   |
+| -------------------------------- | --------------------------------- | ---------------- | ---------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Freight Loading Statistics**   | Road freight loading by NUTS-3    | NUTS L3          | Relevance              | `road_go_loading/`, `unified_freight_data.csv` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table) |
+| **Freight Unloading Statistics** | Road freight unloading by NUTS-3  | NUTS L3          | Relevance              | `L3-estat_road_go_unloading/`                  | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table) |
+| **European Ports**               | Location and attributes of ports  | Point data       | Exposition & Relevance | `Port/PORT_RG_2009.shp`                        | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks)     |
+| **Zeevaart**               | Gross weight handled (1,000 tons) | Per Port         | Relevance              | `Port/PORT_RG_2009.shp`                        | [CBS](https://opendata.cbs.nl/#/CBS/nl/dataset/82850NED/table)                |
 
 ---
 
