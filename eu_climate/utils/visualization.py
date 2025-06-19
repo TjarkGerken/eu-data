@@ -728,8 +728,7 @@ class LayerVisualizer:
         # Get proper layer title
         layer_titles = {
             'gdp': 'GDP Economic Relevance',
-            'freight_loading': 'Freight Loading Economic Relevance',
-            'freight_unloading': 'Freight Unloading Economic Relevance',
+                    'freight': 'Freight Economic Relevance',
             'combined': 'Combined Economic Relevance'
         }
         
