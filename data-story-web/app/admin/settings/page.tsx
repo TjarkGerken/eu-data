@@ -58,12 +58,12 @@ export default function SettingsPage() {
             <CardContent>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Content is stored in <code>lib/content.json</code> and
-                  dynamically loaded into the application.
+                  Content is stored in the Supabase database and dynamically
+                  loaded into the application.
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Changes made through the Content Management interface are
-                  automatically saved and applied.
+                  automatically saved to the database and applied in real-time.
                 </p>
               </div>
             </CardContent>

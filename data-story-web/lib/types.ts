@@ -245,7 +245,9 @@ export interface InteractiveMapBlock {
   type: "interactive-map";
   title: string;
   description: string;
-  layers: string[];
+  selectedLayers: string[];
+  height?: string;
+  enableLayerControls?: boolean;
 }
 
 export interface Story {

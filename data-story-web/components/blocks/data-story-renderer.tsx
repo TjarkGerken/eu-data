@@ -144,11 +144,9 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             key={index}
             title={block.title}
             description={block.description}
-            initialLayers={block.initialLayers || []}
-            showClusterOverlay={block.showClusterOverlay !== false}
+            selectedLayers={block.selectedLayers || []}
             height={block.height || "600px"}
             enableLayerControls={block.enableLayerControls !== false}
-            scenarioFilter={block.scenarioFilter || []}
           />
         );
 

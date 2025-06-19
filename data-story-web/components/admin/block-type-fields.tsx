@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -16,9 +16,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageDropdown } from "@/components/image-dropdown";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
-import { Plus, Trash2, Move, Palette } from "lucide-react";
+import { Plus, Trash2, Move, Palette, Layers, Settings } from "lucide-react";
 import { getFieldError, type ValidationError } from "@/lib/validation";
 import { Switch } from "@/components/ui/switch";
+import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
+import LayerManager from "./layer-manager";
 
 interface BlockTypeFieldsProps {
   blockType: string;
@@ -30,6 +32,171 @@ interface BlockTypeFieldsProps {
   onTitleChange?: (title: string) => void;
   onContentChange?: (content: string) => void;
   mode?: "shared" | "language-specific" | "all";
+}
+
+interface MapLayerSelectorProps {
+  data: any;
+  onDataChange: (newData: any) => void;
+}
+
+function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
+  const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
+    []
+  );
+  const [loading, setLoading] = useState(true);
+  const [showLayerManager, setShowLayerManager] = useState(false);
+
+  useEffect(() => {
+    loadLayers();
+  }, []);
+
+  const loadLayers = async () => {
+    try {
+      const layers = await mapTileService.getAvailableLayers();
+      setAvailableLayers(Array.isArray(layers) ? layers : []);
+    } catch (error) {
+      console.error("Failed to load layers:", error);
+      setAvailableLayers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateDataField = (field: string, value: any) => {
+    onDataChange({ ...data, [field]: value });
+  };
+
+  const toggleLayer = (layerId: string) => {
+    const selectedLayers = data?.selectedLayers || [];
+    const isSelected = selectedLayers.includes(layerId);
+
+    const newLayers = isSelected
+      ? selectedLayers.filter((id: string) => id !== layerId)
+      : [...selectedLayers, layerId];
+
+    updateDataField("selectedLayers", newLayers);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Label>Map Height</Label>
+        <Input
+          value={data?.height || "600px"}
+          onChange={(e) => updateDataField("height", e.target.value)}
+          placeholder="e.g., 600px"
+        />
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="enable-layer-controls"
+          checked={data?.enableLayerControls !== false}
+          onCheckedChange={(checked) =>
+            updateDataField("enableLayerControls", checked)
+          }
+        />
+        <Label htmlFor="enable-layer-controls">Enable Layer Controls</Label>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Available Layers</Label>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowLayerManager(!showLayerManager)}
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Manage Layers
+          </Button>
+        </div>
+
+        {showLayerManager && (
+          <Card>
+            <CardContent className="pt-4">
+              <LayerManager />
+            </CardContent>
+          </Card>
+        )}
+
+        {loading ? (
+          <div className="text-sm text-muted-foreground">Loading layers...</div>
+        ) : availableLayers.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No layers available. Upload layers using the manager above.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-2">
+            {availableLayers.map((layer) => {
+              const isSelected = (data?.selectedLayers || []).includes(
+                layer.id
+              );
+              return (
+                <Card
+                  key={layer.id}
+                  className={`cursor-pointer transition-colors ${
+                    isSelected
+                      ? "border-primary bg-primary/5"
+                      : "hover:border-muted-foreground/50"
+                  }`}
+                  onClick={() => toggleLayer(layer.id)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Layers className="h-4 w-4" />
+                        <div>
+                          <div className="font-medium text-sm">
+                            {layer.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {layer.dataType} • {layer.format}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isSelected && (
+                          <Badge variant="default" className="text-xs">
+                            Selected
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">
+                          {layer.dataType}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {data?.selectedLayers && data.selectedLayers.length > 0 && (
+        <div className="space-y-2">
+          <Label>Selected Layers ({data.selectedLayers.length})</Label>
+          <div className="flex flex-wrap gap-2">
+            {data.selectedLayers.map((layerId: string) => {
+              const layer = availableLayers.find((l) => l.id === layerId);
+              return (
+                <Badge
+                  key={layerId}
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() => toggleLayer(layerId)}
+                >
+                  {layer?.name || layerId}
+                  <Trash2 className="h-3 w-3 ml-1" />
+                </Badge>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function BlockTypeFields({
@@ -141,66 +308,7 @@ export function BlockTypeFields({
         );
 
       case "interactive-map":
-        return (
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>Map Height</Label>
-              <Input
-                value={data?.height || "600px"}
-                onChange={(e) => updateDataField("height", e.target.value)}
-                placeholder="e.g., 600px"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="show-cluster-overlay"
-                checked={data?.showClusterOverlay !== false}
-                onCheckedChange={(checked) =>
-                  updateDataField("showClusterOverlay", checked)
-                }
-              />
-              <Label htmlFor="show-cluster-overlay">Show Cluster Overlay</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="enable-layer-controls"
-                checked={data?.enableLayerControls !== false}
-                onCheckedChange={(checked) =>
-                  updateDataField("enableLayerControls", checked)
-                }
-              />
-              <Label htmlFor="enable-layer-controls">
-                Enable Layer Controls
-              </Label>
-            </div>
-            <div className="space-y-1">
-              <Label>Initial Layers (comma-separated)</Label>
-              <Input
-                value={data?.initialLayers?.join(", ") || ""}
-                onChange={(e) =>
-                  updateDataField(
-                    "initialLayers",
-                    e.target.value.split(",").map((s) => s.trim())
-                  )
-                }
-                placeholder="risk_current, hazard_severe"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Scenario Filter (comma-separated)</Label>
-              <Input
-                value={data?.scenarioFilter?.join(", ") || ""}
-                onChange={(e) =>
-                  updateDataField(
-                    "scenarioFilter",
-                    e.target.value.split(",").map((s) => s.trim())
-                  )
-                }
-                placeholder="current, severe"
-              />
-            </div>
-          </div>
-        );
+        return <MapLayerSelector data={data} onDataChange={onDataChange} />;
 
       case "animated-statistics":
         return (

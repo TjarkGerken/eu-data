@@ -21,6 +21,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { BlockTypeFields } from "./block-type-fields";
 import {
@@ -698,6 +699,9 @@ export default function ContentBlockEditor() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Create New Block Pair</DialogTitle>
+            <DialogDescription>
+              Create a new content block pair in both English and German.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -786,6 +790,9 @@ export default function ContentBlockEditor() {
               Edit Block Pair #{selectedPair?.orderIndex} -{" "}
               {selectedPair?.blockType}
             </DialogTitle>
+            <DialogDescription>
+              Edit content for both English and German versions of this block.
+            </DialogDescription>
           </DialogHeader>
 
           {selectedPair && (

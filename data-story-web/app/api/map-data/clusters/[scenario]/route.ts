@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { get } from "@vercel/blob";
+import { supabase } from "@/lib/supabase";
 import path from "path";
 
 export async function GET(
@@ -19,8 +19,20 @@ export async function GET(
     const geoPackagePath = getClusterGeoPackagePath(scenario);
 
     try {
-      const geoPackageBlob = await get(geoPackagePath);
-      const buffer = Buffer.from(await geoPackageBlob.arrayBuffer());
+      const { data: publicUrlData } = supabase.storage
+        .from("clusters")
+        .getPublicUrl(geoPackagePath);
+
+      if (!publicUrlData.publicUrl) {
+        throw new Error("Cluster file not found");
+      }
+
+      const response = await fetch(publicUrlData.publicUrl);
+      if (!response.ok) {
+        throw new Error("Failed to fetch cluster file");
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
 
       const geoJsonData = await convertGeoPackageToGeoJSON(buffer);
 

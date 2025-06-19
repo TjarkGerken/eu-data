@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Layers, Download, Info, Settings } from "lucide-react";
+import { Layers, Download, Settings } from "lucide-react";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
 import dynamic from "next/dynamic";
 
@@ -21,11 +21,9 @@ const LeafletMap = dynamic(() => import("./map/leaflet-map"), {
 interface InteractiveMapProps {
   title?: string;
   description?: string;
-  initialLayers?: string[];
-  showClusterOverlay?: boolean;
+  selectedLayers?: string[];
   height?: string;
   enableLayerControls?: boolean;
-  scenarioFilter?: string[];
 }
 
 interface LayerState {
@@ -36,19 +34,16 @@ interface LayerState {
 }
 
 export function InteractiveMap({
-  title = "Climate Risk Interactive Map",
-  description = "Explore climate risk scenarios across European regions",
-  initialLayers = [],
-  showClusterOverlay = true,
+  title = "Interactive Climate Map",
+  description = "Explore climate data layers",
+  selectedLayers = [],
   height = "600px",
   enableLayerControls = true,
-  scenarioFilter = [],
 }: InteractiveMapProps) {
   const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
     []
   );
   const [layerStates, setLayerStates] = useState<LayerState[]>([]);
-  const [selectedScenario, setSelectedScenario] = useState<string>("current");
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
 
@@ -56,30 +51,36 @@ export function InteractiveMap({
     loadAvailableLayers();
   }, []);
 
+  useEffect(() => {
+    if (availableLayers.length > 0) {
+      initializeLayerStates();
+    }
+  }, [availableLayers, selectedLayers]);
+
   const loadAvailableLayers = async () => {
     try {
       const layers = await mapTileService.getAvailableLayers();
-
-      const filteredLayers =
-        scenarioFilter.length > 0
-          ? layers.filter((layer) => scenarioFilter.includes(layer.scenario))
-          : layers;
-
-      setAvailableLayers(filteredLayers);
-
-      const initialStates = filteredLayers.map((layer, index) => ({
-        id: layer.layerName,
-        visible: initialLayers.includes(layer.layerName) || index === 0,
-        opacity: 0.8,
-        metadata: layer,
-      }));
-
-      setLayerStates(initialStates);
-      setLoading(false);
+      setAvailableLayers(layers);
     } catch (error) {
       console.error("Failed to load map layers:", error);
+    } finally {
       setLoading(false);
     }
+  };
+
+  const initializeLayerStates = () => {
+    if (!Array.isArray(availableLayers)) {
+      console.warn("availableLayers is not an array:", availableLayers);
+      return;
+    }
+
+    const states = availableLayers.map((layer) => ({
+      id: layer.id,
+      visible: selectedLayers.includes(layer.id),
+      opacity: 0.8,
+      metadata: layer,
+    }));
+    setLayerStates(states);
   };
 
   const toggleLayerVisibility = (layerId: string) => {
@@ -98,20 +99,14 @@ export function InteractiveMap({
     );
   };
 
-  const getLayersByScenario = (scenario: string) => {
-    return layerStates.filter((layer) => layer.metadata.scenario === scenario);
-  };
-
-  const scenarios = [
-    ...new Set(availableLayers.map((layer) => layer.scenario)),
-  ];
-
   const downloadLayerData = async (layerId: string) => {
     const layer = layerStates.find((l) => l.id === layerId);
     if (!layer) return;
 
     window.open(`/api/map-data/download/${layerId}`, "_blank");
   };
+
+  const visibleLayers = layerStates.filter((layer) => layer.visible);
 
   if (loading) {
     return (
@@ -165,65 +160,39 @@ export function InteractiveMap({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Scenario Selection */}
-        {scenarios.length > 1 && (
-          <div className="flex flex-wrap gap-2">
-            <Label className="text-sm font-medium">Scenario:</Label>
-            {scenarios.map((scenario) => (
-              <Badge
-                key={scenario}
-                variant={selectedScenario === scenario ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => setSelectedScenario(scenario)}
-              >
-                {scenario.charAt(0).toUpperCase() + scenario.slice(1)}
-              </Badge>
-            ))}
-          </div>
-        )}
-
         <div className="flex gap-4">
-          {/* Map Container */}
           <div className="flex-1">
             <div
               className="relative rounded-lg overflow-hidden border"
               style={{ height }}
             >
-              <LeafletMap
-                layers={layerStates}
-                showClusterOverlay={showClusterOverlay}
-                scenario={selectedScenario}
-              />
+              <LeafletMap layers={layerStates} />
 
-              {/* Map Legend */}
               <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
                 <h4 className="text-sm font-medium mb-2">Legend</h4>
                 <div className="space-y-1">
-                  {layerStates
-                    .filter((layer) => layer.visible)
-                    .map((layer) => (
+                  {visibleLayers.map((layer) => (
+                    <div
+                      key={layer.id}
+                      className="flex items-center gap-2 text-xs"
+                    >
                       <div
-                        key={layer.id}
-                        className="flex items-center gap-2 text-xs"
-                      >
-                        <div
-                          className="w-4 h-3 rounded border"
-                          style={{
-                            background: `linear-gradient(to right, ${layer.metadata.colorScale.join(
-                              ", "
-                            )})`,
-                            opacity: layer.opacity,
-                          }}
-                        />
-                        <span>{layer.metadata.layerName}</span>
-                      </div>
-                    ))}
+                        className="w-4 h-3 rounded border"
+                        style={{
+                          background: `linear-gradient(to right, ${layer.metadata.colorScale.join(
+                            ", "
+                          )})`,
+                          opacity: layer.opacity,
+                        }}
+                      />
+                      <span>{layer.metadata.name}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Layer Controls */}
           {enableLayerControls && showControls && (
             <div className="w-80 space-y-4">
               <Card>
@@ -231,7 +200,7 @@ export function InteractiveMap({
                   <CardTitle className="text-lg">Layer Controls</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {getLayersByScenario(selectedScenario).map((layer) => (
+                  {layerStates.map((layer) => (
                     <div
                       key={layer.id}
                       className="space-y-3 p-3 bg-gray-50 rounded-lg"
@@ -245,7 +214,7 @@ export function InteractiveMap({
                             }
                           />
                           <Label className="text-sm font-medium">
-                            {layer.metadata.layerName}
+                            {layer.metadata.name}
                           </Label>
                         </div>
                         <div className="flex gap-1">
@@ -262,6 +231,9 @@ export function InteractiveMap({
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">
                           {layer.metadata.dataType}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {layer.metadata.format}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
                           Range: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
@@ -293,13 +265,12 @@ export function InteractiveMap({
           )}
         </div>
 
-        {/* Statistics Panel */}
         <Card>
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-blue-600">
-                  {layerStates.filter((l) => l.visible).length}
+                  {visibleLayers.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
                   Active Layers
@@ -307,18 +278,18 @@ export function InteractiveMap({
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600">
-                  {scenarios.length}
+                  {layerStates.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Scenarios Available
+                  Total Layers
                 </div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-orange-600">
-                  {showClusterOverlay ? "ON" : "OFF"}
+                  {enableLayerControls ? "ON" : "OFF"}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Cluster Overlay
+                  Layer Controls
                 </div>
               </div>
             </div>
