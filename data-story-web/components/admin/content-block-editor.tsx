@@ -73,6 +73,7 @@ const AVAILABLE_BLOCK_TYPES = [
   "visualization",
   "animated-quote",
   "animated-statistics",
+  "interactive-map",
   "climate-timeline",
   "climate-dashboard",
   "temperature-spiral",
@@ -94,7 +95,6 @@ export default function ContentBlockEditor() {
     []
   );
   const [formData, setFormData] = useState<ContentBlockFormData>({
-    story_id: "",
     block_type: "",
     title: "",
     content: "",
@@ -103,6 +103,10 @@ export default function ContentBlockEditor() {
     order_index: 0,
     selectedReferences: [],
   });
+  const [storyIds, setStoryIds] = useState<{
+    english: string;
+    german: string;
+  } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -125,6 +129,11 @@ export default function ContentBlockEditor() {
         setError("Missing English or German story");
         return;
       }
+
+      setStoryIds({
+        english: englishStory.id,
+        german: germanStory.id,
+      });
 
       const fetchBlocksForStory = async (storyId: string) => {
         const { data, error } = await supabase
@@ -176,7 +185,6 @@ export default function ContentBlockEditor() {
 
   const resetForm = () => {
     setFormData({
-      story_id: "",
       block_type: "",
       title: "",
       content: "",
@@ -199,6 +207,7 @@ export default function ContentBlockEditor() {
   };
 
   const createNewBlockPair = async () => {
+    // Validate form data (story_id is handled automatically now)
     const validation = validateContentBlock(formData);
     setValidationErrors(validation.errors);
 
@@ -211,22 +220,17 @@ export default function ContentBlockEditor() {
       return;
     }
 
+    if (!storyIds) {
+      toast({
+        title: "Error",
+        description: "Story IDs not loaded. Please refresh the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
-      const { data: stories } = await supabase
-        .from("content_stories")
-        .select("id, language_code")
-        .in("language_code", ["en", "de"]);
-
-      if (!stories) throw new Error("No stories found");
-
-      const englishStory = stories.find((s) => s.language_code === "en");
-      const germanStory = stories.find((s) => s.language_code === "de");
-
-      if (!englishStory || !germanStory) {
-        throw new Error("Missing English or German story");
-      }
-
       const blockData = {
         block_type: formData.block_type,
         order_index: formData.order_index,
@@ -239,7 +243,7 @@ export default function ContentBlockEditor() {
           .insert([
             {
               ...blockData,
-              story_id: englishStory.id,
+              story_id: storyIds.english,
               title: formData.title || null,
               content: formData.content || null,
               language: "en",
@@ -252,7 +256,7 @@ export default function ContentBlockEditor() {
           .insert([
             {
               ...blockData,
-              story_id: germanStory.id,
+              story_id: storyIds.german,
               title: formData.title || null,
               content: formData.content || null,
               language: "de",
@@ -265,24 +269,6 @@ export default function ContentBlockEditor() {
       if (englishResult.error) throw englishResult.error;
       if (germanResult.error) throw germanResult.error;
 
-      if (
-        formData.selectedReferences &&
-        formData.selectedReferences.length > 0
-      ) {
-        const referenceInserts = [
-          ...formData.selectedReferences.map((refId) => ({
-            block_id: englishResult.data.id,
-            reference_id: refId,
-          })),
-          ...formData.selectedReferences.map((refId) => ({
-            block_id: germanResult.data.id,
-            reference_id: refId,
-          })),
-        ];
-
-        await supabase.from("block_references").insert(referenceInserts);
-      }
-
       toast({
         title: "Success",
         description: "Block pair created successfully",
@@ -290,7 +276,34 @@ export default function ContentBlockEditor() {
 
       setShowNewForm(false);
       resetForm();
-      fetchBlockPairs();
+      await fetchBlockPairs();
+
+      // Open the newly created block pair in edit mode
+      const newPair = {
+        orderIndex: formData.order_index,
+        blockType: formData.block_type,
+        english: {
+          id: englishResult.data.id,
+          story_id: storyIds.english,
+          block_type: formData.block_type,
+          order_index: formData.order_index,
+          data: formData.data || {},
+          title: undefined,
+          content: undefined,
+          language: "en",
+        },
+        german: {
+          id: germanResult.data.id,
+          story_id: storyIds.german,
+          block_type: formData.block_type,
+          order_index: formData.order_index,
+          data: formData.data || {},
+          title: undefined,
+          content: undefined,
+          language: "de",
+        },
+      };
+      setSelectedPair(newPair);
     } catch (error) {
       toast({
         title: "Failed to create block pair",
@@ -728,32 +741,6 @@ export default function ContentBlockEditor() {
                   min="1"
                 />
               </div>
-            </div>
-
-            {formData.block_type && (
-              <BlockTypeFields
-                blockType={formData.block_type}
-                data={formData.data}
-                onDataChange={(newData) => updateFormField("data", newData)}
-                validationErrors={validationErrors}
-                title={formData.title}
-                content={formData.content}
-                onTitleChange={(title) => updateFormField("title", title)}
-                onContentChange={(content) =>
-                  updateFormField("content", content)
-                }
-              />
-            )}
-
-            <div>
-              <Label>References</Label>
-              <MultiSelectReferences
-                selectedReferenceIds={formData.selectedReferences || []}
-                onSelectionChange={(referenceIds) =>
-                  updateFormField("selectedReferences", referenceIds)
-                }
-                placeholder="Select references for this block..."
-              />
             </div>
 
             {validationErrors.length > 0 && (

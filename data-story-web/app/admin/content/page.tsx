@@ -42,6 +42,7 @@ import {
   Reference,
   ContentData,
   Visualization,
+  Story,
 } from "@/lib/types";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
 import { ImageDropdown } from "@/components/image-dropdown";
@@ -57,25 +58,44 @@ export default function ContentAdminPage() {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [storyId, setStoryId] = useState<string>("");
 
   useEffect(() => {
-    loadContent();
+    loadStoryAndContent();
   }, []);
 
-  const loadContent = async () => {
+  const loadStoryAndContent = async () => {
+    setLoading(true);
     try {
-      const response = await fetch("/api/content");
-      const data = await response.json();
+      // Fetch the single story ID from Supabase
+      const response = await fetch("/api/stories");
+      const stories = await response.json();
+
+      if (stories.length === 0) {
+        console.error("No stories found");
+        setContent(null);
+        return;
+      }
+
+      const currentStoryId = stories[0].id;
+      setStoryId(currentStoryId);
+
+      // Load content for this story
+      const contentResponse = await fetch(
+        `/api/content?storyId=${currentStoryId}`
+      );
+      const data = await contentResponse.json();
       setContent(data);
     } catch (error) {
-      console.error("Failed to load content:", error);
+      console.error("Failed to load story and content:", error);
+      setContent(null);
     } finally {
       setLoading(false);
     }
   };
 
   const saveContent = async () => {
-    if (!content) return;
+    if (!content || !storyId) return;
 
     setSaving(true);
     try {
@@ -103,7 +123,10 @@ export default function ContentAdminPage() {
       const response = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(synchronizedContent),
+        body: JSON.stringify({
+          storyId: storyId,
+          content: synchronizedContent,
+        }),
       });
 
       if (!response.ok) {
@@ -186,7 +209,10 @@ export default function ContentAdminPage() {
       const response = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedContent),
+        body: JSON.stringify({
+          storyId: storyId,
+          content: updatedContent,
+        }),
       });
 
       if (!response.ok) {
@@ -235,7 +261,10 @@ export default function ContentAdminPage() {
       const response = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedContent),
+        body: JSON.stringify({
+          storyId: storyId,
+          content: updatedContent,
+        }),
       });
 
       if (!response.ok) {
@@ -344,6 +373,15 @@ export default function ContentAdminPage() {
             imageId: "",
             references: [],
           } as Visualization,
+        };
+      case "interactive-map":
+        return {
+          type: "interactive-map",
+          title: isGerman ? "Interaktive Karte" : "Interactive Map",
+          description: isGerman
+            ? "Interaktive Klimarisiko-Karte"
+            : "Interactive climate risk map",
+          layers: [],
         };
       case "animated-quote":
         return {
@@ -567,6 +605,15 @@ export default function ContentAdminPage() {
             },
           ],
         };
+      case "interactive-map":
+        return {
+          type: "interactive-map",
+          title: isGerman ? "Interaktive Karte" : "Interactive Map",
+          description: isGerman
+            ? "Interaktive Klimarisiko-Karte"
+            : "Interactive climate risk map",
+          layers: [],
+        };
       default:
         return {
           type: "markdown",
@@ -583,63 +630,62 @@ export default function ContentAdminPage() {
   };
 
   const saveNewBlock = async () => {
-    if (!content || !newBlock || !newBlock.type) return;
+    if (!newBlock || !content) return;
 
-    const blocks = [
-      ...content[activeLanguage].blocks,
-      newBlock as DataStoryBlock,
-    ];
+    // Use placeholder creator for the new block for both languages
+    const enBlock = createPlaceholderBlock(newBlock.type!, "en");
+    const deBlock = createPlaceholderBlock(newBlock.type!, "de");
 
-    // Also add a corresponding block to the other language
-    const otherLanguage = activeLanguage === "en" ? "de" : "en";
-    const otherBlocks = [
-      ...content[otherLanguage].blocks,
-      createPlaceholderBlock(newBlock.type, otherLanguage),
-    ];
+    // Copy over initial data from the form if it exists
+    Object.assign(enBlock, newBlock);
+    Object.assign(deBlock, newBlock); // Basic sync, can be refined
 
-    const updatedContent = {
-      ...content,
-      [activeLanguage]: {
-        ...content[activeLanguage],
-        blocks,
-      },
-      [otherLanguage]: {
-        ...content[otherLanguage],
-        blocks: otherBlocks,
-      },
-    };
-    setContent(updatedContent);
-    setNewBlock(null);
-
-    // Auto-save after adding block
-    setSaving(true);
     try {
       const response = await fetch("/api/content", {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedContent),
+        body: JSON.stringify({
+          storyId: storyId,
+          enBlock,
+          deBlock,
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("Server error details:", errorData);
+        console.error("Failed to add block:", errorData);
         throw new Error(
-          `HTTP error! status: ${response.status}, details: ${
-            errorData.details || errorData.error
+          `Failed to add block. Status: ${response.status}. ${
+            errorData.error || ""
           }`
         );
       }
 
-      console.log("Block added and saved successfully");
+      const createdBlocks = await response.json();
+
+      setContent((prevContent) => {
+        if (!prevContent) return null;
+        return {
+          ...prevContent,
+          en: {
+            ...prevContent.en,
+            blocks: [...prevContent.en.blocks, createdBlocks.en],
+          },
+          de: {
+            ...prevContent.de,
+            blocks: [...prevContent.de.blocks, createdBlocks.de],
+          },
+        };
+      });
+
+      setNewBlock(null);
     } catch (error) {
-      console.error("Failed to auto-save after adding block:", error);
+      console.error("Failed to add block:", error);
       alert(
-        `Failed to save block: ${
+        `Failed to add block: ${
           error instanceof Error ? error.message : "Unknown error"
         }`
       );
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -694,7 +740,7 @@ export default function ContentAdminPage() {
       const response = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(content),
+        body: JSON.stringify({ storyId: storyId, content }),
       });
 
       if (!response.ok) {
@@ -2035,6 +2081,13 @@ export default function ContentAdminPage() {
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Climate Infographic
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("interactive-map")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Interactive Map
                       </Button>
                     </div>
                   </CardContent>
