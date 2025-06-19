@@ -87,6 +87,9 @@ class ProjectConfig:
         self.base_floor_height = self.config['building']['base_floor_height']
         self.max_floors = self.config['building']['max_floors']
         
+        # Store clustering parameters
+        self.clustering = self.config.get('clustering', {})
+        
         # Store visualization parameters
         self.figure_size = tuple(self.config['visualization']['figure_size'])
         self.dpi = self.config['visualization']['dpi']
