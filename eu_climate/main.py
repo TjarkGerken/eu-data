@@ -84,6 +84,7 @@ Examples:
   python -m main --no-upload --all           # Run all layers without data upload
   python -m main --clusters                  # Extract risk cluster polygons from existing results
   python -m main --upload                    # Only upload existing data to Hugging Face (skip analysis)
+  python -m main --download                  # Only download data from Hugging Face (skip analysis)
         """
     )
     
@@ -139,6 +140,10 @@ Examples:
                             action='store_true',
                             help='Only execute data upload to Hugging Face (skip all risk analysis)')
     
+    config_group.add_argument('--download',
+                            action='store_true',
+                            help='Only execute data download from Hugging Face (skip all risk analysis)')
+    
     config_group.add_argument('--no-visualize',
                             action='store_true',
                             help='Skip visualization generation')
@@ -172,6 +177,16 @@ Examples:
         args.clusters = False
         args.all = False
         args.no_upload = False  # Ensure upload is enabled
+    elif args.download:
+        # If --download flag is set, disable all other processing and only run download
+        args.hazard = False
+        args.exposition = False
+        args.relevance = False
+        args.risk = False
+        args.population = False
+        args.clusters = False
+        args.all = False
+        args.no_upload = True  # Disable upload when downloading
     elif not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.clusters, args.all]):
         # If no specific layers are chosen, default to --all
         logger.info("No specific layers selected, defaulting to --all")
@@ -464,9 +479,11 @@ def main():
     logger.info("EU CLIMATE RISK ASSESSMENT SYSTEM")
     logger.info("=" * 60)
     
-    # Log selected layers or upload-only mode
+    # Log selected layers or upload-only/download-only mode
     if args.upload:
         logger.info("UPLOAD-ONLY MODE: Skipping all risk analysis layers")
+    elif args.download:
+        logger.info("DOWNLOAD-ONLY MODE: Skipping all risk analysis layers")
     else:
         selected_layers = []
         if args.hazard:
@@ -518,6 +535,29 @@ def main():
                 sys.exit(1)
         except Exception as e:
             logger.error(f"Error during upload: {str(e)}")
+            if args.verbose:
+                import traceback
+                logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            sys.exit(1)
+        return
+    
+    # Handle download-only mode
+    if args.download:
+        logger.info("\n" + "="*50)
+        logger.info("DOWNLOAD-ONLY MODE: EXECUTING DATA DOWNLOAD")
+        logger.info("="*50)
+        try:
+            from eu_climate.utils.data_loading import download_data
+            download_result = download_data()
+            if download_result:
+                logger.info(f"\n{'='*60}")
+                logger.info("DOWNLOAD COMPLETED SUCCESSFULLY")
+                logger.info(f"{'='*60}")
+            else:
+                logger.error("Download failed")
+                sys.exit(1)
+        except Exception as e:
+            logger.error(f"Error during download: {str(e)}")
             if args.verbose:
                 import traceback
                 logger.error(f"Full traceback:\n{traceback.format_exc()}")
