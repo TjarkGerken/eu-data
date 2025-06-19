@@ -33,6 +33,7 @@ export interface CalloutBlock {
 
 export interface QuoteBlock {
   type: "quote";
+  title: string;
   content: string;
   author: string;
   role?: string;
@@ -40,6 +41,8 @@ export interface QuoteBlock {
 
 export interface StatisticsBlock {
   type: "statistics";
+  title: string;
+  description: string;
   stats: Array<{
     label: string;
     value: string;
@@ -49,6 +52,8 @@ export interface StatisticsBlock {
 
 export interface TimelineBlock {
   type: "timeline";
+  title: string;
+  description: string;
   events: Array<{
     year: string;
     title: string;
@@ -58,12 +63,20 @@ export interface TimelineBlock {
 
 export interface VisualizationBlock {
   type: "visualization";
-  data: Visualization;
+  title: string;
+  description: string;
+  content: string;
+  visualizationType: "map" | "chart" | "trend";
+  imageCategory: string;
+  imageScenario?: string;
+  imageId: string;
+  references: string[];
 }
 
 export interface AnimatedQuoteBlock {
   type: "animated-quote";
-  text: string;
+  title: string;
+  content: string;
   author: string;
   role?: string;
 }
@@ -222,6 +235,25 @@ export interface ClimateInfographicBlock {
   }>;
 }
 
+export interface ClimateMapStaticBlock {
+  type: "climate-map-static";
+  title?: string;
+  description?: string;
+}
+
+export interface InteractiveMapBlock {
+  type: "interactive-map";
+  title: string;
+  description: string;
+  layers: string[];
+}
+
+export interface Story {
+  id: string;
+  title: string;
+  description: string;
+}
+
 export type DataStoryBlock =
   | MarkdownBlock
   | CalloutBlock
@@ -244,7 +276,8 @@ export type DataStoryBlock =
   | ClimateTimelineMinimalBlock
   | DataStormBlock
   | CarbonMoleculeDanceBlock
-  | ClimateInfographicBlock;
+  | ClimateInfographicBlock
+  | InteractiveMapBlock;
 
 export interface LanguageContent {
   heroTitle: string;
