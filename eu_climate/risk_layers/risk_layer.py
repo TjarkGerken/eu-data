@@ -336,7 +336,7 @@ class RiskLayer:
         
         for scenario_name, risk_data in risk_scenarios.items():
             # Parse scenario name to extract SLR scenario part
-            # Expected formats: "SLR-0-Current_GDP", "SLR-1-Conservative_FREIGHT_LOADING", etc.
+            # Expected formats: "SLR-0-Current_GDP", "SLR-1-Conservative_FREIGHT", etc.
             # We need to extract just the SLR part: "SLR-0-Current", "SLR-1-Conservative", etc.
             
             # Use regex to match SLR pattern: SLR-{number}-{name}
