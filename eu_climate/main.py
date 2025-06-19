@@ -75,11 +75,12 @@ Examples:
   python -m main --hazard                    # Run only hazard layer analysis
   python -m main --exposition                # Run only exposition layer analysis  
   python -m main --relevance                 # Run only relevance layer analysis
+  python -m main --freight-only              # Run only freight relevance layer (with Zeevart data)
   python -m main --risk                      # Run only risk layer analysis
   python -m main --population                # Run only population risk layer analysis
   python -m main --hazard --exposition       # Run hazard and exposition layers
   python -m main --all                       # Run all layers (default behavior)
-  python -m main --verbose --risk            # Run risk layer with verbose logging
+  python -m main --verbose --freight-only    # Run freight layer with verbose logging
   python -m main --no-cache --hazard         # Run hazard layer without caching
   python -m main --no-upload --all           # Run all layers without data upload
   python -m main --clusters                  # Extract risk cluster polygons from existing results
@@ -103,6 +104,10 @@ Examples:
     layer_group.add_argument('--relevance', 
                            action='store_true',
                            help='Process Relevance Layer (economic factors, GDP)')
+    
+    layer_group.add_argument('--freight-only', 
+                           action='store_true',
+                           help='Process only Freight Relevance Layer (with enhanced Zeevart maritime data)')
     
     layer_group.add_argument('--risk', 
                            action='store_true',
@@ -187,7 +192,7 @@ Examples:
         args.clusters = False
         args.all = False
         args.no_upload = True  # Disable upload when downloading
-    elif not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.clusters, args.all]):
+    elif not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.clusters, args.all, args.freight_only]):
         # If no specific layers are chosen, default to --all
         logger.info("No specific layers selected, defaulting to --all")
         args.all = True
@@ -268,7 +273,7 @@ class RiskAssessment:
         logger.info("EXPOSITION LAYER ANALYSIS")
         logger.info("="*40)
         exposition_layer = ExpositionLayer(config)
-        exposition_layer.run_exposition_with_all_economic_layers(visualize=False, create_png=True, show_ports=False, show_port_buffers=False)
+        exposition_layer.run_exposition_with_all_economic_layers(visualize=False, create_png=True, show_ports=True, show_port_buffers=False)
 
     def run_risk_assessment(self, config: ProjectConfig, 
                            run_hazard: bool = True,
@@ -334,6 +339,37 @@ class RiskAssessment:
         # hazard_layer.visualize_hazard_assessment(flood_extents, save_plots=True)
         
         hazard_layer.export_results(flood_extents)
+    
+    def run_freight_relevance_only(self, config: ProjectConfig) -> None:
+        """
+        Run only freight relevance layer analysis with enhanced Zeevart maritime data.
+        
+        Args:
+            config: Project configuration
+        """
+        logger.info("🚛 Starting FREIGHT-ONLY relevance layer analysis with enhanced Zeevart data")
+        
+        try:
+            relevance_layer = RelevanceLayer(config)
+            relevance_layers = relevance_layer.run_freight_relevance_only(
+                visualize=True,
+                export_tif=True
+            )
+            
+            # Log freight-specific results
+            if 'freight' in relevance_layers:
+                freight_data = relevance_layers['freight']
+                logger.info(f"✅ Freight relevance layer completed:")
+                logger.info(f"   - Shape: {freight_data.shape}")
+                logger.info(f"   - Value range: {np.nanmin(freight_data):.3f} to {np.nanmax(freight_data):.3f}")
+                logger.info(f"   - Non-zero pixels: {np.sum(freight_data > 0):,}")
+                logger.info(f"   - Enhanced with Zeevart maritime port data")
+            else:
+                logger.warning("⚠️  Freight layer not found in results")
+                
+        except Exception as e:
+            logger.error(f"❌ Error in freight relevance analysis: {str(e)}")
+            raise
     
     def run_relevance_layer_analysis(self, config: ProjectConfig) -> None:
         """
@@ -492,6 +528,8 @@ def main():
             selected_layers.append("Exposition")
         if args.relevance:
             selected_layers.append("Relevance")
+        if args.freight_only:
+            selected_layers.append("Freight-Only Relevance")
         if args.risk:
             selected_layers.append("Risk")
         if args.population:
@@ -606,6 +644,12 @@ def main():
             logger.info("EXECUTING RELEVANCE LAYER ANALYSIS")
             logger.info(f"{'='*50}")
             risk_assessment.run_relevance_layer_analysis(config)
+        
+        if args.freight_only:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING FREIGHT-ONLY RELEVANCE LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            risk_assessment.run_freight_relevance_only(config)
             
         if args.risk:
             logger.info(f"\n{'='*50}")

@@ -469,42 +469,33 @@ class ExpositionLayer:
 
     def calculate_exposition_with_weights(self, weights: Dict[str, float]) -> Tuple[np.ndarray, dict]:
         """Calculate exposition layer using custom weights."""
-        # Load and preprocess rasters
         ghs_built_c, meta = self.load_and_preprocess_raster(self.ghs_built_c_path)
         logger.info(f"GHS Built-C after preprocessing - Min: {np.nanmin(ghs_built_c)}, Max: {np.nanmax(ghs_built_c)}, Mean: {np.nanmean(ghs_built_c)}")
         
-        # Use the first layer's transform as reference for all other layers
         reference_transform = meta['transform']
         reference_crs = meta['crs']
         reference_shape = ghs_built_c.shape
         
-        # Load other layers with the same transform
         ghs_built_v, _ = self.load_and_preprocess_raster(self.ghs_built_v_path)
         logger.info(f"GHS Built-V after preprocessing - Min: {np.nanmin(ghs_built_v)}, Max: {np.nanmax(ghs_built_v)}, Mean: {np.nanmean(ghs_built_v)}")
         
-        # Load population data
         population, _ = self.load_and_preprocess_raster(self.population_path)
         logger.info(f"Population after preprocessing - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
         
-        # Load electricity consumption data
         electricity_consumption, _ = self.load_and_preprocess_raster(self.electricity_consumption_path)
         logger.info(f"Electricity consumption after preprocessing - Min: {np.nanmin(electricity_consumption)}, Max: {np.nanmax(electricity_consumption)}, Mean: {np.nanmean(electricity_consumption)}")
         
-        # Load vierkant stats socioeconomic data
         vierkant_stats, vierkant_meta = self.load_and_preprocess_vierkant_stats()
         logger.info(f"Vierkant stats after preprocessing - Min: {np.nanmin(vierkant_stats)}, Max: {np.nanmax(vierkant_stats)}, Mean: {np.nanmean(vierkant_stats)}")
         
-        # Load and process urbanisation data
         urbanisation_gdf = self.load_urbanisation_data()
         urbanisation_multiplier, urbanisation_meta = self.rasterize_urbanisation_multiplier(urbanisation_gdf)
         logger.info(f"Urbanisation multiplier after rasterization - Min: {np.nanmin(urbanisation_multiplier):.2f}, Max: {np.nanmax(urbanisation_multiplier):.2f}, Mean: {np.nanmean(urbanisation_multiplier):.2f}")
         
-        # Load and process port data
         port_gdf = self.load_port_data()
         port_multiplier, port_meta = self.rasterize_port_multiplier(port_gdf)
         logger.info(f"Port multiplier after rasterization - Min: {np.nanmin(port_multiplier):.2f}, Max: {np.nanmax(port_multiplier):.2f}, Mean: {np.nanmean(port_multiplier):.2f}")
         
-        # Ensure all layers have the same shape and transform
         resampling_method_str = (self.config.resampling_method.name.lower() 
                                if hasattr(self.config.resampling_method, 'name') 
                                else str(self.config.resampling_method).lower())
