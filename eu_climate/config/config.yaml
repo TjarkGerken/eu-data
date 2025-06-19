@@ -99,20 +99,10 @@ data:
           population_weight: 0.13
           electricity_consumption_weight: 0.18
           vierkant_stats_weight: 0.10
-      freight_loading:
-        weight: 0.25
+      freight:
+        weight: 0.5
         nuts_level: "l3"
-        file_key: "freight_loading"
-        exposition_weights:
-          ghs_built_c_weight: 0.32
-          ghs_built_v_weight: 0.34
-          population_weight: 0.06
-          electricity_consumption_weight: 0.18
-          vierkant_stats_weight: 0.10
-      freight_unloading:
-        weight: 0.25
-        nuts_level: "l3"
-        file_key: "freight_unloading"
+        file_key: "freight"
         exposition_weights:
           ghs_built_c_weight: 0.32
           ghs_built_v_weight: 0.34
@@ -131,14 +121,13 @@ data:
           vierkant_stats_weight: 0.10
     economic_variables:
       - "gdp"
-      - "freight_loading"
-      - "freight_unloading"
+      - "freight"
       - "hrst"
   risk_assessment:
     n_risk_classes: 5
     weights:
-      hazard: 0.65
-      economic: 0.35
+      hazard: 0.1
+      economic: 0.9
     ghs_built_c_class_weights:
       1: 0.0 # open spaces, low vegetation
       2: 0.0 # open spaces, medium vegetation
