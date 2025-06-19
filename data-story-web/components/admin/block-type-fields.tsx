@@ -303,11 +303,13 @@ export function BlockTypeFields({
               <ImageDropdown
                 selectedImageId={data?.imageId}
                 onImageChange={(imageId, imageData) => {
-                  updateDataField("imageId", imageId);
+                  const newData = { ...data };
+                  newData.imageId = imageId;
                   if (imageData) {
-                    updateDataField("imageCategory", imageData.category);
-                    updateDataField("imageScenario", imageData.scenario);
+                    newData.imageCategory = imageData.category;
+                    newData.imageScenario = imageData.scenario;
                   }
+                  onDataChange(newData);
                 }}
                 placeholder="Select visualization image..."
               />
