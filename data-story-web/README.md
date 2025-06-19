@@ -39,17 +39,17 @@ This Next.js application provides an interactive data story interface with compr
 ### Data Structure
 
 ```
-content.json
-├── references[]          # Global bibliography
-├── en/                  # English content
-│   ├── heroTitle
-│   ├── heroDescription
-│   ├── dataStoryTitle
-│   ├── introText1
-│   ├── introText2
-│   └── visualizations[]
-└── de/                  # German content
-    └── [same structure]
+Supabase Database
+├── content_stories       # Story containers (EN/DE)
+├── content_blocks        # Individual content blocks
+│   ├── block_type       # Type of content block
+│   ├── order_index      # Display order
+│   ├── data             # Block-specific data
+│   ├── title            # Optional title
+│   ├── content          # Optional content
+│   └── language         # Language code
+├── content_references   # Global bibliography
+└── block_references     # Block-reference associations
 ```
 
 ### Component Hierarchy
@@ -95,8 +95,9 @@ Access admin panel at `/admin` with session-based authentication.
 
 ## API Endpoints
 
-- `GET /api/content` - Fetch all content
-- `PUT /api/content` - Update content
+- `GET /api/content` - Fetch content blocks from database
+- `POST /api/content` - Create new content blocks
+- `PUT /api/content` - Create block pairs (EN/DE)
 - `GET /api/images/[category]` - Fetch category images
 - `POST /api/images/upload` - Upload new images
 

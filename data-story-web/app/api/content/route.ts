@@ -1,34 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchContentByLanguage } from "@/lib/content-service";
-import { promises as fs } from "fs";
-import path from "path";
 import { supabase } from "@/lib/supabase";
 import { ContentBlockInsert } from "@/lib/supabase";
 
-const contentFilePath = path.join(
-  process.cwd(),
-  "data-story-web/lib/content.json"
-);
-
-async function getContent() {
-  const fileContent = await fs.readFile(contentFilePath, "utf8");
-  return JSON.parse(fileContent);
-}
-
 export async function GET(request: NextRequest) {
-  const storyId = request.nextUrl.searchParams.get("storyId");
+  try {
+    const storyId = request.nextUrl.searchParams.get("storyId");
+    const language = request.nextUrl.searchParams.get("language") || "en";
 
-  if (!storyId) {
-    // For now, returning all content if no storyId is provided,
-    // but this could be an error in a multi-story setup.
-    const allContent = await getContent();
-    return NextResponse.json(allContent);
+    if (storyId) {
+      // Fetch content for specific story
+      const { data: blocks, error } = await supabase
+        .from("content_blocks")
+        .select("*")
+        .eq("story_id", storyId)
+        .order("order_index");
+
+      if (error) {
+        throw error;
+      }
+
+      return NextResponse.json(blocks || []);
+    } else {
+      // Fetch content using the content service
+      const content = await fetchContentByLanguage(language);
+      return NextResponse.json(content);
+    }
+  } catch (error) {
+    console.error("Error fetching content:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch content" },
+      { status: 500 }
+    );
   }
-
-  // In a real multi-story application, you would fetch content
-  // specific to the storyId. Here we return the single content file.
-  const content = await getContent();
-  return NextResponse.json(content);
 }
 
 export async function POST(request: NextRequest) {
@@ -42,12 +46,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In a real multi-story application, you would save content
-    // specific to the storyId. Here we overwrite the single content file.
-    await fs.writeFile(contentFilePath, JSON.stringify(content, null, 2));
+    // For backward compatibility, if content is provided as an array of blocks
+    if (Array.isArray(content)) {
+      const blocksToInsert = content.map((block, index) => ({
+        story_id: storyId,
+        block_type: block.type || "markdown",
+        order_index: index,
+        data: block,
+        title: block.title || null,
+        content: block.content || null,
+      }));
+
+      const { data, error } = await supabase
+        .from("content_blocks")
+        .insert(blocksToInsert)
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      return NextResponse.json({
+        message: `Content for story ${storyId} saved successfully`,
+        blocks: data,
+      });
+    }
 
     return NextResponse.json({
-      message: `Content for story ${storyId} saved successfully`,
+      message: "Content saved successfully",
     });
   } catch (error) {
     console.error("Error saving content:", error);
@@ -69,18 +95,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // This is a simplified implementation. It assumes that there is a way
-    // to find the corresponding German story ID from the English one,
-    // or that both blocks are associated with the same storyId, which
-    // would be the case if language is handled within the block's data.
-
-    // For this implementation, we'll assume a single story ID is used
-    // and we store language-specific data within each block's `data` field.
-    // This requires a modification on how content is fetched and processed.
-
-    // A proper implementation would require a clear strategy for multilingual content.
-    // For now, let's just insert the English block to make the flow work.
-
+    // Get the next order index
     const { data: maxOrderBlock } = await supabase
       .from("content_blocks")
       .select("order_index")
@@ -89,34 +104,45 @@ export async function PUT(request: NextRequest) {
       .limit(1)
       .single();
 
-    const newOrderIndex = maxOrderBlock ? maxOrderBlock.order_index + 1 : 0;
+    const newOrderIndex = maxOrderBlock ? maxOrderBlock.order_index + 1 : 1;
 
-    const blockToInsert: Omit<
-      ContentBlockInsert,
-      "id" | "created_at" | "updated_at"
-    > = {
-      story_id: storyId,
-      block_type: enBlock.type,
-      order_index: newOrderIndex,
-      data: enBlock,
-    };
+    // Create blocks for both languages
+    const blocksToInsert = [
+      {
+        story_id: storyId,
+        block_type: enBlock.type || "markdown",
+        order_index: newOrderIndex,
+        data: enBlock,
+        language: "en",
+        title: enBlock.title || null,
+        content: enBlock.content || null,
+      },
+      {
+        story_id: storyId,
+        block_type: deBlock.type || "markdown",
+        order_index: newOrderIndex,
+        data: deBlock,
+        language: "de",
+        title: deBlock.title || null,
+        content: deBlock.content || null,
+      },
+    ];
 
-    const { data: createdEnBlock, error } = await supabase
+    const { data: createdBlocks, error } = await supabase
       .from("content_blocks")
-      .insert(blockToInsert)
-      .select()
-      .single();
+      .insert(blocksToInsert)
+      .select();
 
     if (error) {
       throw error;
     }
 
-    // The frontend expects both en and de blocks. We'll return the created
-    // english block for both, with a different mock ID for the german one.
-    // This is a temporary solution.
-    const createdDeBlock = { ...createdEnBlock, id: createdEnBlock.id + "_de" };
+    const [createdEnBlock, createdDeBlock] = createdBlocks || [];
 
-    return NextResponse.json({ en: createdEnBlock, de: createdDeBlock });
+    return NextResponse.json({
+      en: createdEnBlock,
+      de: createdDeBlock,
+    });
   } catch (error: any) {
     console.error("Error creating content block:", error);
     return NextResponse.json(

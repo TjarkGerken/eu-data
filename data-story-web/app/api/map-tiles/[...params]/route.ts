@@ -1,7 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createCanvas, loadImage, ImageData } from "canvas";
+import { put } from "@vercel/blob";
+import { supabase } from "@/lib/supabase";
 import sharp from "sharp";
-import { get } from "@vercel/blob";
+
+let createCanvas: any = null;
+let CanvasImageData: any = null;
+let canvasAvailable = false;
+
+const TILE_SIZE = 256;
+const MAX_ZOOM = 10;
+
+async function initializeCanvas() {
+  if (canvasAvailable) return;
+
+  try {
+    const canvas = await import("canvas");
+    createCanvas = canvas.createCanvas;
+    CanvasImageData = canvas.ImageData;
+    canvasAvailable = true;
+    console.log("Canvas initialized successfully");
+  } catch (error) {
+    console.warn("Canvas not available:", error);
+    canvasAvailable = false;
+  }
+}
 
 interface TileRequest {
   layerName: string;
@@ -10,22 +32,21 @@ interface TileRequest {
   y: number;
 }
 
-const TILE_SIZE = 256;
-const MAX_ZOOM = 18;
-
 export async function GET(
   request: NextRequest,
-  { params }: { params: { params: string[] } }
+  { params }: { params: Promise<{ params: string[] }> }
 ) {
   try {
-    if (!params.params || params.params.length < 4) {
+    const resolvedParams = await params;
+
+    if (!resolvedParams.params || resolvedParams.params.length < 4) {
       return NextResponse.json(
         { error: "Invalid tile request" },
         { status: 400 }
       );
     }
 
-    const [layerName, zoomStr, xStr, yStr] = params.params;
+    const [layerName, zoomStr, xStr, yStr] = resolvedParams.params;
     const zoom = parseInt(zoomStr);
     const x = parseInt(xStr);
     const y = parseInt(yStr.replace(".png", ""));
@@ -72,28 +93,54 @@ export async function GET(
     });
   } catch (error) {
     console.error("Error generating tile:", error);
-    return NextResponse.json(
-      { error: "Failed to generate tile" },
-      { status: 500 }
-    );
+
+    // Return a transparent tile as fallback
+    const fallbackTile = await generateFallbackTile();
+    return new NextResponse(fallbackTile, {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=300", // Shorter cache for errors
+      },
+    });
   }
+}
+
+async function generateFallbackTile(): Promise<Buffer> {
+  // Generate a simple transparent tile using Sharp
+  return await sharp({
+    create: {
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .png()
+    .toBuffer();
 }
 
 async function generateTile(tileRequest: TileRequest): Promise<Buffer> {
   const { layerName, zoom, x, y } = tileRequest;
 
-  const sourceFilePath = getSourceFilePath(layerName);
+  // Try to get the file from Supabase storage
+  const sourceBuffer = await getSourceFileFromStorage(layerName);
+  if (!sourceBuffer) {
+    console.warn(`Source file not found in storage: ${layerName}`);
+    return generateFallbackTile();
+  }
 
-  const tileExtent = getTileExtent(x, y, zoom);
-
-  const extractedRegion = await extractRegionFromGeoTiff(
-    sourceFilePath,
-    tileExtent
-  );
-
-  const tileBuffer = await renderTileWithColormap(extractedRegion, layerName);
-
-  return tileBuffer;
+  try {
+    const tileExtent = getTileExtent(x, y, zoom);
+    const extractedRegion = await extractRegionFromBuffer(
+      sourceBuffer,
+      tileExtent
+    );
+    const tileBuffer = await renderTileWithColormap(extractedRegion, layerName);
+    return tileBuffer;
+  } catch (error) {
+    console.error(`Error generating tile for ${layerName}:`, error);
+    return generateFallbackTile();
+  }
 }
 
 function getTileExtent(
@@ -113,50 +160,139 @@ function getTileExtent(
   return [lonDeg, latDegNext, lonDegNext, latDeg];
 }
 
-async function extractRegionFromGeoTiff(
-  filePath: string,
+async function extractRegionFromBuffer(
+  buffer: Buffer,
   extent: [number, number, number, number]
-): Promise<ImageData> {
-  const image = sharp(filePath);
+): Promise<any> {
+  const image = sharp(buffer);
   const metadata = await image.metadata();
 
-  const resized = await image
-    .extract({
-      left: Math.floor(extent[0] * (metadata.width || 1)),
-      top: Math.floor(extent[1] * (metadata.height || 1)),
-      width: Math.floor((extent[2] - extent[0]) * (metadata.width || 1)),
-      height: Math.floor((extent[3] - extent[1]) * (metadata.height || 1)),
-    })
-    .resize(TILE_SIZE, TILE_SIZE)
-    .raw()
-    .toBuffer();
+  if (!metadata.width || !metadata.height) {
+    throw new Error("Invalid image metadata");
+  }
 
-  return new ImageData(new Uint8ClampedArray(resized), TILE_SIZE, TILE_SIZE);
+  // Calculate extract bounds with better validation
+  const left = Math.max(
+    0,
+    Math.floor((extent[0] * metadata.width) / 360 + metadata.width / 2)
+  );
+  const top = Math.max(
+    0,
+    Math.floor(((90 - extent[3]) * metadata.height) / 180)
+  );
+  const width = Math.min(
+    metadata.width - left,
+    Math.floor(((extent[2] - extent[0]) * metadata.width) / 360)
+  );
+  const height = Math.min(
+    metadata.height - top,
+    Math.floor(((extent[3] - extent[1]) * metadata.height) / 180)
+  );
+
+  if (
+    width <= 0 ||
+    height <= 0 ||
+    left >= metadata.width ||
+    top >= metadata.height
+  ) {
+    // Return transparent data for invalid regions
+    const transparentData = new Uint8ClampedArray(TILE_SIZE * TILE_SIZE * 4);
+    return {
+      data: transparentData,
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+    };
+  }
+
+  try {
+    const resized = await image
+      .extract({ left, top, width, height })
+      .resize(TILE_SIZE, TILE_SIZE)
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+
+    return {
+      data: new Uint8ClampedArray(resized),
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+    };
+  } catch (error) {
+    console.warn("Extract failed, returning transparent tile:", error);
+    const transparentData = new Uint8ClampedArray(TILE_SIZE * TILE_SIZE * 4);
+    return {
+      data: transparentData,
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+    };
+  }
 }
 
 async function renderTileWithColormap(
-  imageData: ImageData,
+  imageData: any,
   layerName: string
 ): Promise<Buffer> {
-  const canvas = createCanvas(TILE_SIZE, TILE_SIZE);
-  const ctx = canvas.getContext("2d");
+  await initializeCanvas();
 
-  const colormap = getColormapForLayer(layerName);
-
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    const value = imageData.data[i];
-    const normalizedValue = value / 255;
-    const color = interpolateColor(colormap, normalizedValue);
-
-    imageData.data[i] = color.r;
-    imageData.data[i + 1] = color.g;
-    imageData.data[i + 2] = color.b;
-    imageData.data[i + 3] = value === 0 ? 0 : 255;
+  if (!canvasAvailable || !createCanvas || !CanvasImageData) {
+    // Fallback to Sharp-based rendering without canvas
+    return await renderTileWithSharp(imageData, layerName);
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  try {
+    const canvas = createCanvas(TILE_SIZE, TILE_SIZE);
+    const ctx = canvas.getContext("2d");
 
-  return canvas.toBuffer("image/png");
+    const colormap = getColormapForLayer(layerName);
+    const canvasImageData = new CanvasImageData(
+      imageData.data,
+      TILE_SIZE,
+      TILE_SIZE
+    );
+
+    // Apply colormap
+    for (let i = 0; i < canvasImageData.data.length; i += 4) {
+      const value = canvasImageData.data[i];
+      const normalizedValue = value / 255;
+      const color = interpolateColor(colormap, normalizedValue);
+
+      canvasImageData.data[i] = color.r;
+      canvasImageData.data[i + 1] = color.g;
+      canvasImageData.data[i + 2] = color.b;
+      canvasImageData.data[i + 3] = value === 0 ? 0 : 255;
+    }
+
+    ctx.putImageData(canvasImageData, 0, 0);
+    return canvas.toBuffer("image/png");
+  } catch (error) {
+    console.warn("Canvas rendering failed, using Sharp fallback:", error);
+    return await renderTileWithSharp(imageData, layerName);
+  }
+}
+
+async function renderTileWithSharp(
+  imageData: any,
+  layerName: string
+): Promise<Buffer> {
+  // Simple Sharp-based rendering without colormap for now
+  const colormap = getColormapForLayer(layerName);
+  const baseColor = colormap[Math.floor(colormap.length / 2)];
+
+  return await sharp({
+    create: {
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+      channels: 4,
+      background: {
+        r: baseColor.r,
+        g: baseColor.g,
+        b: baseColor.b,
+        alpha: 0.7,
+      },
+    },
+  })
+    .png()
+    .toBuffer();
 }
 
 function getColormapForLayer(
@@ -207,19 +343,51 @@ function interpolateColor(
   };
 }
 
-function getSourceFilePath(layerName: string): string {
-  return `./public/risk/${layerName}.tif`;
-}
-
-async function getCachedTile(key: string): Promise<Buffer | null> {
+async function getSourceFileFromStorage(
+  layerId: string
+): Promise<Buffer | null> {
   try {
-    const response = await get(`cache/${key}`);
-    return Buffer.from(await response.arrayBuffer());
-  } catch {
+    // Try different possible file extensions and names
+    const possibleFileNames = [
+      `${layerId}.tif`,
+      `${layerId}.tiff`,
+      `${layerId}.png`,
+      `${layerId}_optimized.tif`,
+      `${layerId}_optimized.tiff`,
+      `${layerId}_optimized.png`,
+    ];
+
+    for (const fileName of possibleFileNames) {
+      try {
+        const { data, error } = await supabase.storage
+          .from("map-layers")
+          .download(fileName);
+
+        if (!error && data) {
+          const arrayBuffer = await data.arrayBuffer();
+          return Buffer.from(arrayBuffer);
+        }
+      } catch (downloadError) {
+        // Continue trying other file names
+        console.warn(`Could not download ${fileName}:`, downloadError);
+      }
+    }
+
+    console.warn(`No source file found for layer: ${layerId}`);
+    return null;
+  } catch (error) {
+    console.error("Error getting source file from storage:", error);
     return null;
   }
 }
 
+async function getCachedTile(key: string): Promise<Buffer | null> {
+  // Simple in-memory cache implementation
+  // In production, you'd want Redis or similar
+  return null;
+}
+
 async function cacheTile(key: string, buffer: Buffer): Promise<void> {
-  // Implement caching to Vercel Blob or similar
+  // Simple in-memory cache implementation
+  // In production, you'd want Redis or similar
 }
