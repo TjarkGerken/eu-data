@@ -3,7 +3,7 @@ import rasterio.features
 import rasterio.warp
 import geopandas as gpd
 import pandas as pd
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 import numpy as np
 from pathlib import Path
 import os
@@ -38,17 +38,8 @@ class EconomicDataLoader:
         else:
             logger.error(f"GDP dataset not found: {gdp_path}")
             
-        # Unified freight dataset (loading + unloading combined)
-        unified_freight_path = self.data_dir / "unified_freight_data.csv"
-        if unified_freight_path.exists():
-            logger.info(f"Loading unified freight dataset from {unified_freight_path}")
-            freight_df = pd.read_csv(unified_freight_path)
-            datasets['freight'] = self._process_unified_freight_data(freight_df)
-        else:
-            logger.info("Unified freight dataset not found, creating from loading and unloading data")
-            datasets['freight'] = self._create_unified_freight_data()
+        datasets['freight'] = self._load_maritime_freight_data()
             
-        # HRST dataset
         hrst_path = self.data_dir / getattr(self.config, 'hrst_file_path', 'L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv')
         if hrst_path.exists():
             logger.info(f"Loading HRST dataset from {hrst_path}")
@@ -92,23 +83,25 @@ class EconomicDataLoader:
         # Filter for Netherlands and NUTS L3
         nl_data = df[df['geo'].str.startswith('NL') & df['geo'].str.len().eq(5)]
         
-        # Get latest available year and aggregate all goods types
         latest_year = nl_data['TIME_PERIOD'].max()
         latest_data = nl_data[nl_data['TIME_PERIOD'] == latest_year]
         
-        # Aggregate by NUTS region (sum across all goods categories)
-        aggregated = latest_data.groupby('geo').agg({
-            'OBS_VALUE': 'sum',
-            'unit': 'first', 
-            'Geopolitical entity (reporting)': 'first'
-        }).reset_index()
+        total_data = latest_data[latest_data['nst07'] == 'TOTAL']
+        
+        aggregated = total_data[['geo', 'OBS_VALUE', 'unit', 'Geopolitical entity (reporting)']].copy()
         
         # Clean and standardize
         aggregated.columns = ['nuts_code', 'freight_value', 'unit', 'region']
         aggregated['freight_value'] = pd.to_numeric(aggregated['freight_value'], errors='coerce')
         aggregated = aggregated.dropna()
         
+        if not aggregated.empty and aggregated['unit'].iloc[0] == 'THS_T':
+            aggregated['freight_value'] = aggregated['freight_value'] * 1000
+            aggregated['unit'] = 'T'
+            logger.info("Converted NUTS freight data from thousands of tonnes to tonnes")
+        
         logger.info(f"Processed freight data: {len(aggregated)} regions for year {latest_year}")
+        logger.info(f"Total NUTS freight volume: {aggregated['freight_value'].sum():,.0f} tonnes")
         return aggregated
     
     def _process_hrst_data(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -191,6 +184,45 @@ class EconomicDataLoader:
         logger.info(f"Saved unified freight dataset to {unified_freight_path}")
         
         return result
+    
+    def _load_maritime_freight_data(self) -> pd.DataFrame:
+        """Load enhanced freight data combining NUTS road freight with Zeevart maritime data."""
+        logger.info("Loading enhanced freight dataset with maritime data integration")
+        
+        # First load traditional NUTS freight data
+        unified_freight_path = self.data_dir / "unified_freight_data.csv"
+        if unified_freight_path.exists():
+            logger.info(f"Loading existing unified freight dataset from {unified_freight_path}")
+            nuts_freight_df = pd.read_csv(unified_freight_path)
+            nuts_freight_processed = self._process_unified_freight_data(nuts_freight_df)
+        else:
+            logger.info("Unified freight dataset not found, creating from loading and unloading data")
+            nuts_freight_processed = self._create_unified_freight_data()
+        
+        # Load and process Zeevart maritime freight data
+        zeevart_loader = ZeevartDataLoader(self.config)
+        zeevart_data = zeevart_loader.load_zeevart_freight_data()
+        
+        # Map freight data to ports using centralized approach
+        port_mapper = PortFreightMapper(self.config)
+        port_freight_gdf = port_mapper.map_freight_to_ports(zeevart_data)
+        
+        
+        freight_processor = CombinedFreightProcessor(self.config)
+        combined_datasets = freight_processor.combine_freight_datasets(
+            nuts_freight_processed, 
+            port_freight_gdf
+        )
+        
+        self.enhanced_freight_datasets = combined_datasets
+        
+        # For backward compatibility, return the NUTS freight data as primary
+        # The port data will be handled separately during rasterization
+        if 'nuts_freight' in combined_datasets:
+            return combined_datasets['nuts_freight']
+        else:
+            logger.warning("No NUTS freight data available, using empty dataset")
+            return pd.DataFrame()
     
     def _process_unified_freight_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process pre-unified freight dataset that was already combined."""
@@ -355,15 +387,49 @@ class EconomicDistributor:
         return raster, meta
     
     def distribute_with_exposition(self, economic_raster: np.ndarray, 
-                                 exposition_layer: np.ndarray) -> np.ndarray:
-        """Distribute economic values using exposition layer as weights."""
-        logger.info("Distributing economic values using exposition layer")
+                                 exposition_layer: np.ndarray,
+                                 enhanced_freight_datasets: dict = None,
+                                 reference_meta: dict = None) -> np.ndarray:
+        """
+        Distribute economic values using exposition layer as weights with enhanced freight integration.
+        Uses centralized approaches for validation, normalization, and port freight handling.
+        """
+        logger.info("Distributing economic values using exposition layer with enhanced freight integration")
         
-        # Ensure alignment
-        if economic_raster.shape != exposition_layer.shape:
-            raise ValueError(f"Shape mismatch: economic {economic_raster.shape} "
-                           f"vs exposition {exposition_layer.shape}")
+        # Store reference metadata for port rasterization
+        if reference_meta:
+            self._reference_meta = reference_meta
         
+        if not self.transformer.validate_alignment(
+            economic_raster, None, exposition_layer, None
+        ):
+            logger.warning("Raster alignment validation failed")
+        
+        distributed = self._apply_nuts_distribution(economic_raster, exposition_layer)
+        
+        if enhanced_freight_datasets and 'port_freight' in enhanced_freight_datasets:
+            logger.info("Applying enhanced port freight data using centralized approaches")
+            distributed = self._apply_port_freight_enhancement(
+                distributed, enhanced_freight_datasets['port_freight']
+            )
+        
+        # Apply final normalization using centralized approach
+        normalizer = AdvancedDataNormalizer(NormalizationStrategy.ECONOMIC_OPTIMIZED)
+        final_valid_mask = ~np.isnan(distributed) & (distributed > 0)
+        
+        if np.any(final_valid_mask):
+            distributed = normalizer.normalize_economic_data(
+                distributed, final_valid_mask
+            )
+        
+        logger.info(f"Final distributed economic values: min={np.nanmin(distributed)}, "
+                   f"max={np.nanmax(distributed)}, mean={np.nanmean(distributed)}")
+        
+        return distributed
+    
+    def _apply_nuts_distribution(self, economic_raster: np.ndarray, 
+                               exposition_layer: np.ndarray) -> np.ndarray:
+        """Apply standard NUTS-based economic distribution."""
         # Create distributed values
         distributed = np.zeros_like(economic_raster, dtype=np.float32)
         
@@ -389,11 +455,411 @@ class EconomicDistributor:
                 region_cells = np.sum(region_mask)
                 if region_cells > 0:
                     distributed[region_mask] = region_value / region_cells
-                    
-        logger.info(f"Distributed economic values: min={np.nanmin(distributed)}, "
-                   f"max={np.nanmax(distributed)}, mean={np.nanmean(distributed)}")
         
         return distributed
+    def _apply_port_freight_enhancement(self, distributed_base: np.ndarray,
+                                       port_freight_data: pd.DataFrame) -> np.ndarray:
+        """Apply port freight enhancement using exact port locations (no exposition distribution)."""
+        if port_freight_data.empty:
+            logger.info("No port freight data available for enhancement")
+            return distributed_base
+
+        logger.info(f"Enhancing with {len(port_freight_data)} port freight entries")
+        
+        # Create port freight raster using centralized transformer
+        port_raster = self._rasterize_port_freight(port_freight_data, distributed_base.shape)
+        
+        # Start with base distribution (NUTS data distributed over exposition)
+        enhanced_distributed = distributed_base.copy()
+        
+        # Identify port pixels with freight data
+        port_mask = (port_raster > 0) & (~np.isnan(port_raster))
+        
+        if np.any(port_mask):
+            # ADD port freight values to existing NUTS distribution
+            # This combines NUTS freight (distributed over exposition) with precise port freight
+            enhanced_distributed[port_mask] += port_raster[port_mask]
+            logger.info(f"Added precise port freight data to existing NUTS distribution at {np.sum(port_mask)} port pixels")
+            logger.info(f"Total port freight added: {port_raster[port_mask].sum():,.0f}")
+        
+        return enhanced_distributed
+    
+    def _rasterize_port_freight(self, port_freight_data: pd.DataFrame, 
+                              target_shape: Tuple[int, int]) -> np.ndarray:
+        """Rasterize port freight data using high-resolution shapefile areas."""
+        try:
+            import rasterio.features
+            from shapely.geometry import Polygon
+            
+            port_raster = np.zeros(target_shape, dtype=np.float32)
+            
+            # Use reference metadata from exposition layer if available
+            if hasattr(self, '_reference_meta') and self._reference_meta:
+                base_transform = self._reference_meta['transform']
+            else:
+                logger.warning("No reference metadata available for port rasterization")
+                return port_raster
+            
+            
+            target_resolution = self.config.target_resolution
+            port_resolution = max(1.0, target_resolution / 2.0)
+            
+            logger.info(f"Using port rasterization resolution: {port_resolution}m (half of {target_resolution}m target)")
+            
+            hr_transform = rasterio.Affine(
+                port_resolution, 0.0, base_transform.c,
+                0.0, -port_resolution, base_transform.f
+            )
+            
+            hr_width = int(target_shape[1] * (target_resolution / port_resolution))
+            hr_height = int(target_shape[0] * (target_resolution / port_resolution))
+            hr_shape = (hr_height, hr_width)
+            
+            logger.info(f"High-resolution raster shape: {hr_shape} (vs target: {target_shape})")
+            
+            # Create high-resolution raster for ports
+            hr_port_raster = np.zeros(hr_shape, dtype=np.float32)
+            
+            # Process each port individually to distribute freight over its entire shapefile area
+            for _, row in port_freight_data.iterrows():
+                if 'geometry' in row and 'freight_value' in row:
+                    # Debug logging for port processing
+                    port_id = row.get('PORT_ID', row.get('port_id', 'unknown'))
+                    freight_value = row.get('freight_value', 0)
+                    logger.debug(f"Processing port {port_id}: freight={freight_value}, geometry_valid={row['geometry'] is not None}")
+                    
+                    if freight_value > 0 and row['geometry'] is not None:
+                        
+                        # Calculate area of the port polygon in square meters
+                        port_area_m2 = row['geometry'].area
+                        
+                        if port_area_m2 > 0:
+                            # Calculate freight density per square meter
+                            freight_per_m2 = freight_value / port_area_m2
+                            
+                            # Calculate freight value per pixel (port_resolution x port_resolution)
+                            pixel_area_m2 = port_resolution * port_resolution
+                            freight_per_pixel = freight_per_m2 * pixel_area_m2
+                            
+                            # Rasterize this single port with its freight density
+                            single_port_raster = rasterio.features.rasterize(
+                                [(row['geometry'], freight_per_pixel)],
+                                out_shape=hr_shape,
+                                transform=hr_transform,
+                                fill=0,
+                                dtype=np.float32,
+                                merge_alg=rasterio.enums.MergeAlg.add
+                            )
+                            
+                            # Add to the combined high-resolution raster
+                            hr_port_raster += single_port_raster
+                            
+                            logger.debug(f"Port {port_id}: "
+                                       f"area={port_area_m2:,.0f}m², "
+                                       f"freight={freight_value:,.0f}, "
+                                       f"density={freight_per_pixel:.6f}/pixel")
+            
+            # Resample high-resolution raster back to target resolution
+            from rasterio.warp import reproject, Resampling
+            
+            # Reproject from high-resolution to target resolution
+            reproject(
+                source=hr_port_raster,
+                destination=port_raster,
+                src_transform=hr_transform,
+                src_crs=self.config.target_crs,
+                dst_transform=base_transform,
+                dst_crs=self.config.target_crs,
+                resampling=Resampling.sum  # Use sum to preserve total freight values
+            )
+            
+            logger.info(f"Rasterized {len(port_freight_data)} ports with area-based freight distribution")
+            logger.info(f"Total rasterized freight: {port_raster.sum():,.0f}")
+            
+            return port_raster
+            
+        except Exception as e:
+            logger.error(f"Error rasterizing port freight data: {e}")
+            return np.zeros(target_shape, dtype=np.float32)
+
+
+class ZeevartDataLoader:
+    """Handles loading and preprocessing of Zeevart maritime freight data."""
+    
+    def __init__(self, config: ProjectConfig):
+        self.config = config
+        self.data_dir = config.data_dir
+        self.transformer = RasterTransformer(
+            target_crs=config.target_crs,
+            config=config
+        )
+        
+    def load_zeevart_freight_data(self) -> pd.DataFrame:
+        """Load and process Zeevart maritime freight data."""
+        zeevart_path = self.config.zeevart_freight_path
+        
+        if not zeevart_path.exists():
+            logger.warning(f"Zeevart data not found: {zeevart_path}")
+            return pd.DataFrame()
+            
+        logger.info(f"Loading Zeevart freight data from {zeevart_path}")
+        
+        try:
+            zeevart_df = pd.read_excel(zeevart_path)
+            logger.info(f"Loaded Zeevart data with shape: {zeevart_df.shape}")
+            logger.info(f"Columns: {zeevart_df.columns.tolist()}")
+            
+            processed_data = self._process_zeevart_data(zeevart_df)
+            return processed_data
+            
+        except Exception as e:
+            logger.error(f"Error loading Zeevart data: {e}")
+            return pd.DataFrame()
+    
+    def _process_zeevart_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Process Zeevart data to extract relevant freight values."""
+        # Filter for "Aan- en afvoer" (combined import/export) data
+        combined_flow_data = df[df['Vervoerstromen'] == 'Aan- en afvoer']
+        
+        # Get most recent full year (2022*)
+        latest_year = '2022*'
+        if latest_year not in combined_flow_data['Perioden'].values:
+            available_years = combined_flow_data['Perioden'].unique()
+            latest_year = sorted([year for year in available_years if '*' in year and 'kwartaal' not in year])[-1]
+            logger.info(f"Using latest available year: {latest_year}")
+        
+        latest_data = combined_flow_data[combined_flow_data['Perioden'] == latest_year]
+        
+        # Group by port category and sum freight volumes
+        aggregated = latest_data.groupby('Nederlandse zeehavens').agg({
+            'Overgeslagen brutogewicht (1 000 ton)': 'sum'
+        }).reset_index()
+        
+        # Clean and standardize column names
+        aggregated.columns = ['port_category', 'freight_volume_1000_tons']
+        
+        # Convert to tonnes (multiply by 1000)
+        aggregated['freight_value'] = aggregated['freight_volume_1000_tons'] * 1000
+        
+        # Remove 'Totaal' category to avoid double counting
+        aggregated = aggregated[aggregated['port_category'] != 'Totaal']
+        
+        # Ensure numeric values
+        aggregated['freight_value'] = pd.to_numeric(aggregated['freight_value'], errors='coerce')
+        aggregated = aggregated.dropna()
+        
+        logger.info(f"Processed Zeevart data: {len(aggregated)} port categories for year {latest_year}")
+        logger.info(f"Total maritime freight volume: {aggregated['freight_value'].sum():,.0f} tonnes")
+        
+        return aggregated
+
+
+class PortFreightMapper:
+    """Maps freight data to individual port geometries using centralized transformation utilities."""
+    
+    def __init__(self, config: ProjectConfig):
+        self.config = config
+        self.transformer = RasterTransformer(
+            target_crs=config.target_crs,
+            config=config
+        )
+        
+    def load_port_mapping(self) -> pd.DataFrame:
+        """Load port ID to category mapping file."""
+        mapping_path = self.config.port_mapping_path
+        
+        if not mapping_path.exists():
+            logger.error(f"Port mapping file not found: {mapping_path}")
+            return pd.DataFrame()
+            
+        try:
+            mapping_df = pd.read_excel(mapping_path)
+            logger.info(f"Loaded port mapping with shape: {mapping_df.shape}")
+            return mapping_df
+            
+        except Exception as e:
+            logger.error(f"Error loading port mapping: {e}")
+            return pd.DataFrame()
+    
+    def load_port_shapefile(self) -> gpd.GeoDataFrame:
+        """Load port shapefile using consistent coordinate transformation."""
+        if not self.config.port_path.exists():
+            logger.error(f"Port shapefile not found: {self.config.port_path}")
+            return gpd.GeoDataFrame()
+            
+        try:
+            port_gdf = gpd.read_file(self.config.port_path)
+            logger.info(f"Loaded port shapefile with {len(port_gdf)} ports")
+            logger.info(f"Port shapefile columns: {port_gdf.columns.tolist()}")
+            
+            # Transform to target CRS using consistent approach
+            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+            if port_gdf.crs != target_crs:
+                port_gdf = port_gdf.to_crs(target_crs)
+                logger.info(f"Transformed port data to {target_crs}")
+                
+            return port_gdf
+            
+        except Exception as e:
+            logger.error(f"Error loading port shapefile: {e}")
+            return gpd.GeoDataFrame()
+    
+    def map_freight_to_ports(self, zeevart_data: pd.DataFrame) -> gpd.GeoDataFrame:
+        """Map Zeevart freight data to individual port geometries."""
+        # Load port shapefile and mapping
+        port_gdf = self.load_port_shapefile()
+        mapping_df = self.load_port_mapping()
+        
+        if port_gdf.empty or mapping_df.empty or zeevart_data.empty:
+            logger.warning("Missing required data for port freight mapping")
+            return gpd.GeoDataFrame()
+        
+        # Merge port geometries with categories
+        port_with_categories = port_gdf.merge(
+            mapping_df, 
+            left_on='PORT_ID', 
+            right_on='PORT_ID', 
+            how='left'
+        )
+        
+        # Merge with freight data
+        port_with_freight = port_with_categories.merge(
+            zeevart_data,
+            left_on='Category',
+            right_on='port_category',
+            how='left'
+        )
+        
+        # Fill missing freight values with 0 and ensure proper float type
+        port_with_freight['freight_value'] = port_with_freight['freight_value'].fillna(0).astype(float)
+        
+        # Distribute freight values among ports in each category to avoid duplication
+        # Calculate the number of ports per category and distribute the total freight
+        if not port_with_freight.empty:
+            category_port_counts = port_with_freight.groupby('port_category').size()
+            logger.info("Distributing freight among ports by category:")
+            
+            for category, count in category_port_counts.items():
+                if category in zeevart_data['port_category'].values:
+                    total_freight = zeevart_data[zeevart_data['port_category'] == category]['freight_value'].iloc[0]
+                    freight_per_port = total_freight / count if count > 0 else 0
+                    
+                    # Update freight values for this category (ensure proper data type)
+                    mask = port_with_freight['port_category'] == category
+                    port_with_freight.loc[mask, 'freight_value'] = float(freight_per_port)
+                    
+                    logger.info(f"  {category}: {total_freight:,.0f} tonnes / {count} ports = {freight_per_port:,.0f} tonnes per port")
+        
+        # Include all ports - those with categories get freight, those without get 0 freight
+        valid_ports = port_with_freight.copy()
+        
+        # Ensure all ports have a freight value (NaN categories get 0 freight)  
+        valid_ports['freight_value'] = valid_ports['freight_value'].fillna(0)
+        
+        # Filter out any ports with invalid geometries
+        valid_ports = valid_ports[valid_ports['geometry'].notna()].copy()
+        
+        # Clip to study area using existing NUTS boundaries
+        nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+        if nuts_l3_path.exists():
+            try:
+                nuts_gdf = gpd.read_file(nuts_l3_path)
+                target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
+                if nuts_gdf.crs != target_crs:
+                    nuts_gdf = nuts_gdf.to_crs(target_crs)
+                
+                study_area = nuts_gdf.geometry.unary_union
+                ports_in_study_area = valid_ports[valid_ports.geometry.intersects(study_area)]
+                
+                logger.info(f"Clipped to study area: {len(ports_in_study_area)} ports with freight data "
+                           f"(from {len(valid_ports)} total valid ports)")
+                valid_ports = ports_in_study_area
+                
+            except Exception as e:
+                logger.warning(f"Could not clip ports to study area: {e}")
+        
+        logger.info(f"Mapped freight to {len(valid_ports)} ports")
+        if len(valid_ports) > 0:
+            total_mapped_freight = valid_ports['freight_value'].sum()
+            logger.info(f"Total mapped maritime freight: {total_mapped_freight:,.0f} tonnes")
+            
+            # Log freight distribution by category
+            freight_by_category = valid_ports.groupby('port_category')['freight_value'].sum().sort_values(ascending=False)
+            logger.info("Freight distribution by port category:")
+            for category, freight in freight_by_category.items():
+                logger.info(f"  {category}: {freight:,.0f} tonnes")
+        
+        return valid_ports
+
+
+class CombinedFreightProcessor:
+    """Combines NUTS-based and port-based freight data using centralized normalization."""
+    
+    def __init__(self, config: ProjectConfig):
+        self.config = config
+        self.transformer = RasterTransformer(
+            target_crs=config.target_crs,
+            config=config
+        )
+        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.ECONOMIC_OPTIMIZED)
+        
+    def combine_freight_datasets(self, nuts_freight_data: pd.DataFrame, 
+                                port_freight_gdf: gpd.GeoDataFrame) -> Dict[str, pd.DataFrame]:
+        """Combine NUTS and port freight data ensuring no double counting."""
+        combined_datasets = {}
+        
+        if not nuts_freight_data.empty:
+            combined_datasets['nuts_freight'] = nuts_freight_data.copy()
+            nuts_total = nuts_freight_data['freight_value'].sum()
+            logger.info(f"NUTS freight total: {nuts_total:,.0f} tonnes")
+        
+        if not port_freight_gdf.empty:
+            port_data = pd.DataFrame({
+                'port_id': port_freight_gdf['PORT_ID'],
+                'freight_value': port_freight_gdf['freight_value'],
+                'geometry': port_freight_gdf['geometry'],
+                'port_category': port_freight_gdf['port_category']
+            })
+            combined_datasets['port_freight'] = port_data
+            port_total = port_data['freight_value'].sum()
+            logger.info(f"Port freight total: {port_total:,.0f} tonnes")
+        
+        if 'nuts_freight' in combined_datasets and 'port_freight' in combined_datasets:
+            logger.info("Created combined freight dataset with both NUTS and port components")
+            
+            combined_total = nuts_total + port_total
+            logger.info(f"Combined freight total: {combined_total:,.0f} tonnes")
+            logger.info(f"NUTS share: {(nuts_total/combined_total)*100:.1f}%, Port share: {(port_total/combined_total)*100:.1f}%")
+            
+        return combined_datasets
+    
+    def normalize_combined_freight_data(self, combined_datasets: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+        """Apply sophisticated normalization across all freight datasets."""
+        normalized_datasets = {}
+        
+        for dataset_name, dataset in combined_datasets.items():
+            if 'freight_value' in dataset.columns:
+                valid_mask = (dataset['freight_value'] > 0) & dataset['freight_value'].notna()
+                
+                if valid_mask.sum() > 0:
+                    freight_values = dataset['freight_value'].values
+                    normalized_values = self.normalizer.normalize_economic_data(
+                        data=freight_values,
+                        economic_mask=valid_mask.values
+                    )
+                    
+                    normalized_dataset = dataset.copy()
+                    normalized_dataset['freight_value_normalized'] = normalized_values
+                    normalized_datasets[dataset_name] = normalized_dataset
+                    
+                    logger.info(f"Normalized {dataset_name}: {valid_mask.sum()} valid freight entries")
+                else:
+                    logger.warning(f"No valid freight data found in {dataset_name}")
+                    normalized_datasets[dataset_name] = dataset.copy()
+            else:
+                normalized_datasets[dataset_name] = dataset.copy()
+        
+        return normalized_datasets
 
 
 class RelevanceLayer:
@@ -425,96 +891,93 @@ class RelevanceLayer:
         
         self.visualizer = LayerVisualizer(config)
         
-        # Initialize sophisticated normalizer optimized for economic data
         self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.ECONOMIC_OPTIMIZED)
         
         logger.info("Initialized Relevance Layer")
     
     def load_and_process_economic_data(self) -> Dict[str, gpd.GeoDataFrame]:
         """Load economic datasets and join with NUTS geometries at appropriate levels."""
-        # Load economic datasets
+        
         economic_data = self.data_loader.load_economic_datasets()
         
         if not economic_data:
             raise ValueError("No economic datasets could be loaded. Please check data paths and files.")
         
-        # Determine which NUTS levels are needed
         required_nuts_levels = set()
         for dataset_name in economic_data.keys():
-            dataset_config = getattr(self.config, 'economic_datasets', {}).get(dataset_name, {})
-            nuts_level = dataset_config.get('nuts_level', 'l3')
+            dataset_config = getattr(self.config, 'economic_datasets', {})
+            nuts_level = dataset_config.get(dataset_name, {}).get('nuts_level', 'l3')
             required_nuts_levels.add(nuts_level)
         
-        # Load NUTS shapefiles for required levels
         nuts_gdfs = {}
         for nuts_level in required_nuts_levels:
             nuts_gdfs[nuts_level] = self.nuts_mapper.load_nuts_shapefile(nuts_level)
         
-        # Join economic data with appropriate NUTS levels
         joined_gdfs = self.nuts_mapper.join_economic_data(nuts_gdfs, economic_data)
         
         return joined_gdfs
     
-    def calculate_relevance(self) -> Tuple[Dict[str, np.ndarray], dict]:
+    def calculate_relevance(self, layers_to_generate: List[str] = None) -> Tuple[Dict[str, np.ndarray], dict]:
         """Calculate economic relevance layers for each dataset."""
         logger.info("Calculating economic relevance layers")
         
-        # Load and process economic data
         nuts_economic_gdfs = self.load_and_process_economic_data()
         
-        # Get default exposition layer metadata for reference
-        default_exposition_data, exposition_meta = self.exposition_layer.calculate_exposition()
-        logger.info(f"Using default exposition layer metadata for spatial distribution")
+        # Get exposition metadata without expensive calculation - use config-based approach
+        exposition_meta = self._get_exposition_metadata()
+        logger.info(f"Using exposition metadata for spatial distribution")
         
-        # Process each dataset separately since they may have different NUTS levels and exposition weights
+        if layers_to_generate:
+            filtered_gdfs = {name: gdf for name, gdf in nuts_economic_gdfs.items() if name in layers_to_generate}
+            logger.info(f"Generating only requested layers: {list(filtered_gdfs.keys())}")
+            nuts_economic_gdfs = filtered_gdfs
+        else:
+            logger.info(f"Generating all available layers: {list(nuts_economic_gdfs.keys())}")
+        
         relevance_layers = {}
         
         for dataset_name, nuts_gdf in nuts_economic_gdfs.items():
             logger.info(f"Processing {dataset_name} dataset")
             
-            # Get available economic columns for this dataset
             available_economic_columns = [col for col in nuts_gdf.columns if col.endswith('_value')]
             
             if not available_economic_columns:
                 logger.warning(f"No economic columns found for {dataset_name}")
                 continue
             
-            # Extract the variable name (should match dataset_name)
             variable = dataset_name
             
-            # Rasterize NUTS regions with economic values using exposition metadata
             economic_raster, raster_meta = self.distributor.rasterize_nuts_regions(
                 nuts_gdf, exposition_meta, variable
             )
             
-            # Get the specific exposition layer for this economic dataset
-            logger.info(f"Ensuring economic exposition layer exists for {dataset_name}")
-            economic_exposition_path = self.exposition_layer.ensure_economic_exposition_layer_exists(dataset_name)
+            # Get or create economic exposition layer for this dataset
+            economic_exposition_data = self._get_economic_exposition_layer(dataset_name)
+            logger.info(f"Loaded economic exposition layer for {dataset_name} - "
+                       f"Min: {np.nanmin(economic_exposition_data)}, Max: {np.nanmax(economic_exposition_data)}, "
+                       f"Non-zero pixels: {np.sum(economic_exposition_data > 0)}")
             
-            # Load the economic-specific exposition layer
-            with rasterio.open(economic_exposition_path) as src:
-                economic_exposition_data = src.read(1).astype(np.float32)
-                logger.info(f"Loaded economic exposition layer for {dataset_name} - "
-                           f"Min: {np.nanmin(economic_exposition_data)}, Max: {np.nanmax(economic_exposition_data)}, "
-                           f"Non-zero pixels: {np.sum(economic_exposition_data > 0)}")
-            
-            # Ensure alignment between economic raster and economic exposition layer
             if economic_exposition_data.shape != economic_raster.shape:
                 logger.warning(f"Shape mismatch between economic exposition and economic raster for {dataset_name}")
                 logger.warning(f"Economic exposition shape: {economic_exposition_data.shape}, Economic raster shape: {economic_raster.shape}")
-                # Resample economic exposition to match economic raster
                 economic_exposition_data = self.transformer.ensure_alignment(
                     economic_exposition_data, exposition_meta['transform'], 
                     raster_meta['transform'], economic_raster.shape,
                     self.config.resampling_method
                 )
             
-            # Distribute using the economic-specific exposition layer
+            enhanced_datasets = None
+            if variable == 'freight':
+                if hasattr(self.data_loader, 'enhanced_freight_datasets'):
+                    enhanced_datasets = self.data_loader.enhanced_freight_datasets
+                    logger.info("Using enhanced freight datasets with Zeevart maritime data")
+                else:
+                    logger.info("No enhanced freight datasets available, using standard NUTS distribution")
+            
             distributed_raster = self.distributor.distribute_with_exposition(
-                economic_raster, economic_exposition_data
+                economic_raster, economic_exposition_data, enhanced_datasets, raster_meta
             )
             
-            # Normalize to 0-1 range
             normalized_raster = self._normalize_economic_layer(distributed_raster)
             
             relevance_layers[variable] = normalized_raster
@@ -524,7 +987,6 @@ class RelevanceLayer:
             
         logger.info(f"Processed {len(relevance_layers)} economic variables: {list(relevance_layers.keys())}")
         
-        # Calculate combined relevance layer with configured weights
         economic_datasets_config = getattr(self.config, 'economic_datasets', {})
         weights = {}
         
@@ -541,7 +1003,6 @@ class RelevanceLayer:
                 combined_relevance += weight * relevance_layers[variable]
                 total_weight += weight
                 
-        # Normalize combined layer if total weight != 1.0
         if total_weight > 0 and abs(total_weight - 1.0) > 1e-6:
             combined_relevance /= total_weight
             logger.info(f"Normalized combined layer by total weight: {total_weight}")
@@ -554,6 +1015,98 @@ class RelevanceLayer:
                    f"Non-zero pixels: {np.sum(combined_relevance > 0)}")
         
         return relevance_layers, exposition_meta
+    
+    def _get_exposition_metadata(self) -> dict:
+        """Get exposition metadata without expensive calculation."""
+        # Use a lightweight approach to get metadata - check if default layer exists
+        default_path = Path(self.config.output_dir) / "exposition" / "tif" / "exposition_layer.tif"
+        
+        if default_path.exists():
+            # Load metadata from existing file
+            with rasterio.open(default_path) as src:
+                return src.meta
+        else:
+            # Generate metadata from config and reference data
+            logger.info("No existing exposition layer found, generating metadata from config")
+            
+            # Use NUTS shapefile as reference for spatial extent and resolution
+            nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
+            reference_bounds = self.transformer.get_reference_bounds(nuts_l3_path)
+            
+            # Calculate dimensions based on target resolution
+            width = int((reference_bounds[2] - reference_bounds[0]) / self.config.target_resolution)
+            height = int((reference_bounds[3] - reference_bounds[1]) / self.config.target_resolution)
+            
+            # Create transform
+            transform = rasterio.transform.from_bounds(
+                reference_bounds[0], reference_bounds[1], 
+                reference_bounds[2], reference_bounds[3],
+                width, height
+            )
+            
+            return {
+                'driver': 'GTiff',
+                'dtype': 'float32',
+                'width': width,
+                'height': height,
+                'count': 1,
+                'crs': self.config.target_crs,
+                'transform': transform,
+                'nodata': None
+            }
+    
+    def _get_economic_exposition_layer(self, dataset_name: str) -> np.ndarray:
+        """Get economic exposition layer, creating it only if needed."""
+        # Check if economic-specific layer exists
+        tif_path = Path(self.config.output_dir) / "exposition" / "tif" / f"exposition_{dataset_name}.tif"
+        
+        if tif_path.exists():
+            logger.info(f"Loading existing economic exposition layer for {dataset_name}")
+            with rasterio.open(tif_path) as src:
+                return src.read(1).astype(np.float32)
+        else:
+            # Create economic-specific layer only when needed
+            logger.info(f"Creating economic exposition layer for {dataset_name}")
+            
+            # Get weights for this economic dataset
+            economic_weights = self.config.economic_exposition_weights
+            if dataset_name not in economic_weights:
+                logger.warning(f"No specific exposition weights found for {dataset_name}, using default")
+                # Fall back to default exposition layer
+                default_data, _ = self.exposition_layer.calculate_exposition()
+                return default_data
+            
+            weights = economic_weights[dataset_name]
+            
+            # Create the economic-specific exposition layer
+            exposition_data, meta = self.exposition_layer.create_economic_exposition_layer(dataset_name, weights)
+            
+            # Save for future use
+            tif_path.parent.mkdir(parents=True, exist_ok=True)
+            self.exposition_layer.save_exposition_layer(exposition_data, meta, str(tif_path))
+            logger.info(f"Created and saved economic exposition layer for {dataset_name}")
+            
+            return exposition_data
+    
+    def run_freight_relevance_only(self, visualize: bool = True, 
+                                  export_tif: bool = True) -> Dict[str, np.ndarray]:
+        """
+        Convenience method to generate only the freight relevance layer with enhanced Zeevart data.
+        
+        Args:
+            visualize: Whether to create visualization plots
+            export_tif: Whether to export as GeoTIFF files
+            
+        Returns:
+            Dictionary containing only the freight relevance layer
+        """
+        logger.info("Generating freight relevance layer only with enhanced Zeevart data")
+        
+        return self.run_relevance_analysis(
+            visualize=visualize,
+            export_individual_tifs=export_tif,
+            layers_to_generate=['freight']
+        )
     
     def _normalize_economic_layer(self, data: np.ndarray) -> np.ndarray:
         """Normalize economic layer using sophisticated economic optimization."""
@@ -569,7 +1122,6 @@ class RelevanceLayer:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Update metadata for output
         output_meta = meta.copy()
         output_meta.update({
             'driver': 'GTiff',
@@ -582,11 +1134,9 @@ class RelevanceLayer:
             output_path = output_dir / "tif" / f"relevance_{layer_name}.tif"
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Remove existing file
             if output_path.exists():
                 output_path.unlink()
                 
-            # Save as GeoTIFF
             with rasterio.open(output_path, 'w', **output_meta) as dst:
                 dst.write(data.astype(np.float32), 1)
                 
@@ -605,11 +1155,9 @@ class RelevanceLayer:
         
         logger.info("Creating relevance layer visualizations using unified styling...")
         
-        # Load land mask for proper water/land separation
         land_mask = None
         try:
             with rasterio.open(self.config.land_mass_path) as src:
-                # Transform land mask to match relevance layer resolution and extent
                 if meta and 'transform' in meta:
                     land_mask, _ = rasterio.warp.reproject(
                         source=src.read(1),
@@ -620,7 +1168,6 @@ class RelevanceLayer:
                         dst_crs=meta['crs'],
                         resampling=rasterio.enums.Resampling.nearest
                     )
-                    # Ensure proper data type (1=land, 0=water)
                     land_mask = (land_mask > 0).astype(np.uint8)
                     logger.info("Loaded and transformed land mask for relevance visualizations")
                 else:
@@ -630,10 +1177,8 @@ class RelevanceLayer:
         
         for layer_name, data in relevance_layers.items():
             if save_plots:
-                # Create output path
                 plot_path = output_dir / f"relevance_{layer_name}_plot.png"
                 
-                # Use unified visualizer for consistent styling with land mask
                 self.visualizer.visualize_relevance_layer(
                     data=data,
                     meta=meta,
@@ -644,108 +1189,17 @@ class RelevanceLayer:
                 
                 logger.info(f"Saved {layer_name} relevance layer PNG to {plot_path}")
 
-    def _add_nuts_labels(self, ax, nuts_gdf: gpd.GeoDataFrame):
-        """Add NUTS code and region name labels to the plot at polygon centroids."""
-        # Determine the NUTS code column
-        nuts_code_col = None
-        for col in ['NUTS_ID', 'nuts_id', 'geo', 'GEOCODE']:
-            if col in nuts_gdf.columns:
-                nuts_code_col = col
-                break
-        
-        if nuts_code_col is None:
-            logger.warning("Could not find NUTS code column for labeling")
-            return
-            
-        # Determine region name column (prefer original shapefile column if available, otherwise use merged 'region')
-        region_name_col = None
-        for col in ['NAME_LATN', 'NUTS_NAME', 'region']:
-            if col in nuts_gdf.columns:
-                region_name_col = col
-                break
-                
-        if region_name_col is None:
-            logger.warning("Could not find region name column for labeling")
-            region_name_col = nuts_code_col  # Fallback to just showing codes
-        
-        logger.debug(f"Using NUTS code column: {nuts_code_col}, region name column: {region_name_col}")
-        
-        # Add labels at polygon centroids
-        for idx, row in nuts_gdf.iterrows():
-            try:
-                # Calculate centroid for label placement
-                centroid = row.geometry.centroid
-                
-                # Get NUTS code and region name
-                nuts_code = str(row[nuts_code_col])
-                region_name = str(row[region_name_col]) if region_name_col != nuts_code_col else ""
-                
-                # Create label text
-                if region_name and region_name != nuts_code and region_name.lower() != 'nan':
-                    # Truncate long region names for better readability
-                    if len(region_name) > 15:
-                        region_name = region_name[:12] + "..."
-                    label_text = f"{nuts_code}\n{region_name}"
-                else:
-                    label_text = nuts_code
-                
-                # Add text annotation with background for better readability
-                ax.annotate(
-                    label_text,
-                    xy=(centroid.x, centroid.y),
-                    xytext=(0, 0),
-                    textcoords='offset points',
-                    ha='center',
-                    va='center',
-                    fontsize=8,
-                    fontweight='bold',
-                    color='white',
-                    bbox=dict(
-                        boxstyle='round,pad=0.3',
-                        facecolor='black',
-                        alpha=0.7,
-                        edgecolor='white',
-                        linewidth=0.5
-                    ),
-                    zorder=15  # Ensure labels are on top of everything
-                )
-                
-            except Exception as e:
-                logger.debug(f"Could not add label for region {row.get(nuts_code_col, 'unknown')}: {e}")
-                continue
-    
-    def _get_raster_extent(self, data: np.ndarray, meta: dict = None) -> Tuple[float, float, float, float]:
-        """Get raster extent for proper plotting coordinate alignment."""
-        if meta is not None and 'transform' in meta:
-            # Use actual geospatial transform for proper coordinate alignment
-            transform = meta['transform']
-            height, width = data.shape
-            
-            # Calculate bounds using affine transform
-            left = transform.c
-            right = left + width * transform.a
-            top = transform.f  
-            bottom = top + height * transform.e
-            
-            return (left, right, bottom, top)
-        else:
-            # Fallback to simple pixel coordinates
-            height, width = data.shape
-            return (0, width, 0, height)
-    
     def run_relevance_analysis(self, visualize: bool = True, 
-                             export_individual_tifs: bool = True) -> Dict[str, np.ndarray]:
+                             export_individual_tifs: bool = True,
+                             layers_to_generate: List[str] = None) -> Dict[str, np.ndarray]:
         """Main execution flow for relevance layer analysis."""
         logger.info("Starting relevance layer analysis")
         
-        # Calculate relevance layers
-        relevance_layers, meta = self.calculate_relevance()
+        relevance_layers, meta = self.calculate_relevance(layers_to_generate)
         
-        # Save all layers as TIFFs
         if export_individual_tifs:
             self.save_relevance_layers(relevance_layers, meta)
             
-        # Create visualizations with metadata for proper coordinate alignment
         if visualize:
             self.visualize_relevance_layers(relevance_layers, meta)
             
