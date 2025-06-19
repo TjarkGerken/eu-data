@@ -90,6 +90,13 @@ export function Header() {
               {t.visualizations}
             </motion.a>
             <motion.a
+              href="/gallery"
+              className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
+              style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
+            >
+              Gallery
+            </motion.a>
+            <motion.a
               href="#bibliography"
               className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
               style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
