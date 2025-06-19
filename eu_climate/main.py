@@ -25,6 +25,7 @@ from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.risk_layers.relevance_layer import RelevanceLayer
 from eu_climate.risk_layers.risk_layer import RiskLayer
+from eu_climate.risk_layers.cluster_layer import ClusterLayer
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.data_loading import check_data_integrity, get_config, upload_data, validate_env_vars
@@ -57,6 +58,7 @@ class AssessmentLayer(Enum):
     RELEVANCE = "relevance"
     RISK = "risk"
     POPULATION = "population"
+    CLUSTERS = "clusters"
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -80,6 +82,8 @@ Examples:
   python -m main --verbose --risk            # Run risk layer with verbose logging
   python -m main --no-cache --hazard         # Run hazard layer without caching
   python -m main --no-upload --all           # Run all layers without data upload
+  python -m main --clusters                  # Extract risk cluster polygons from existing results
+  python -m main --upload                    # Only upload existing data to Hugging Face (skip analysis)
         """
     )
     
@@ -107,9 +111,13 @@ Examples:
                            action='store_true',
                            help='Process Population Risk Layer (population-based risk assessment)')
     
+    layer_group.add_argument('--clusters', 
+                           action='store_true',
+                           help='Process Cluster Layer (extract risk cluster polygons from existing results)')
+    
     layer_group.add_argument('--all', 
                            action='store_true',
-                           help='Process all layers (hazard, exposition, relevance, risk, population)')
+                           help='Process all layers (hazard, exposition, relevance, risk, population, clusters)')
     
     # Configuration arguments
     config_group = parser.add_argument_group('Configuration Options',
@@ -126,6 +134,10 @@ Examples:
     config_group.add_argument('--no-upload',
                             action='store_true',
                             help='Skip data upload to Hugging Face')
+    
+    config_group.add_argument('--upload',
+                            action='store_true',
+                            help='Only execute data upload to Hugging Face (skip all risk analysis)')
     
     config_group.add_argument('--no-visualize',
                             action='store_true',
@@ -150,7 +162,17 @@ Examples:
     args = parser.parse_args()
     
     # Validate arguments
-    if not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.all]):
+    if args.upload:
+        # If --upload flag is set, disable all other processing and only run upload
+        args.hazard = False
+        args.exposition = False
+        args.relevance = False
+        args.risk = False
+        args.population = False
+        args.clusters = False
+        args.all = False
+        args.no_upload = False  # Ensure upload is enabled
+    elif not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.clusters, args.all]):
         # If no specific layers are chosen, default to --all
         logger.info("No specific layers selected, defaulting to --all")
         args.all = True
@@ -162,6 +184,7 @@ Examples:
         args.relevance = True
         args.risk = True
         args.population = True
+        args.clusters = True
     
     return args
 
@@ -188,6 +211,7 @@ class RiskAssessment:
         self.exposition_layer = ExpositionLayer(config)
         self.relevance_layer = RelevanceLayer(config)
         self.risk_layer = RiskLayer(config)
+        self.cluster_layer = ClusterLayer(config)
         
         self._apply_caching()
         
@@ -385,6 +409,43 @@ class RiskAssessment:
             logger.error(f"Could not execute population risk layer analysis: {e}")
             raise e
 
+    def run_cluster_layer_analysis(self, config: ProjectConfig) -> Dict[str, Any]:
+        """
+        Run the Cluster Layer analysis for the EU Climate Risk Assessment System.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+            
+        Returns:
+            Dictionary of cluster results for all scenarios
+        """
+        logger.info("\n" + "="*40)  
+        logger.info("CLUSTER LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        try:
+            cluster_layer = ClusterLayer(config)
+            
+            cluster_results = cluster_layer.run_cluster_analysis(
+                visualize=True,
+                export_results=True
+            )
+            
+            logger.info(f"Cluster layer analysis completed successfully")
+            logger.info(f"Processed {len(cluster_results)} risk scenarios for clustering")
+            
+            if cluster_results:
+                summary_statistics = cluster_layer.get_cluster_summary_statistics(cluster_results)
+                logger.info("Cluster summary statistics:")
+                for scenario_name, stats in summary_statistics.items():
+                    logger.info(f"  {scenario_name}: {stats['cluster_count']} clusters, {stats.get('total_area_square_kilometers', 0):.2f} km²")
+            
+            return cluster_results
+            
+        except Exception as e:
+            logger.error(f"Could not execute cluster layer analysis: {e}")
+            raise e
+
 def main():
     """
     Main execution function for the EU Climate Risk Assessment System.
@@ -403,20 +464,26 @@ def main():
     logger.info("EU CLIMATE RISK ASSESSMENT SYSTEM")
     logger.info("=" * 60)
     
-    # Log selected layers
-    selected_layers = []
-    if args.hazard:
-        selected_layers.append("Hazard")
-    if args.exposition:
-        selected_layers.append("Exposition")
-    if args.relevance:
-        selected_layers.append("Relevance")
-    if args.risk:
-        selected_layers.append("Risk")
-    if args.population:
-        selected_layers.append("Population Risk")
-    
-    logger.info(f"Selected layers: {', '.join(selected_layers)}")
+    # Log selected layers or upload-only mode
+    if args.upload:
+        logger.info("UPLOAD-ONLY MODE: Skipping all risk analysis layers")
+    else:
+        selected_layers = []
+        if args.hazard:
+            selected_layers.append("Hazard")
+        if args.exposition:
+            selected_layers.append("Exposition")
+        if args.relevance:
+            selected_layers.append("Relevance")
+        if args.risk:
+            selected_layers.append("Risk")
+        if args.population:
+            selected_layers.append("Population Risk")
+        if args.clusters:
+            selected_layers.append("Clusters")
+        
+        logger.info(f"Selected layers: {', '.join(selected_layers)}")
+        
     if args.no_cache:
         logger.info("Caching disabled")
     if args.no_upload:
@@ -435,7 +502,29 @@ def main():
     
     logger.info(f"Project initialized with data directory: {config.data_dir}")
     
-    # Perform data integrity check (unless skipped)
+    # Handle upload-only mode
+    if args.upload:
+        logger.info("\n" + "="*50)
+        logger.info("UPLOAD-ONLY MODE: EXECUTING DATA UPLOAD")
+        logger.info("="*50)
+        try:
+            upload_result = upload_data()
+            if upload_result:
+                logger.info(f"\n{'='*60}")
+                logger.info("UPLOAD COMPLETED SUCCESSFULLY")
+                logger.info(f"{'='*60}")
+            else:
+                logger.error("Upload failed")
+                sys.exit(1)
+        except Exception as e:
+            logger.error(f"Error during upload: {str(e)}")
+            if args.verbose:
+                import traceback
+                logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            sys.exit(1)
+        return
+    
+    # Normal processing mode - perform data integrity check (unless skipped)
     if not args.skip_integrity_check:
         logger.info("\n" + "="*40)
         logger.info("DATA INTEGRITY CHECK")
@@ -491,6 +580,13 @@ def main():
             logger.info(f"{'='*50}")
             population_risk_scenarios = risk_assessment.run_population_risk_layer_analysis(config)
             logger.info(f"Population risk analysis completed with {len(population_risk_scenarios)} scenarios")
+        
+        if args.clusters:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING CLUSTER LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            cluster_results = risk_assessment.run_cluster_layer_analysis(config)
+            logger.info(f"Cluster analysis completed with results for {len(cluster_results)} scenarios")
         
         # Data upload (unless disabled)
         if not args.no_upload:
