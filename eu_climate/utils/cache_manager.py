@@ -77,47 +77,34 @@ class CacheManager:
     def _get_cache_config(self, key: str, default: Any) -> Any:
         """Get cache configuration value from YAML config."""
         
-        # Debug logging to understand what we're working with
-        logger.info(f"DEBUG: Attempting to get cache config for key '{key}'")
-        logger.info(f"DEBUG: self.config type: {type(self.config)}")
-        logger.info(f"DEBUG: self.config: {self.config}")
-        
         if self.config is None:
             raise ValueError(f"No configuration provided to CacheManager, cannot get cache config for '{key}'")
         
         # Check if config is ProjectConfig instance
         if hasattr(self.config, 'config'):
-            logger.info(f"DEBUG: Found config.config attribute, type: {type(self.config.config)}")
-            logger.info(f"DEBUG: config.config contents: {self.config.config}")
-            
             yaml_config = self.config.config
             if 'caching' not in yaml_config:
                 raise ValueError(f"'caching' section not found in YAML config. Available keys: {list(yaml_config.keys())}")
             
             caching_config = yaml_config['caching']
-            logger.info(f"DEBUG: Found caching config: {caching_config}")
             
             if key not in caching_config:
                 raise ValueError(f"Cache config key '{key}' not found. Available keys: {list(caching_config.keys())}")
             
             value = caching_config[key]
-            logger.info(f"Successfully retrieved cache config '{key}': {value}")
             return value
         
         # Check if config is direct dict
         elif isinstance(self.config, dict):
-            logger.info(f"DEBUG: Config is direct dict")
             if 'caching' not in self.config:
                 raise ValueError(f"'caching' section not found in config dict. Available keys: {list(self.config.keys())}")
             
             caching_config = self.config['caching']
-            logger.info(f"DEBUG: Found caching config: {caching_config}")
             
             if key not in caching_config:
                 raise ValueError(f"Cache config key '{key}' not found. Available keys: {list(caching_config.keys())}")
             
             value = caching_config[key]
-            logger.info(f"Successfully retrieved cache config '{key}': {value}")
             return value
         
         else:
@@ -451,7 +438,6 @@ def cached_method(cache_type: str = 'calculations',
             # Try to get from cache
             cached_result = cache_manager.get(cache_key, cache_type)
             if cached_result is not None:
-                logger.debug(f"Cache hit for {function_name}")
                 return cached_result
                 
             # Execute function and cache result

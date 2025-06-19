@@ -9,7 +9,7 @@ export interface ValidationResult {
 }
 
 export interface ContentBlockFormData {
-  story_id: string;
+  story_id?: string;
   block_type: string;
   title: string;
   content: string;
@@ -20,7 +20,6 @@ export interface ContentBlockFormData {
 }
 
 const REQUIRED_FIELDS = {
-  story_id: "Story ID is required",
   block_type: "Block type is required",
   language: "Language is required",
   order_index: "Order index is required",
@@ -40,6 +39,7 @@ const BLOCK_TYPES = [
   "kpi-showcase",
   "climate-timeline-minimal",
   "climate-infographic",
+  "interactive-map",
 ];
 
 const CALLOUT_VARIANTS = ["success", "warning", "info", "error"];
