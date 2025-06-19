@@ -38,23 +38,15 @@ class EconomicDataLoader:
         else:
             logger.error(f"GDP dataset not found: {gdp_path}")
             
-        # Road freight loading
-        loading_path = self.data_dir / "L3-estat_road_go_loading" / "estat_road_go_na_rl3g_en.csv"
-        if loading_path.exists():
-            logger.info(f"Loading freight loading dataset from {loading_path}")
-            loading_df = pd.read_csv(loading_path)
-            datasets['freight_loading'] = self._process_freight_data(loading_df)
+        # Unified freight dataset (loading + unloading combined)
+        unified_freight_path = self.data_dir / "unified_freight_data.csv"
+        if unified_freight_path.exists():
+            logger.info(f"Loading unified freight dataset from {unified_freight_path}")
+            freight_df = pd.read_csv(unified_freight_path)
+            datasets['freight'] = self._process_unified_freight_data(freight_df)
         else:
-            logger.error(f"Freight loading dataset not found: {loading_path}")
-            
-        # Road freight unloading
-        unloading_path = self.data_dir / "L3-estat_road_go_unloading" / "estat_road_go_na_ru3g_en.csv"
-        if unloading_path.exists():
-            logger.info(f"Loading freight unloading dataset from {unloading_path}")
-            unloading_df = pd.read_csv(unloading_path)
-            datasets['freight_unloading'] = self._process_freight_data(unloading_df)
-        else:
-            logger.error(f"Freight unloading dataset not found: {unloading_path}")
+            logger.info("Unified freight dataset not found, creating from loading and unloading data")
+            datasets['freight'] = self._create_unified_freight_data()
             
         # HRST dataset
         hrst_path = self.data_dir / getattr(self.config, 'hrst_file_path', 'L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv')
@@ -141,6 +133,79 @@ class EconomicDataLoader:
             logger.warning(f"Dropped {len_before - len_after} NAN values in HRST data")
         
         logger.info(f"Processed HRST data: {len(processed)} regions for year {latest_year}")
+        return processed
+    
+    def _create_unified_freight_data(self) -> pd.DataFrame:
+        """Create unified freight dataset by combining loading and unloading data."""
+        logger.info("Creating unified freight dataset from loading and unloading sources")
+        
+        # Load freight loading data
+        loading_path = self.data_dir / "L3-estat_road_go_loading" / "estat_road_go_na_rl3g_en.csv"
+        if not loading_path.exists():
+            raise FileNotFoundError(f"Freight loading dataset not found: {loading_path}")
+        
+        # Load freight unloading data  
+        unloading_path = self.data_dir / "L3-estat_road_go_unloading" / "estat_road_go_na_ru3g_en.csv"
+        if not unloading_path.exists():
+            raise FileNotFoundError(f"Freight unloading dataset not found: {unloading_path}")
+        
+        logger.info(f"Loading freight loading data from {loading_path}")
+        loading_df = pd.read_csv(loading_path)
+        loading_processed = self._process_freight_data(loading_df)
+        
+        logger.info(f"Loading freight unloading data from {unloading_path}")
+        unloading_df = pd.read_csv(unloading_path)
+        unloading_processed = self._process_freight_data(unloading_df)
+        
+        # Merge and sum the freight values
+        unified_data = loading_processed.merge(
+            unloading_processed, 
+            on=['nuts_code', 'region'], 
+            how='outer',
+            suffixes=('_loading', '_unloading')
+        )
+        
+        # Fill NaN values with 0 for proper summing
+        unified_data['freight_value_loading'] = unified_data['freight_value_loading'].fillna(0)
+        unified_data['freight_value_unloading'] = unified_data['freight_value_unloading'].fillna(0)
+        
+        # Sum loading and unloading values
+        unified_data['freight_value'] = (
+            unified_data['freight_value_loading'] + 
+            unified_data['freight_value_unloading']
+        )
+        
+        # Clean up columns and standardize format
+        result = unified_data[['nuts_code', 'freight_value', 'region']].copy()
+        result['unit'] = 'T'  # Tonnes (standard freight unit)
+        
+        # Remove rows with zero or NaN total freight
+        result = result[result['freight_value'] > 0].dropna()
+        
+        logger.info(f"Created unified freight data: {len(result)} regions with combined loading + unloading values")
+        logger.info(f"Total freight volume: {result['freight_value'].sum():,.0f} tonnes")
+        
+        # Save unified dataset for future use
+        unified_freight_path = self.data_dir / "unified_freight_data.csv"
+        result.to_csv(unified_freight_path, index=False)
+        logger.info(f"Saved unified freight dataset to {unified_freight_path}")
+        
+        return result
+    
+    def _process_unified_freight_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Process pre-unified freight dataset that was already combined."""
+        logger.info(f"Processing unified freight data: {len(df)} regions")
+        
+        # Ensure numeric values
+        df['freight_value'] = pd.to_numeric(df['freight_value'], errors='coerce')
+        
+        # Remove invalid data
+        processed = df.dropna()
+        processed = processed[processed['freight_value'] > 0]
+        
+        logger.info(f"Processed unified freight data: {len(processed)} regions")
+        logger.info(f"Total freight volume: {processed['freight_value'].sum():,.0f} tonnes")
+        
         return processed
 
 
