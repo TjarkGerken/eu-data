@@ -86,3 +86,28 @@
   background-color: hsl(var(--muted-foreground));
   border-radius: 3px;
 }
+
+/* Map z-index management to prevent conflicts with header and UI elements */
+.leaflet-container {
+  z-index: 1 !important;
+}
+
+.leaflet-control-container {
+  z-index: 1000 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 1010 !important;
+}
+
+/* Ensure map legends and overlays have proper z-index */
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1000 !important;
+}
+
+/* Interactive map wrapper should have controlled z-index */
+.interactive-map-container {
+  position: relative;
+  z-index: 1;
+}

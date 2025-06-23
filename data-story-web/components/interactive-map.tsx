@@ -24,6 +24,10 @@ interface InteractiveMapProps {
   selectedLayers?: string[];
   height?: string;
   enableLayerControls?: boolean;
+  centerLat?: number;
+  centerLng?: number;
+  zoom?: number;
+  autoFitBounds?: boolean;
 }
 
 interface LayerState {
@@ -39,6 +43,10 @@ export function InteractiveMap({
   selectedLayers = [],
   height = "600px",
   enableLayerControls = true,
+  centerLat = 52.1326,
+  centerLng = 5.2913,
+  zoom = 8,
+  autoFitBounds = false,
 }: InteractiveMapProps) {
   const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
     []
@@ -163,12 +171,18 @@ export function InteractiveMap({
         <div className="flex gap-4">
           <div className="flex-1">
             <div
-              className="relative rounded-lg overflow-hidden border"
+              className="relative rounded-lg overflow-hidden border interactive-map-container"
               style={{ height }}
             >
-              <LeafletMap layers={layerStates} />
+              <LeafletMap 
+                layers={layerStates} 
+                centerLat={centerLat} 
+                centerLng={centerLng} 
+                zoom={zoom} 
+                autoFitBounds={autoFitBounds}
+              />
 
-              <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
+              <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg z-[1000]">
                 <h4 className="text-sm font-medium mb-2">Legend</h4>
                 <div className="space-y-1">
                   {visibleLayers.map((layer) => (

@@ -35,7 +35,7 @@ export function Header() {
 
   return (
     <motion.header
-      className="fixed top-0 z-50 w-full transition-all duration-300"
+      className="fixed top-0 z-[9999] w-full transition-all duration-300"
       style={{ backgroundColor }}
     >
       <div

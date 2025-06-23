@@ -14,12 +14,19 @@ interface LayerState {
 
 interface LeafletMapProps {
   layers: LayerState[];
+  centerLat?: number;
+  centerLng?: number;
+  zoom?: number;
+  autoFitBounds?: boolean;
 }
 
-const DEFAULT_CENTER: [number, number] = [52.5, 13.4];
-const DEFAULT_ZOOM = 6;
-
-export default function LeafletMap({ layers }: LeafletMapProps) {
+export default function LeafletMap({ 
+  layers, 
+  centerLat = 52.1326, 
+  centerLng = 5.2913, 
+  zoom = 8,
+  autoFitBounds = false 
+}: LeafletMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
@@ -28,9 +35,11 @@ export default function LeafletMap({ layers }: LeafletMapProps) {
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
+    console.log("Initializing map with:", { centerLat, centerLng, zoom });
+
     const map = L.map(mapContainerRef.current).setView(
-      DEFAULT_CENTER,
-      DEFAULT_ZOOM
+      [centerLat, centerLng],
+      zoom
     );
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -52,6 +61,14 @@ export default function LeafletMap({ layers }: LeafletMapProps) {
       vectorLayerGroupRef.current = null;
     };
   }, []);
+
+  // Update map view when center/zoom props change
+  useEffect(() => {
+    if (mapRef.current) {
+      console.log("Updating map view to:", { centerLat, centerLng, zoom });
+      mapRef.current.setView([centerLat, centerLng], zoom);
+    }
+  }, [centerLat, centerLng, zoom]);
 
   useEffect(() => {
     updateMapLayers();
@@ -87,7 +104,7 @@ export default function LeafletMap({ layers }: LeafletMapProps) {
       }
     });
 
-    if (visibleLayers.length > 0) {
+    if (autoFitBounds && visibleLayers.length > 0) {
       const bounds = visibleLayers[0].metadata.bounds;
       const leafletBounds = L.latLngBounds([
         [bounds[1], bounds[0]],
@@ -101,33 +118,62 @@ export default function LeafletMap({ layers }: LeafletMapProps) {
     if (!vectorLayerGroupRef.current) return;
 
     try {
+      console.log("Loading vector layer:", layer.id, layer.metadata);
       const response = await fetch(`/api/map-data/vector/${layer.id}`);
+      
       if (response.ok) {
         const vectorData = await response.json();
+        console.log("Vector data loaded:", {
+          layerId: layer.id,
+          featureCount: vectorData?.features?.length || 0,
+          type: vectorData?.type,
+          firstFeature: vectorData?.features?.[0]
+        });
 
-        L.geoJSON(vectorData, {
-          style: {
-            fillColor: layer.metadata.colorScale[1] || "#ff0000",
-            weight: 2,
-            opacity: layer.opacity,
-            color: "#ffffff",
-            fillOpacity: layer.opacity * 0.6,
-          },
-          onEachFeature: (feature, layerInstance) => {
-            if (feature.properties) {
-              const popupContent = Object.entries(feature.properties)
-                .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
-                .join("<br>");
+        if (vectorData && vectorData.features && vectorData.features.length > 0) {
+          const geoJSONLayer = L.geoJSON(vectorData, {
+            style: (feature) => {
+              // Use the improved color scale, but fallback to a visible color
+              const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
+              return {
+                fillColor: fillColor,
+                weight: 2,
+                opacity: 1,
+                color: "#000000",
+                fillOpacity: 0.7,
+              };
+            },
+            onEachFeature: (feature, layerInstance) => {
+              if (feature.properties) {
+                const popupContent = Object.entries(feature.properties)
+                  .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
+                  .join("<br>");
 
-              layerInstance.bindPopup(`
-                <div class="vector-popup">
-                  <h4>${layer.metadata.name}</h4>
-                  ${popupContent}
-                </div>
-              `);
-            }
-          },
-        }).addTo(vectorLayerGroupRef.current);
+                layerInstance.bindPopup(`
+                  <div class="vector-popup">
+                    <h4>${layer.metadata.name}</h4>
+                    ${popupContent}
+                  </div>
+                `);
+              }
+            },
+          });
+          
+          geoJSONLayer.addTo(vectorLayerGroupRef.current);
+          console.log("GeoJSON layer added to map, bounds:", geoJSONLayer.getBounds());
+          
+          // Only fit to bounds if autoFitBounds is enabled
+          if (autoFitBounds && mapRef.current && geoJSONLayer.getBounds().isValid()) {
+            console.log("Fitting to bounds because autoFitBounds is enabled");
+            mapRef.current.fitBounds(geoJSONLayer.getBounds(), { padding: [20, 20] });
+          } else {
+            console.log("Not fitting to bounds - autoFitBounds:", autoFitBounds);
+          }
+        } else {
+          console.warn("No features found in vector data for layer:", layer.id);
+        }
+      } else {
+        console.error("Failed to load vector layer:", response.status, response.statusText);
       }
     } catch (error) {
       console.error("Failed to load vector layer:", error);
