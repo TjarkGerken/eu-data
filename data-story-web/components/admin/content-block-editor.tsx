@@ -49,6 +49,7 @@ import {
   type ValidationError,
   type ContentBlockFormData,
 } from "@/lib/validation";
+import { contentCacheService } from "@/lib/content-cache";
 
 interface ContentBlock {
   id: string;
@@ -144,7 +145,14 @@ export default function ContentBlockEditor() {
           .order("order_index");
 
         if (error) throw error;
-        return data || [];
+        
+        // Ensure data field is properly parsed
+        const blocks = (data || []).map(block => ({
+          ...block,
+          data: block.data || {}
+        }));
+        
+        return blocks;
       };
 
       const [englishBlocks, germanBlocks] = await Promise.all([
@@ -191,7 +199,7 @@ export default function ContentBlockEditor() {
       content: "",
       data: {},
       language: "en",
-      order_index: blockPairs.length + 1,
+      order_index: Math.max(...blockPairs.map(p => p.orderIndex), 0) + 1,
       selectedReferences: [],
     });
     setValidationErrors([]);
@@ -207,15 +215,84 @@ export default function ContentBlockEditor() {
     }
   };
 
-  const createNewBlockPair = async () => {
-    // Validate form data (story_id is handled automatically now)
-    const validation = validateContentBlock(formData);
-    setValidationErrors(validation.errors);
+  const shiftBlockIndexes = async (fromIndex: number) => {
+    if (!storyIds) return;
+    
+    console.log(`Shifting block indexes from ${fromIndex} and above`);
+    
+    try {
+      // First, get all blocks that need to be shifted
+      const [englishBlocks, germanBlocks] = await Promise.all([
+        supabase
+          .from("content_blocks")
+          .select("id, order_index")
+          .eq("story_id", storyIds.english)
+          .gte("order_index", fromIndex),
+        supabase
+          .from("content_blocks")
+          .select("id, order_index")
+          .eq("story_id", storyIds.german)
+          .gte("order_index", fromIndex),
+      ]);
 
-    if (!validation.isValid) {
+      if (englishBlocks.error) throw englishBlocks.error;
+      if (germanBlocks.error) throw germanBlocks.error;
+
+      // Update each block individually
+      const updates = [];
+
+      for (const block of englishBlocks.data || []) {
+        updates.push(
+          supabase
+            .from("content_blocks")
+            .update({ order_index: block.order_index + 1 })
+            .eq("id", block.id)
+        );
+      }
+
+      for (const block of germanBlocks.data || []) {
+        updates.push(
+          supabase
+            .from("content_blocks")
+            .update({ order_index: block.order_index + 1 })
+            .eq("id", block.id)
+        );
+      }
+
+      const results = await Promise.all(updates);
+      
+      for (const result of results) {
+        if (result.error) {
+          console.error("Error updating block index:", result.error);
+          throw result.error;
+        }
+      }
+
+      console.log("Block indexes shifted successfully");
+    } catch (error) {
+      console.error("Failed to shift block indexes:", error);
+      throw error;
+    }
+  };
+
+  const createNewBlockPair = async () => {
+    // Only validate required fields for creation: block_type and order_index
+    const errors: ValidationError[] = [];
+    
+    if (!formData.block_type) {
+      errors.push({ field: "block_type", message: "Block type is required" });
+    }
+    
+    if (!formData.order_index || formData.order_index < 1) {
+      errors.push({ field: "order_index", message: "Order index must be a positive number" });
+    }
+
+    setValidationErrors(errors);
+
+    if (errors.length > 0) {
       toast({
         title: "Validation failed",
-        description: "Please fix the errors before creating the block pair",
+        description: "Please select a block type and order index",
         variant: "destructive",
       });
       return;
@@ -232,11 +309,21 @@ export default function ContentBlockEditor() {
 
     setSaving(true);
     try {
+      // Check if a block already exists at this index
+      const existingPair = blockPairs.find(pair => pair.orderIndex === formData.order_index);
+      
+      if (existingPair) {
+        console.log(`Block already exists at index ${formData.order_index}, shifting indexes`);
+        // Shift all blocks at this index and above by 1
+        await shiftBlockIndexes(formData.order_index);
+      }
       const blockData = {
         block_type: formData.block_type,
         order_index: formData.order_index,
-        data: formData.data || {},
+        data: JSON.parse(JSON.stringify(formData.data || {})), // Ensure proper JSON serialization
       };
+
+      console.log("Creating block pair with data:", blockData);
 
       const [englishResult, germanResult] = await Promise.all([
         supabase
@@ -267,8 +354,19 @@ export default function ContentBlockEditor() {
           .single(),
       ]);
 
-      if (englishResult.error) throw englishResult.error;
-      if (germanResult.error) throw germanResult.error;
+      if (englishResult.error) {
+        console.error("English block creation error:", englishResult.error);
+        throw englishResult.error;
+      }
+      if (germanResult.error) {
+        console.error("German block creation error:", germanResult.error);
+        throw germanResult.error;
+      }
+
+      console.log("Block pair created successfully:", {
+        english: englishResult.data,
+        german: germanResult.data
+      });
 
       toast({
         title: "Success",
@@ -277,7 +375,12 @@ export default function ContentBlockEditor() {
 
       setShowNewForm(false);
       resetForm();
+      
+      // Refresh the block pairs list
       await fetchBlockPairs();
+
+      // Invalidate content cache to update main page
+      contentCacheService.invalidate();
 
       // Open the newly created block pair in edit mode
       const newPair = {
@@ -288,9 +391,9 @@ export default function ContentBlockEditor() {
           story_id: storyIds.english,
           block_type: formData.block_type,
           order_index: formData.order_index,
-          data: formData.data || {},
-          title: undefined,
-          content: undefined,
+          data: JSON.parse(JSON.stringify(formData.data || {})),
+          title: formData.title || undefined,
+          content: formData.content || undefined,
           language: "en",
         },
         german: {
@@ -298,14 +401,17 @@ export default function ContentBlockEditor() {
           story_id: storyIds.german,
           block_type: formData.block_type,
           order_index: formData.order_index,
-          data: formData.data || {},
-          title: undefined,
-          content: undefined,
+          data: JSON.parse(JSON.stringify(formData.data || {})),
+          title: formData.title || undefined,
+          content: formData.content || undefined,
           language: "de",
         },
       };
+      
+      console.log("Opening newly created pair for editing:", newPair);
       setSelectedPair(newPair);
     } catch (error) {
+      console.error("Block pair creation failed:", error);
       toast({
         title: "Failed to create block pair",
         description: error instanceof Error ? error.message : "Unknown error",
@@ -352,7 +458,11 @@ export default function ContentBlockEditor() {
         description: "Block pair deleted successfully",
       });
 
-      fetchBlockPairs();
+      // Refresh the block pairs list
+      await fetchBlockPairs();
+
+      // Invalidate content cache to update main page
+      contentCacheService.invalidate();
     } catch (error) {
       toast({
         title: "Failed to delete block pair",
@@ -415,7 +525,11 @@ export default function ContentBlockEditor() {
         description: `Block pair moved ${direction} successfully`,
       });
 
-      fetchBlockPairs();
+      // Refresh the block pairs list
+      await fetchBlockPairs();
+
+      // Invalidate content cache to update main page
+      contentCacheService.invalidate();
     } catch (error) {
       toast({
         title: "Failed to move block pair",
@@ -459,6 +573,8 @@ export default function ContentBlockEditor() {
     setError(null);
 
     try {
+      console.log("Saving block pair:", selectedPair);
+      
       const updates = [];
 
       if (selectedPair.english) {
@@ -467,7 +583,7 @@ export default function ContentBlockEditor() {
             .from("content_blocks")
             .update({
               block_type: selectedPair.blockType,
-              data: selectedPair.english.data,
+              data: JSON.parse(JSON.stringify(selectedPair.english.data)), // Ensure proper JSON serialization
               title: selectedPair.english.title || null,
               content: selectedPair.english.content || null,
             })
@@ -481,7 +597,7 @@ export default function ContentBlockEditor() {
             .from("content_blocks")
             .update({
               block_type: selectedPair.blockType,
-              data: selectedPair.german.data,
+              data: JSON.parse(JSON.stringify(selectedPair.german.data)), // Ensure proper JSON serialization
               title: selectedPair.german.title || null,
               content: selectedPair.german.content || null,
             })
@@ -490,9 +606,14 @@ export default function ContentBlockEditor() {
       }
 
       const results = await Promise.all(updates);
+      
+      console.log("Update results:", results);
 
       for (const result of results) {
-        if (result.error) throw result.error;
+        if (result.error) {
+          console.error("Supabase error:", result.error);
+          throw result.error;
+        }
       }
 
       toast({
@@ -500,8 +621,16 @@ export default function ContentBlockEditor() {
         description: "Block pair saved successfully",
       });
 
-      fetchBlockPairs();
+      // Refresh the block pairs list to get updated data
+      await fetchBlockPairs();
+
+      // Invalidate content cache to update main page
+      contentCacheService.invalidate();
+
+      // Close the dialog after successful save
+      setSelectedPair(null);
     } catch (err) {
+      console.error("Block pair save failed:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Failed to save blocks";
       setError(errorMessage);
@@ -607,7 +736,10 @@ export default function ContentBlockEditor() {
           <h2 className="text-xl font-semibold">Content Block Editor</h2>
           <Badge variant="outline">{blockPairs.length} block pairs</Badge>
         </div>
-        <Button onClick={() => setShowNewForm(true)}>
+        <Button onClick={() => {
+          resetForm(); // This will set the correct order index
+          setShowNewForm(true);
+        }}>
           <Plus className="w-4 h-4 mr-2" />
           Add Block Pair
         </Button>
@@ -725,14 +857,6 @@ export default function ContentBlockEditor() {
                     ))}
                   </SelectContent>
                 </Select>
-                {validationErrors.find((e) => e.field === "block_type") && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {
-                      validationErrors.find((e) => e.field === "block_type")
-                        ?.message
-                    }
-                  </p>
-                )}
               </div>
               <div>
                 <Label htmlFor="order_index">Order Index</Label>

@@ -433,6 +433,21 @@ export function BlockTypeFields({
           </div>
         );
 
+      case "quote":
+      case "animated-quote":
+        return (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>References</Label>
+              <MultiSelectReferences
+                selectedReferenceIds={data?.references || []}
+                onSelectionChange={(ids) => updateDataField("references", ids)}
+                placeholder="Select references..."
+              />
+            </div>
+          </div>
+        );
+
       default:
         return (
           <div className="space-y-1">
@@ -520,7 +535,17 @@ export function BlockTypeFields({
           <div className="space-y-4">
             {renderLanguageSpecificFields()}
             <div className="space-y-1">
-              <Label>Author</Label>
+              <Label>Quote Text *</Label>
+              <Textarea
+                value={data?.text || ""}
+                onChange={(e) => updateDataField("text", e.target.value)}
+                placeholder="Enter the quote text..."
+                rows={4}
+              />
+              {renderFieldError("data.text")}
+            </div>
+            <div className="space-y-1">
+              <Label>Author *</Label>
               <Input
                 value={data?.author || ""}
                 onChange={(e) => updateDataField("author", e.target.value)}

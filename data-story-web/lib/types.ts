@@ -75,8 +75,7 @@ export interface VisualizationBlock {
 
 export interface AnimatedQuoteBlock {
   type: "animated-quote";
-  title: string;
-  content: string;
+  text: string;
   author: string;
   role?: string;
 }

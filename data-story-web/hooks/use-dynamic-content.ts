@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/language-context";
 import { DynamicContent } from "@/lib/types";
 import { fetchContentByLanguage, ContentData } from "@/lib/content-service";
+import { contentCacheService } from "@/lib/content-cache";
 
 export function useDynamicContent() {
   const { language } = useLanguage();
@@ -29,17 +30,20 @@ export function useDynamicContent() {
           };
 
         case "markdown":
-          return {
+          console.log("Transforming markdown block:", block);
+          const markdownBlock = {
             type: "markdown",
-            content: block.data.content,
+            content: block.content || block.data.content || "",
           };
+          console.log("Transformed markdown block:", markdownBlock);
+          return markdownBlock;
 
         case "callout":
           return {
             type: "callout",
-            title: block.data.title,
-            content: block.data.content,
-            variant: block.data.variant,
+            title: block.title || block.data.title || "",
+            content: block.content || block.data.content || "",
+            variant: block.data.variant || "default",
           };
 
         case "quote":
@@ -65,14 +69,18 @@ export function useDynamicContent() {
         case "animated-quote":
           return {
             type: "animated-quote",
-            text: block.data.text,
-            author: block.data.author,
-            role: block.data.role,
+            title: block.title || "",
+            content: block.content || "",
+            text: block.data.text || "",
+            author: block.data.author || "",
+            role: block.data.role || "",
           };
 
         default:
           return {
             type: block.blockType,
+            title: block.title || block.data.title,
+            content: block.content || block.data.content,
             ...block.data,
           };
       }
@@ -105,12 +113,14 @@ export function useDynamicContent() {
     };
   };
 
-  const loadContent = async () => {
+  const loadContent = async (forceReload = false) => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/content?language=${language}`);
+      // Add cache busting for forced reloads
+      const cacheParam = forceReload ? `&_t=${Date.now()}` : '';
+      const response = await fetch(`/api/content?language=${language}${cacheParam}`);
       if (!response.ok) {
         throw new Error("Failed to fetch content");
       }
@@ -121,7 +131,11 @@ export function useDynamicContent() {
         throw new Error(`Content not found for language: ${language}`);
       }
 
+      console.log("Fetched content data:", contentData);
+      console.log("Content blocks:", contentData.blocks);
+
       const transformedContent = transformContentData(contentData);
+      console.log("Transformed content blocks:", transformedContent.blocks);
       setContent(transformedContent);
     } catch (err) {
       console.error("Error loading content:", err);
@@ -136,6 +150,7 @@ export function useDynamicContent() {
           "Climate change poses significant threats to European coastal regions through sea level rise, increased storm intensity, and changing precipitation patterns.",
         introText2:
           "This data story presents a systematic approach to climate risk assessment, integrating high-resolution spatial data, scenario modeling, and impact analysis.",
+        blocks: [],
         visualizations: [
           {
             title: "Climate Hazard Risk Assessment",
@@ -160,6 +175,16 @@ export function useDynamicContent() {
 
   useEffect(() => {
     loadContent();
+  }, [language]);
+
+  // Subscribe to cache invalidation events
+  useEffect(() => {
+    const unsubscribe = contentCacheService.subscribe(() => {
+      console.log('Content cache invalidated, reloading...');
+      loadContent(true);
+    });
+
+    return unsubscribe;
   }, [language]);
 
   return { content, loading, error, reload: loadContent };
