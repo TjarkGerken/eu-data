@@ -25,6 +25,8 @@ export interface ContentBlock {
   storyId: string | null;
   blockType: string;
   orderIndex: number;
+  title?: string;
+  content?: string;
   data: any;
   references?: ContentReference[];
 }
@@ -80,12 +82,14 @@ export async function fetchContentByLanguage(
       return null;
     }
 
-    const processedBlocks: ContentBlock[] = (blocksData || []).map((block) => ({
+    const processedBlocks: ContentBlock[] = (blocksData || []).map((block: any) => ({
       id: block.id,
       storyId: block.story_id,
       blockType: block.block_type,
       orderIndex: block.order_index,
-      data: block.data,
+      title: block.title || null,
+      content: block.content || null,
+      data: block.data || {},
       references:
         block.block_references?.map((br: any) => br.content_references) || [],
     }));
