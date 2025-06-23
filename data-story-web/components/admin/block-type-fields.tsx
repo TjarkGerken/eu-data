@@ -88,6 +88,44 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
         />
       </div>
 
+      <div className="space-y-1">
+        <Label>Map Center (Latitude, Longitude)</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            value={data?.centerLat || "52.1326"}
+            onChange={(e) => updateDataField("centerLat", parseFloat(e.target.value) || 52.1326)}
+            placeholder="52.1326"
+            type="number"
+            step="0.0001"
+          />
+          <Input
+            value={data?.centerLng || "5.2913"}
+            onChange={(e) => updateDataField("centerLng", parseFloat(e.target.value) || 5.2913)}
+            placeholder="5.2913"
+            type="number"
+            step="0.0001"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Default: Netherlands center (52.1326, 5.2913)
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <Label>Initial Zoom Level</Label>
+        <Input
+          value={data?.zoom || "8"}
+          onChange={(e) => updateDataField("zoom", parseInt(e.target.value) || 8)}
+          placeholder="8"
+          type="number"
+          min="1"
+          max="18"
+        />
+        <p className="text-xs text-muted-foreground">
+          Zoom level: 1 (world) to 18 (street level)
+        </p>
+      </div>
+
       <div className="flex items-center space-x-2">
         <Switch
           id="enable-layer-controls"
@@ -97,6 +135,17 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
           }
         />
         <Label htmlFor="enable-layer-controls">Enable Layer Controls</Label>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="auto-fit-bounds"
+          checked={data?.autoFitBounds || false}
+          onCheckedChange={(checked) =>
+            updateDataField("autoFitBounds", checked)
+          }
+        />
+        <Label htmlFor="auto-fit-bounds">Auto Fit to Layer Bounds</Label>
       </div>
 
       <div className="space-y-2">
@@ -256,17 +305,34 @@ export function BlockTypeFields({
     return error ? <p className="text-sm text-red-500 mt-1">{error}</p> : null;
   };
 
+  // Block types that actually use and display the title field
+  const blockTypesWithTitle = [
+    "callout",
+    "interactive-callout", 
+    "animated-statistics",
+    "climate-timeline",
+    "climate-dashboard",
+    "temperature-spiral",
+    "interactive-map",
+    "impact-comparison",
+    "kpi-showcase",
+    "climate-timeline-minimal",
+    "climate-infographic"
+  ];
+
   const renderLanguageSpecificFields = () => (
     <>
-      <div className="space-y-1">
-        <Label>Title</Label>
-        <Input
-          value={title || ""}
-          onChange={(e) => onTitleChange?.(e.target.value)}
-          placeholder="Enter block title..."
-        />
-        {renderFieldError("title")}
-      </div>
+      {blockTypesWithTitle.includes(blockType) && (
+        <div className="space-y-1">
+          <Label>Section Title (optional)</Label>
+          <Input
+            value={title || ""}
+            onChange={(e) => onTitleChange?.(e.target.value)}
+            placeholder="Enter section title..."
+          />
+          {renderFieldError("title")}
+        </div>
+      )}
       <div className="space-y-1">
         <Label>Description</Label>
         <Textarea

@@ -144,9 +144,13 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             key={index}
             title={block.title}
             description={block.description}
-            selectedLayers={block.selectedLayers || []}
-            height={block.height || "600px"}
-            enableLayerControls={block.enableLayerControls !== false}
+            selectedLayers={block.selectedLayers || (block as any).data?.selectedLayers || []}
+            height={block.height || (block as any).data?.height || "600px"}
+            enableLayerControls={block.enableLayerControls !== false && (block as any).data?.enableLayerControls !== false}
+            centerLat={block.centerLat || (block as any).data?.centerLat || 52.1326}
+            centerLng={block.centerLng || (block as any).data?.centerLng || 5.2913}
+            zoom={block.zoom || (block as any).data?.zoom || 8}
+            autoFitBounds={block.autoFitBounds || (block as any).data?.autoFitBounds || false}
           />
         );
 

@@ -62,6 +62,7 @@ export interface TimelineBlock {
 }
 
 export interface VisualizationBlock {
+  data: any;
   type: "visualization";
   title: string;
   description: string;
@@ -247,6 +248,10 @@ export interface InteractiveMapBlock {
   selectedLayers: string[];
   height?: string;
   enableLayerControls?: boolean;
+  centerLat?: number;
+  centerLng?: number;
+  zoom?: number;
+  autoFitBounds?: boolean;
 }
 
 export interface Story {

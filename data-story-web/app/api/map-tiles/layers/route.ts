@@ -56,7 +56,19 @@ async function extractLayerMetadata(
 ): Promise<MapLayerMetadata | null> {
   try {
     const fileName = layer.name;
-    const layerId = path.basename(fileName, path.extname(fileName));
+    let layerId = path.basename(fileName, path.extname(fileName));
+    
+    // Handle special naming patterns for clusters
+    if (fileName.includes("clusters_SLR")) {
+      // Extract scenario from filename like "clusters_SLR-0-Current_COMBINED_optimized.geojson"
+      const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_COMBINED/);
+      if (match) {
+        const scenario = match[2].toLowerCase(); // "current", "severe", etc.
+        layerId = `clusters-slr-${scenario}`;
+      } else {
+        layerId = "clusters-slr-current"; // fallback
+      }
+    }
 
     // Determine layer type from filename
     const layerType = determineLayerType(fileName);
@@ -119,6 +131,8 @@ function determineLayerType(fileName: string): string {
   if (name.includes("hazard")) return "hazard";
   if (name.includes("exposition")) return "exposition";
   if (name.includes("relevance")) return "relevance";
+  if (name.includes("cluster")) return "clusters";
+  if (name.includes("slr")) return "sea-level-rise";
   return "unknown";
 }
 
@@ -128,7 +142,9 @@ function getDefaultColorScale(layerType: string): string[] {
     hazard: ["#add8e6", "#00bfff", "#0000ff", "#00008b"],
     exposition: ["#ffffff", "#90ee90", "#228b22", "#006400"],
     relevance: ["#ffffff", "#ffd700", "#ff8c00", "#ff4500"],
-    unknown: ["#ffffff", "#cccccc", "#666666", "#000000"],
+    clusters: ["#ffffff", "#4fc3f7", "#2196f3", "#0d47a1"],
+    "sea-level-rise": ["#ffffff", "#81c784", "#4caf50", "#1b5e20"],
+    unknown: ["#ffffff", "#ff6b6b", "#e53935", "#b71c1c"],
   };
   return (
     colorScales[layerType as keyof typeof colorScales] || colorScales.unknown
