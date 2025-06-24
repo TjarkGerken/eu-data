@@ -275,6 +275,14 @@ class WebOptimizedExporter:
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
+        # Use configuration settings if available
+        mvt_config = self.web_config.get('mvt_settings', {})
+        min_zoom = mvt_config.get('min_zoom', min_zoom)
+        max_zoom = mvt_config.get('max_zoom', max_zoom)
+        simplification = mvt_config.get('simplification', simplification)
+        
+        logger.info(f"Exporting MVT with optimized settings: zoom {min_zoom}-{max_zoom}, simplification: {simplification}")
+        
         # Check if tippecanoe is available
         tippecanoe_available = False
         try:
@@ -309,45 +317,185 @@ class WebOptimizedExporter:
                                   min_zoom: int,
                                   max_zoom: int,
                                   simplification: str) -> bool:
-        """Export MVT using tippecanoe (Unix/Linux/WSL)."""
+        """Export MVT using tippecanoe with proper CRS transformation."""
         temp_geojson = None
         try:
             # Convert to GeoJSON first if needed
             if input_path.suffix.lower() in ['.gpkg', '.shp']:
                 gdf = gpd.read_file(input_path)
                 
-                # Create temporary GeoJSON
+                logger.info(f"Original data: {len(gdf)} features, CRS: {gdf.crs}")
+                logger.info(f"Original bounds: {gdf.total_bounds}")
+                
+                # CRITICAL FIX: Transform to WGS84 before bounds validation
+                if gdf.crs != 'EPSG:4326':
+                    logger.info(f"Transforming from {gdf.crs} to EPSG:4326 (WGS84)")
+                    gdf = gdf.to_crs('EPSG:4326')
+                    logger.info(f"Transformed bounds: {gdf.total_bounds}")
+                
+                # Validate transformed bounds
+                bounds = gdf.total_bounds
+                west, south, east, north = bounds
+                bounds_are_invalid = False
+                
+                # Check basic coordinate validity in WGS84
+                if west < -180 or west > 180 or east < -180 or east > 180:
+                    logger.warning(f"Invalid longitude bounds after transformation: W={west}, E={east}")
+                    bounds_are_invalid = True
+                if south < -90 or south > 90 or north < -90 or north > 90:
+                    logger.warning(f"Invalid latitude bounds after transformation: S={south}, N={north}")
+                    bounds_are_invalid = True
+                
+                # Check for degenerate bounds
+                if abs(north - south) < 0.001:
+                    logger.warning(f"Degenerate bounds - same north/south: {north} ≈ {south}")
+                    bounds_are_invalid = True
+                if abs(east - west) < 0.001:
+                    logger.warning(f"Degenerate bounds - same east/west: {east} ≈ {west}")
+                    bounds_are_invalid = True
+                
+                # Check for unreasonably large bounds (global extent)
+                if (east - west) > 350 or (north - south) > 170:
+                    logger.warning(f"Bounds span nearly entire globe - likely transformation error: W={west}, S={south}, E={east}, N={north}")
+                    bounds_are_invalid = True
+                
+                # For European data, check if bounds are reasonable
+                if not bounds_are_invalid:
+                    if not (-20 <= west <= 40 and 30 <= south <= 75 and -20 <= east <= 40 and 30 <= north <= 75):
+                        logger.warning(f"Bounds outside expected European range: W={west}, S={south}, E={east}, N={north}")
+                        # Don't mark as invalid - could be valid data outside Europe
+                
+                # If bounds are still invalid after transformation, apply geographic filtering
+                if bounds_are_invalid:
+                    logger.warning("Applying geographic filtering to fix invalid bounds...")
+                    
+                    # Remove completely invalid geometries
+                    original_count = len(gdf)
+                    gdf = gdf[gdf.geometry.is_valid]
+                    
+                    # Apply reasonable European bounds filtering in WGS84
+                    gdf = gdf.cx[-20:45, 30:75]  # Extended European bounds in WGS84
+                    
+                    filtered_count = len(gdf)
+                    logger.info(f"Filtered from {original_count} to {filtered_count} features")
+                    
+                    if gdf.empty:
+                        logger.error("No valid geometries remain after geographic filtering")
+                        return False
+                    
+                    # Recalculate bounds after filtering
+                    bounds = gdf.total_bounds
+                    west, south, east, north = bounds
+                    logger.info(f"Final bounds after filtering: W={west}, S={south}, E={east}, N={north}")
+                
+                # Validate final data before export
+                if gdf.empty:
+                    logger.error("No features to export after processing")
+                    return False
+                
+                # Create temporary GeoJSON with transformed data
                 temp_geojson = tempfile.NamedTemporaryFile(mode='w', suffix='.geojson', delete=False)
                 gdf.to_file(temp_geojson.name, driver='GeoJSON')
                 input_for_tippecanoe = temp_geojson.name
+                
+                # Use the validated bounds for tippecanoe
+                bounds_str = f"{west},{south},{east},{north}"
+                
             else:
+                # For existing GeoJSON files, validate and transform if needed
+                try:
+                    gdf = gpd.read_file(input_path)
+                    
+                    # Transform to WGS84 if not already
+                    if gdf.crs != 'EPSG:4326':
+                        logger.info(f"Transforming existing GeoJSON from {gdf.crs} to EPSG:4326")
+                        gdf = gdf.to_crs('EPSG:4326')
+                    
+                    bounds = gdf.total_bounds
+                    west, south, east, north = bounds
+                    bounds_str = f"{west},{south},{east},{north}"
+                    logger.info(f"Using bounds from existing GeoJSON: {bounds_str}")
+                except Exception as e:
+                    logger.warning(f"Could not validate existing GeoJSON bounds: {e}")
+                    bounds_str = None
+                
                 input_for_tippecanoe = str(input_path)
             
             # Set layer name
             if not layer_name:
                 layer_name = input_path.stem
             
-            # Build tippecanoe command
+            # Build optimized tippecanoe command for clusters
             cmd = [
                 'tippecanoe',
                 '-o', str(output_path),
                 '-l', layer_name,
                 f'-Z{min_zoom}',
                 f'-z{max_zoom}',
-                f'--{simplification}',
                 '--force',  # Overwrite existing
                 '--read-parallel',
                 '--generate-ids',
                 '--detect-shared-borders',
-                '--simplify-only-low-zooms',
-                input_for_tippecanoe
             ]
+            
+            # Optimize simplification based on data type and zoom levels
+            if 'cluster' in layer_name.lower():
+                # For cluster data: preserve shape accuracy more than point density
+                cmd.extend([
+                    '--simplify-only-low-zooms',
+                    '--drop-densest-as-needed',
+                    '--preserve-input-order',
+                    '--extend-zooms-if-still-dropping'  # Better detail preservation
+                ])
+            else:
+                # Standard simplification
+                cmd.append(f'--{simplification}')
+            
+            # Add explicit bounds if available
+            if 'bounds_str' in locals() and bounds_str:
+                cmd.extend(['--bounds', bounds_str])
+                logger.info(f"Using explicit bounds for tippecanoe: {bounds_str}")
+            else:
+                logger.warning("No explicit bounds available - tippecanoe will calculate automatically")
+            
+            # File size optimization: Add compression and optimization flags
+            if max_zoom > 10:  # For detailed zoom levels, add size optimizations
+                cmd.extend([
+                    '--drop-fraction-as-needed',  # Reduce feature density if needed
+                    '--buffer=0',  # Reduce tile buffer for smaller files
+                ])
+            
+            cmd.append(input_for_tippecanoe)
+            
+            logger.info(f"Running optimized tippecanoe command: {' '.join(cmd[:8])}...")  # Log first part to avoid very long output
             
             # Run tippecanoe
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             
-            logger.info(f"Successfully created MVT with tippecanoe: {output_path}")
-            logger.debug(f"Tippecanoe output: {result.stderr}")
+            logger.info(f"Successfully created optimized MVT: {output_path}")
+            
+            # Validate output file size
+            if output_path.exists():
+                file_size_mb = output_path.stat().st_size / (1024 * 1024)
+                logger.info(f"Generated MBTiles size: {file_size_mb:.2f} MB")
+                
+                if file_size_mb > 50:
+                    logger.warning(f"⚠️ MBTiles file is large ({file_size_mb:.2f} MB). Consider reducing max_zoom or adding more aggressive simplification.")
+            
+            # Log bounds information from created MBTiles
+            try:
+                conn = sqlite3.connect(output_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT name, value FROM metadata WHERE name IN ('bounds', 'center', 'minzoom', 'maxzoom')")
+                metadata_info = cursor.fetchall()
+                conn.close()
+                
+                logger.info("Created MBTiles metadata:")
+                for name, value in metadata_info:
+                    logger.info(f"  {name}: {value}")
+                    
+            except Exception as e:
+                logger.debug(f"Could not read MBTiles metadata: {e}")
             
             return True
             
@@ -390,6 +538,10 @@ class WebOptimizedExporter:
             conn = sqlite3.connect(output_path)
             cursor = conn.cursor()
             
+            # Drop existing tables if they exist (for overwrite)
+            cursor.execute('DROP TABLE IF EXISTS metadata')
+            cursor.execute('DROP TABLE IF EXISTS tiles')
+            
             # Create MBTiles schema
             cursor.execute('''
                 CREATE TABLE metadata (name text, value text);
@@ -412,6 +564,17 @@ class WebOptimizedExporter:
             # Get bounds
             bounds = gdf.total_bounds
             metadata['bounds'] = f"{bounds[0]},{bounds[1]},{bounds[2]},{bounds[3]}"
+            
+            # Validate bounds before adding to metadata
+            west, south, east, north = bounds
+            if (west < -180 or west > 180 or east < -180 or east > 180 or 
+                south < -90 or south > 90 or north < -90 or north > 90 or
+                abs(north - south) < 0.001 or abs(east - west) < 0.001):
+                logger.warning(f"Invalid bounds detected in Python MVT: {bounds}")
+                logger.warning("Using European bounds fallback")
+                metadata['bounds'] = "-15,30,35,75"  # European bounds
+            else:
+                logger.info(f"Using calculated bounds: {metadata['bounds']}")
             
             for name, value in metadata.items():
                 cursor.execute('INSERT INTO metadata (name, value) VALUES (?, ?)', (name, value))

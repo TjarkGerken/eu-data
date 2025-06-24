@@ -133,7 +133,7 @@ export default function LeafletMap({
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 3
                   }).format(value);
-                };const formatPropertyValue = (key: string, value: any): string => {
+                };const formatPropertyValue = (key: string, value: unknown): string => {
                   if (typeof value === 'number') {
                     // Convert square meters to square kilometers for area fields
                     if (key.toLowerCase().includes('area') && key.toLowerCase().includes('square') && key.toLowerCase().includes('meter')) {
@@ -167,8 +167,8 @@ export default function LeafletMap({
                   
                   return formattedName;
                 };                const propertyEntries = Object.entries(feature.properties)
-                  .filter(([key, value]) => value !== null && value !== undefined && value !== '')
-                  .filter(([key, value]) => !key.toLowerCase().includes('pixel_count') && !key.toLowerCase().includes('risk_density') && !key.toLowerCase().includes('cluster_id'))
+                  .filter(([, value]) => value !== null && value !== undefined && value !== '')
+                  .filter(([key]) => !key.toLowerCase().includes('pixel_count') && !key.toLowerCase().includes('risk_density') && !key.toLowerCase().includes('cluster_id'))
                   .map(([key, value]) => {
                     const formattedKey = formatPropertyName(key);
                     const formattedValue = formatPropertyValue(key, value);

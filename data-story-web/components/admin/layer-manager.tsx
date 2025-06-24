@@ -75,9 +75,9 @@ export default function LayerManager() {
       setLayerName(baseName);
 
       const extension = file.name.split(".").pop()?.toLowerCase();
-      if (extension === "tif" || extension === "tiff") {
+      if (extension === "cog") {
         setLayerType("raster");
-      } else if (extension === "geojson" || extension === "gpkg") {
+      } else if (extension === "mbtiles") {
         setLayerType("vector");
       }
     }
@@ -204,15 +204,14 @@ export default function LayerManager() {
                 <Input
                   id="file"
                   type="file"
-                  accept=".tif,.tiff,.geojson,.gpkg"
+                  accept=".cog,.mbtiles"
                   onChange={handleFileSelect}
                   disabled={uploading}
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Supported formats: TIF, GeoJSON, GeoPackage
+                  Supported formats: COG (Cloud Optimized GeoTIFF), MBTiles
                   <br />
-                  Files will be automatically optimized (COG for TIF, simplified
-                  GeoJSON for vectors)
+                  Files are already web-optimized and ready for efficient serving
                 </p>
               </div>
 
@@ -248,9 +247,9 @@ export default function LayerManager() {
                     <SelectValue placeholder="Select layer type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="raster">Raster (TIF)</SelectItem>
+                    <SelectItem value="raster">Raster (COG)</SelectItem>
                     <SelectItem value="vector">
-                      Vector (GeoJSON/GeoPackage)
+                      Vector (MBTiles)
                     </SelectItem>
                   </SelectContent>
                 </Select>
