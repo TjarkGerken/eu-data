@@ -18,13 +18,14 @@ from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.utils.normalise_data import DataNormalizer, AdvancedDataNormalizer, NormalizationStrategy, ensure_full_range_utilization
 from eu_climate.utils.vierkant_processor import VierkantStatsProcessor
+from eu_climate.utils.web_export_mixin import WebExportMixin
 
 
 # Set up logging for the exposition layer
 logger = setup_logging(__name__)
 
 
-class ExpositionLayer:
+class ExpositionLayer(WebExportMixin):
     """
     Exposition Layer Implementation
     =============================
@@ -60,6 +61,7 @@ class ExpositionLayer:
     
     def __init__(self, config: ProjectConfig):
         """Initialize the Exposition Layer with project configuration."""
+        super().__init__()
         self.config = config
         
         # Data paths
@@ -628,8 +630,8 @@ class ExpositionLayer:
             
         return exposition, meta
 
-    def save_exposition_layer(self, data: np.ndarray, meta: dict, out_path: str):
-        """Save the final exposition layer as GeoTIFF."""
+    def save_exposition_layer(self, data: np.ndarray, meta: dict, out_path: str, create_web_formats: bool = True):
+        """Save the final exposition layer as GeoTIFF and web-optimized formats."""
         if os.path.exists(out_path):
             logger.info(f"Removing existing file at {out_path} before writing new output.")
             os.remove(out_path)
@@ -652,16 +654,24 @@ class ExpositionLayer:
         final_min, final_max, final_mean = np.nanmin(data), np.nanmax(data), np.nanmean(data)
         logger.info(f"Data before saving (after clipping negatives) - Min: {final_min:.4f}, Max: {final_max:.4f}, Mean: {final_mean:.4f}")
         
-        meta.update({
-            'driver': 'GTiff',
-            'dtype': 'float32',
-            'count': 1,
-            'nodata': None  # Ensure no nodata value is set
-        })
+        # Extract layer name from file path
+        layer_name = Path(out_path).stem
         
-        with rasterio.open(out_path, 'w', **meta) as dst:
-            dst.write(data.astype(np.float32), 1)
-            logger.info(f"Successfully wrote data to {out_path}")
+        # Use the web export mixin to save both legacy and web formats
+        results = self.save_raster_with_web_exports(
+            data=data,
+            meta=meta,
+            output_path=out_path,
+            layer_name=layer_name,
+            create_web_formats=create_web_formats
+        )
+        
+        if results.get('geotiff', False):
+            logger.info(f"Successfully wrote exposition layer to {out_path}")
+        if results.get('cog', False):
+            logger.info(f"Created web-optimized COG for exposition layer")
+        
+        return results
 
     def visualize_exposition(self, exposition: np.ndarray, meta: dict, title: str = "Exposition Layer", show_ports: bool = False, show_port_buffers: bool = False):
         """Visualize the exposition index for each cell using unified styling."""

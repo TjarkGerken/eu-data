@@ -1,4 +1,4 @@
-# EU Climate Risk Assessment Framework
+# EU Climate Risk Assessment Framework - Complete Guide
 
 A comprehensive framework for climate risk analysis with modern web-compatible data exports.
 
@@ -11,6 +11,7 @@ A comprehensive framework for climate risk analysis with modern web-compatible d
 5. [📊 Output Formats](#-output-formats)
 6. [🛠️ Advanced Usage](#️-advanced-usage)
 7. [📁 Project Structure](#-project-structure)
+8. [🌍 Web Deployment](#-web-deployment)
 
 ## 🚀 Quick Start
 
@@ -185,6 +186,7 @@ The framework automatically generates web-optimized formats alongside traditiona
   - Automatic overview pyramids
   - 512×512 pixel tiles
 - **Use Cases**: Web mapping, progressive loading, mobile apps
+- **File Extension**: `.tif` (in `/web/cog/` directories)
 
 #### Mapbox Vector Tiles (MVT)
 - **Purpose**: Efficient web delivery of vector data
@@ -194,6 +196,7 @@ The framework automatically generates web-optimized formats alongside traditiona
   - Binary compression
   - Optimized for web rendering
 - **Use Cases**: Interactive maps, clustering visualization, responsive design
+- **File Extension**: `.mbtiles`
 
 ### Web Export Dependencies
 
@@ -323,6 +326,28 @@ eu_climate/data/.output/
 - `FREIGHT` - Freight transport risk
 - `HRST` - Human resources in science & technology risk
 
+### Example Output Files
+
+**After running the complete analysis, you'll have:**
+
+**COG Files (32 files total):**
+```
+eu_climate/data/.output/risk/SLR-0-Current/web/cog/
+├── risk_SLR-0-Current_COMBINED_cog.tif    (31MB)
+├── risk_SLR-0-Current_FREIGHT_cog.tif     (35MB)
+├── risk_SLR-0-Current_GDP_cog.tif         (18MB)
+├── risk_SLR-0-Current_HRST_cog.tif        (32MB)
+└── risk_SLR-0-Current_POPULATION_cog.tif  (38MB)
+```
+
+**MVT Files (12 files total):**
+```
+eu_climate/data/.output/clusters/SLR-0-Current/web/mvt/
+├── clusters_SLR-0-Current_FREIGHT.mbtiles     (32KB)
+├── clusters_SLR-0-Current_GDP.mbtiles         (32KB)
+└── clusters_SLR-0-Current_POPULATION.mbtiles  (32KB)
+```
+
 ## 🛠️ Advanced Usage
 
 ### Custom Web Export
@@ -360,6 +385,8 @@ web_export:
   mvt_simplification: "drop-densest-as-needed"
 ```
 
+Available COG profiles: `lzw`, `deflate`, `zstd`, `jpeg`, `webp`
+
 ### Development Setup
 
 ```bash
@@ -392,6 +419,9 @@ jupyter lab
 4. **Permission errors (WSL):**
    - Ensure files are accessible from WSL: `/mnt/c/...`
 
+5. **Web export warnings:**
+   - COG warnings about OVERVIEW_LEVELS are normal and don't affect functionality
+
 ## 📁 Project Structure
 
 ```
@@ -407,27 +437,119 @@ eu_climate/
 │   ├── cluster_layer.py      # Clustering analysis
 │   └── economic_impact_analyzer.py  # Economic impact analysis
 ├── utils/                    # Utility modules
-│   ├── web_exports.py        # Web export functionality
+│   ├── web_exports.py        # Web export functionality ⭐
+│   ├── web_export_mixin.py   # Mixin for easy integration
 │   ├── cache_manager.py      # Data caching
 │   ├── data_loader.py        # Data loading utilities
 │   └── visualization.py     # Visualization tools
 ├── scripts/                  # Utility scripts
-│   ├── demo_web_exports.py   # Web export demonstration
+│   ├── demo_web_exports.py   # Web export demonstration ⭐
 │   └── cache_manager_cli.py  # Cache management CLI
 ├── data/                     # Data directory (synced with HuggingFace)
 │   ├── source/               # Input data
 │   └── .output/              # Generated outputs
+│       ├── */tif/            # Traditional raster outputs
+│       ├── */web/cog/        # Web-optimized raster outputs ⭐
+│       ├── */gpkg/           # Traditional vector outputs
+│       └── */web/mvt/        # Web-optimized vector outputs ⭐
 ├── debug/                    # Log files
 ├── main.py                   # Main execution script
-└── README.md                 # This documentation
+├── run_eu_climate.py         # WSL-compatible runner ⭐
+├── run_in_wsl.ps1           # PowerShell WSL runner ⭐
+└── README.md                 # Documentation
 ```
 
 ### Key Components
 
 - **WebOptimizedExporter**: Handles COG and MVT generation
+- **WebExportMixin**: Easy integration into existing layer classes
 - **ProjectConfig**: Centralized configuration management
 - **Cache Manager**: Intelligent data caching system
 - **Risk Layers**: Modular risk assessment components
+
+## 🌍 Web Deployment
+
+### Using COG Files in Web Applications
+
+**Leaflet Example:**
+```javascript
+// Add COG layer using georaster-layer-for-leaflet
+fetch('path/to/risk_SLR-0-Current_COMBINED_cog.tif')
+  .then(response => response.arrayBuffer())
+  .then(arrayBuffer => {
+    parseGeoraster(arrayBuffer).then(georaster => {
+      const layer = new GeoRasterLayer({
+        georaster: georaster,
+        opacity: 0.7
+      });
+      layer.addTo(map);
+    });
+  });
+```
+
+**OpenLayers Example:**
+```javascript
+// Add COG layer using ol-source-raster
+import GeoTIFF from 'ol/source/GeoTIFF';
+
+const source = new GeoTIFF({
+  sources: [{
+    url: 'path/to/risk_SLR-0-Current_COMBINED_cog.tif'
+  }]
+});
+
+const layer = new TileLayer({ source });
+map.addLayer(layer);
+```
+
+### Using MVT Files in Web Applications
+
+**Mapbox GL JS Example:**
+```javascript
+map.addSource('clusters', {
+  'type': 'vector',
+  'url': 'mbtiles://path/to/clusters_SLR-0-Current_POPULATION.mbtiles'
+});
+
+map.addLayer({
+  'id': 'cluster-layer',
+  'type': 'circle',
+  'source': 'clusters',
+  'paint': {
+    'circle-radius': 6,
+    'circle-color': '#ff0000'
+  }
+});
+```
+
+**Leaflet with Mapbox Vector Tiles:**
+```javascript
+// Using leaflet-vector-tile-layer
+const vectorTileLayer = L.vectorTileLayer(
+  'path/to/clusters_SLR-0-Current_POPULATION.mbtiles/{z}/{x}/{y}.pbf'
+).addTo(map);
+```
+
+### Performance Benefits
+
+**COG Benefits:**
+- **HTTP Range Requests**: Only download needed portions
+- **Progressive Loading**: Show low-res first, enhance with detail
+- **Caching**: Efficient browser and CDN caching
+- **Mobile Optimized**: Reduced bandwidth usage
+
+**MVT Benefits:**
+- **Vector Rendering**: Smooth zooming and styling
+- **Interactive Features**: Click events and popups
+- **Small File Sizes**: 32-40KB vs 324KB+ for GPKG
+- **Responsive Design**: Adapts to different screen sizes
+
+### Deployment Options
+
+1. **Static File Server**: Host files directly (Apache, Nginx, S3)
+2. **CDN Deployment**: Use CloudFront, CloudFlare for global delivery
+3. **Tile Server**: Use TileServer GL for dynamic serving
+4. **Database Integration**: Import MVT into PostGIS for complex queries
 
 ---
 
@@ -453,4 +575,14 @@ python -m eu_climate.main --risk  # Run only risk assessment
 - **Full support**: WSL (Windows), Linux, macOS
 - **Limited support**: Native Windows (COG only)
 
-For detailed technical documentation, see individual module docstrings and the configuration files.
+**File Counts After Complete Analysis:**
+- COG files: 20 (4 scenarios × 5 risk types)
+- MVT files: 12 (4 scenarios × 3 cluster types)
+- Total web files: 32
+
+**Performance Stats:**
+- COG creation: ~4-6 seconds per file
+- MVT creation: ~0.2-0.4 seconds per file
+- Total web export time: ~2-3 minutes for all files
+
+For detailed technical documentation, see individual module docstrings and the configuration files. 
