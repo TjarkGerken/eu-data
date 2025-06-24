@@ -11,7 +11,7 @@ import { Layers, Download, Settings } from "lucide-react";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
 import dynamic from "next/dynamic";
 
-const LeafletMap = dynamic(() => import("./map/leaflet-map"), {
+const LeafletMap = dynamic(() => import("./map/leaflet-map-clean"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-96 bg-gray-100 rounded-lg animate-pulse" />
