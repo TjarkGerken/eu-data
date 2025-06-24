@@ -24,8 +24,10 @@ import argparse
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.risk_layers.relevance_layer import RelevanceLayer
+from eu_climate.risk_layers.relevance_absolute_layer import RelevanceAbsoluteLayer
 from eu_climate.risk_layers.risk_layer import RiskLayer
 from eu_climate.risk_layers.cluster_layer import ClusterLayer
+from eu_climate.risk_layers.economic_impact_analyzer import EconomicImpactAnalyzer
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
 from eu_climate.utils.data_loading import check_data_integrity, get_config, upload_data, validate_env_vars
@@ -59,6 +61,7 @@ class AssessmentLayer(Enum):
     RISK = "risk"
     POPULATION = "population"
     CLUSTERS = "clusters"
+    ECONOMIC_IMPACT = "economic_impact"
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -76,6 +79,7 @@ Examples:
   python -m main --exposition                # Run only exposition layer analysis  
   python -m main --relevance                 # Run only relevance layer analysis
   python -m main --freight-only              # Run only freight relevance layer (with Zeevart data)
+  python -m main --relevance-absolute        # Run only absolute relevance layer (preserves original values)
   python -m main --risk                      # Run only risk layer analysis
   python -m main --population                # Run only population risk layer analysis
   python -m main --hazard --exposition       # Run hazard and exposition layers
@@ -109,6 +113,10 @@ Examples:
                            action='store_true',
                            help='Process only Freight Relevance Layer (with enhanced Zeevart maritime data)')
     
+    layer_group.add_argument('--relevance-absolute', 
+                           action='store_true',
+                           help='Process Absolute Relevance Layer (preserves original values with mass conservation)')
+    
     layer_group.add_argument('--risk', 
                            action='store_true',
                            help='Process Risk Layer (integrated risk assessment)')
@@ -120,10 +128,14 @@ Examples:
     layer_group.add_argument('--clusters', 
                            action='store_true',
                            help='Process Cluster Layer (extract risk cluster polygons from existing results)')
+
+    layer_group.add_argument('--economic-impact', 
+                           action='store_true',
+                           help='Process Economic Impact Analysis (extract absolute economic values from risk clusters)')
     
     layer_group.add_argument('--all', 
                            action='store_true',
-                           help='Process all layers (hazard, exposition, relevance, risk, population, clusters)')
+                           help='Process all layers (hazard, exposition, relevance, risk, population, clusters, economic-impact)')
     
     # Configuration arguments
     config_group = parser.add_argument_group('Configuration Options',
@@ -177,9 +189,11 @@ Examples:
         args.hazard = False
         args.exposition = False
         args.relevance = False
+        args.relevance_absolute = False
         args.risk = False
         args.population = False
         args.clusters = False
+        args.economic_impact = False
         args.all = False
         args.no_upload = False  # Ensure upload is enabled
     elif args.download:
@@ -187,12 +201,14 @@ Examples:
         args.hazard = False
         args.exposition = False
         args.relevance = False
+        args.relevance_absolute = False
         args.risk = False
         args.population = False
         args.clusters = False
+        args.economic_impact = False
         args.all = False
         args.no_upload = True  # Disable upload when downloading
-    elif not any([args.hazard, args.exposition, args.relevance, args.risk, args.population, args.clusters, args.all, args.freight_only]):
+    elif not any([args.hazard, args.exposition, args.relevance, args.relevance_absolute, args.risk, args.population, args.clusters, args.economic_impact, args.all, args.freight_only]):
         # If no specific layers are chosen, default to --all
         logger.info("No specific layers selected, defaulting to --all")
         args.all = True
@@ -202,9 +218,11 @@ Examples:
         args.hazard = True
         args.exposition = True  
         args.relevance = True
+        args.relevance_absolute = True
         args.risk = True
         args.population = True
         args.clusters = True
+        args.economic_impact = True
     
     return args
 
@@ -396,6 +414,32 @@ class RiskAssessment:
         
         logger.info(f"Relevance layer analysis completed - Generated {len(relevance_layers)} layers")
     
+    def run_absolute_relevance_layer_analysis(self, config: ProjectConfig) -> None:
+        """
+        Run the Absolute Relevance Layer analysis preserving absolute values with mass conservation.
+        
+        This analysis processes GDP, Freight, HRST, and Population indicators while maintaining
+        their original absolute values and ensuring total value conservation through
+        spatial distribution using exposition layer weights.
+        """
+        logger.info("="*40)
+        logger.info("ABSOLUTE RELEVANCE LAYER ANALYSIS")
+        logger.info("="*40)
+        
+        try:
+            absolute_relevance_layer = RelevanceAbsoluteLayer(config)
+            
+            absolute_relevance_layers = absolute_relevance_layer.run_absolute_relevance_analysis(
+                visualize=True,
+                export_individual_tifs=True
+            )
+            
+            logger.info(f"Absolute relevance layer analysis completed - Generated {len(absolute_relevance_layers)} layers")
+            
+        except Exception as e:
+            logger.error(f"Error in absolute relevance layer analysis: {str(e)}")
+            raise
+    
     def run_risk_layer_analysis(self, config: ProjectConfig) -> Dict[str, Dict[str, np.ndarray]]:
         """
         Run the Risk Layer analysis for the EU Climate Risk Assessment System.
@@ -497,6 +541,44 @@ class RiskAssessment:
             logger.error(f"Could not execute cluster layer analysis: {e}")
             raise e
 
+    def run_economic_impact_analysis(self, config: ProjectConfig) -> List[Any]:
+        """
+        Run Economic Impact Analysis for extracting absolute economic values from risk clusters.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+            
+        Returns:
+            List of economic impact metrics for all scenarios
+        """
+        logger.info("\n" + "="*40)  
+        logger.info("ECONOMIC IMPACT ANALYSIS")
+        logger.info("="*40)
+        
+        try:
+            impact_analyzer = EconomicImpactAnalyzer(config)
+            
+            impact_metrics = impact_analyzer.run_complete_impact_analysis(
+                create_visualizations=True,
+                export_results=True
+            )
+            
+            logger.info(f"Economic impact analysis completed successfully")
+            logger.info(f"Generated impact metrics for {len(impact_metrics)} scenarios")
+            
+            if impact_metrics:
+                logger.info("Economic impact summary:")
+                for metrics in impact_metrics:
+                    gdp_risk_pct = (metrics.at_risk_gdp_millions_eur / metrics.total_gdp_millions_eur * 100) if metrics.total_gdp_millions_eur > 0 else 0
+                    freight_risk_pct = (metrics.at_risk_freight_tonnes / metrics.total_freight_tonnes * 100) if metrics.total_freight_tonnes > 0 else 0
+                    logger.info(f"  {metrics.scenario_name}: GDP at risk {gdp_risk_pct:.1f}%, Freight at risk {freight_risk_pct:.1f}%")
+            
+            return impact_metrics
+            
+        except Exception as e:
+            logger.error(f"Could not execute economic impact analysis: {e}")
+            raise e
+
 def main():
     """
     Main execution function for the EU Climate Risk Assessment System.
@@ -530,12 +612,16 @@ def main():
             selected_layers.append("Relevance")
         if args.freight_only:
             selected_layers.append("Freight-Only Relevance")
+        if args.relevance_absolute:
+            selected_layers.append("Absolute Relevance")
         if args.risk:
             selected_layers.append("Risk")
         if args.population:
             selected_layers.append("Population Risk")
         if args.clusters:
             selected_layers.append("Clusters")
+        if args.economic_impact:
+            selected_layers.append("Economic Impact")
         
         logger.info(f"Selected layers: {', '.join(selected_layers)}")
         
@@ -651,6 +737,12 @@ def main():
             logger.info(f"{'='*50}")
             risk_assessment.run_freight_relevance_only(config)
             
+        if args.relevance_absolute:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING ABSOLUTE RELEVANCE LAYER ANALYSIS")
+            logger.info(f"{'='*50}")
+            risk_assessment.run_absolute_relevance_layer_analysis(config)
+            
         if args.risk:
             logger.info(f"\n{'='*50}")
             logger.info("EXECUTING RISK LAYER ANALYSIS")
@@ -671,6 +763,13 @@ def main():
             logger.info(f"{'='*50}")
             cluster_results = risk_assessment.run_cluster_layer_analysis(config)
             logger.info(f"Cluster analysis completed with results for {len(cluster_results)} scenarios")
+        
+        if args.economic_impact:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING ECONOMIC IMPACT ANALYSIS")
+            logger.info(f"{'='*50}")
+            impact_metrics = risk_assessment.run_economic_impact_analysis(config)
+            logger.info(f"Economic impact analysis completed with metrics for {len(impact_metrics)} scenarios")
         
         # Data upload (unless disabled)
         if not args.no_upload:

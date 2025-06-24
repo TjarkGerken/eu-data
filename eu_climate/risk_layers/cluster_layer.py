@@ -147,17 +147,27 @@ class ClusterLayer:
         return risk_file_paths
     
     def _should_skip_file(self, file_stem: str) -> bool:
-        """Check if file should be skipped from clustering analysis."""
-        patterns_to_skip = [
-            'freight_loading',
-            'freight_unloading',
-            'population'
+        """Only process GDP, Population, and Freight (combined) for economic impact analysis."""
+        filename_lower = file_stem.lower()
+        
+        # Only keep these three specific indicators
+        allowed_indicators = [
+            '_gdp',
+            '_population', 
+            '_freight'  # Only combined freight, not loading/unloading
         ]
         
-        for pattern in patterns_to_skip:
-            if pattern in file_stem.lower():
-                return True
-        return False
+        # Check if file contains any allowed indicator
+        for indicator in allowed_indicators:
+            if indicator in filename_lower:
+                # Special check for freight - skip loading/unloading variants
+                if indicator == '_freight':
+                    if '_loading' in filename_lower or '_unloading' in filename_lower:
+                        return True  # Skip freight loading/unloading
+                return False  # Keep this file
+                
+        # Skip all other files (COMBINED, HRST, etc.)
+        return True
     
     def parse_risk_filename(self, filename: str) -> Tuple[str, str, Optional[str]]:
         """Parse risk filename to extract scenario and economic components."""
@@ -185,8 +195,8 @@ class ClusterLayer:
     def process_risk_clusters_sequential(self, 
                                        custom_risk_files: Optional[Dict[str, str]] = None,
                                        visualize: bool = True) -> Dict[str, gpd.GeoDataFrame]:
-        """Process risk outputs to extract clusters, processing and plotting one at a time."""
-        logger.info("Processing risk clusters sequentially from existing outputs...")
+        """Process risk outputs to extract clusters using sequential pattern: calculate → visualize → write."""
+        logger.info("Starting sequential cluster processing: calculate → visualize → write per scenario")
         
         if custom_risk_files:
             risk_file_paths = {"custom": custom_risk_files}
@@ -200,23 +210,26 @@ class ClusterLayer:
         all_cluster_results = {}
         
         for scenario_name, scenario_files in risk_file_paths.items():
-            logger.info(f"Processing clusters for scenario: {scenario_name}")
+            logger.info(f"\n→ Processing scenario: {scenario_name}")
             
             for file_key, file_path in scenario_files.items():
-                logger.info(f"Processing and plotting clusters for: {file_key}")
+                logger.info(f"  → Calculate clusters for: {file_key}")
                 
                 cluster_result = self._process_single_risk_file(file_path, file_key)
                 
                 if not cluster_result.empty:
                     all_cluster_results[file_key] = cluster_result
-                    logger.info(f"Extracted {len(cluster_result)} clusters from {file_key}")
+                    logger.info(f"  ✓ Calculated: {len(cluster_result)} clusters")
                     
+                    logger.info(f"  → Visualize & Write: {file_key}")
                     self._export_single_cluster_result(file_key, cluster_result, visualize)
-                    logger.info(f"Completed processing and plotting for {file_key}")
+                    logger.info(f"  ✓ Completed processing for: {file_key}")
                 else:
-                    logger.info(f"No clusters found in {file_key}")
+                    logger.info(f"  ⚠ No clusters found in: {file_key}")
+                    
+            logger.info(f"✓ Scenario {scenario_name} complete")
         
-        logger.info(f"Processed clusters for {len(all_cluster_results)} risk scenarios")
+        logger.info(f"\n✓ Sequential cluster processing complete: {len(all_cluster_results)} scenarios processed")
         return all_cluster_results
     
     def process_risk_clusters(self, 
