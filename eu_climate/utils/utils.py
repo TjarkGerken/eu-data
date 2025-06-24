@@ -32,7 +32,8 @@ def setup_logging(name=__name__):
     
     # Get logger for the specific module
     logger = logging.getLogger(name)
-    logger.info("Logger initialized with name: %s, %s", name, dir)
+    # Log the logger name for debugging purposes
+    logger.info("Logger initialized with name: %s", name)
     return logger
 
 
