@@ -270,6 +270,72 @@ export default function ContentBlockEditor() {
     }
   };
 
+  const reorderBlocksAfterDeletion = async (deletedOrderIndex: number) => {
+    if (!storyIds) return;
+    
+    console.log(`Reordering blocks after deletion of index ${deletedOrderIndex}`);
+    
+    try {
+      // Get all blocks that come after the deleted block (order_index > deletedOrderIndex)
+      const [englishBlocks, germanBlocks] = await Promise.all([
+        supabase
+          .from("content_blocks")
+          .select("id, order_index")
+          .eq("story_id", storyIds.english)
+          .gt("order_index", deletedOrderIndex)
+          .order("order_index", { ascending: true }),
+        supabase
+          .from("content_blocks")
+          .select("id, order_index")
+          .eq("story_id", storyIds.german)
+          .gt("order_index", deletedOrderIndex)
+          .order("order_index", { ascending: true }),
+      ]);
+
+      if (englishBlocks.error) throw englishBlocks.error;
+      if (germanBlocks.error) throw germanBlocks.error;
+
+      // Update each block to decrease its order_index by 1
+      const updates = [];
+
+      for (const block of englishBlocks.data || []) {
+        updates.push(
+          supabase
+            .from("content_blocks")
+            .update({ order_index: block.order_index - 1 })
+            .eq("id", block.id)
+        );
+      }
+
+      for (const block of germanBlocks.data || []) {
+        updates.push(
+          supabase
+            .from("content_blocks")
+            .update({ order_index: block.order_index - 1 })
+            .eq("id", block.id)
+        );
+      }
+
+      if (updates.length > 0) {
+        const results = await Promise.all(updates);
+        
+        for (const result of results) {
+          if (result.error) {
+            console.error("Error reordering block:", result.error);
+            throw result.error;
+          }
+        }
+        
+        console.log(`Successfully reordered ${updates.length} blocks after deletion`);
+      } else {
+        console.log("No blocks to reorder after deletion");
+      }
+    } catch (error) {
+      console.error("Failed to reorder blocks after deletion:", error);
+      throw error;
+    }
+  };
+
   const createNewBlockPair = async () => {
     // Only validate required fields for creation: block_type and order_index
     const errors: ValidationError[] = [];
@@ -448,9 +514,12 @@ export default function ContentBlockEditor() {
 
       await Promise.all(deletePromises);
 
+      // Reorder remaining blocks to maintain sequential indices
+      await reorderBlocksAfterDeletion(orderIndex);
+
       toast({
         title: "Success",
-        description: "Block pair deleted successfully",
+        description: "Block pair deleted and remaining blocks reordered successfully",
       });
 
       // Refresh the block pairs list

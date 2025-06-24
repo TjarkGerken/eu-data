@@ -6,7 +6,7 @@ export interface MapLayerMetadata {
   id: string;
   name: string;
   dataType: "raster" | "vector";
-  format: "tiff" | "geojson" | "geopackage" | "png";
+  format: "cog" | "mbtiles";
   bounds: [number, number, number, number];
   colorScale: string[];
   valueRange: [number, number];
@@ -56,40 +56,37 @@ async function extractLayerMetadata(
 ): Promise<MapLayerMetadata | null> {
   try {
     const fileName = layer.name;
+    // Start with the full filename without extension
     let layerId = path.basename(fileName, path.extname(fileName));
     
-    // Handle special naming patterns for clusters
+    // Handle special naming patterns for clusters to create more readable IDs
     if (fileName.includes("clusters_SLR")) {
-      // Extract scenario from filename like "clusters_SLR-0-Current_COMBINED_optimized.geojson"
-      const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_COMBINED/);
+      // Extract scenario and risk type from filename like "clusters_SLR-0-Current_GDP.mbtiles"
+      const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_(\w+)/);
       if (match) {
         const scenario = match[2].toLowerCase(); // "current", "severe", etc.
-        layerId = `clusters-slr-${scenario}`;
-      } else {
-        layerId = "clusters-slr-current"; // fallback
+        const riskType = match[3].toLowerCase(); // "gdp", "population", "freight", etc.
+        layerId = `clusters-slr-${scenario}-${riskType}`;
       }
+      // If no match, keep the original layerId (full filename without extension)
     }
+    
+    // For all other files, preserve the original filename
+    // This ensures files like "risk_SLR-3-Severe_COMBINED.cog" become "risk_SLR-3-Severe_COMBINED"
 
     // Determine layer type from filename
     const layerType = determineLayerType(fileName);
 
     // Determine data type and format based on file extension
     let dataType: "raster" | "vector";
-    let format: "tiff" | "geojson" | "geopackage" | "png";
+    let format: "cog" | "mbtiles";
 
-    if (fileName.endsWith(".tif") || fileName.endsWith(".tiff")) {
+    if (fileName.endsWith(".cog")) {
       dataType = "raster";
-      format = "tiff";
-    } else if (fileName.endsWith(".png")) {
-      // PNG files are typically optimized raster data from GeoTIFF conversion
-      dataType = "raster";
-      format = "png";
-    } else if (fileName.endsWith(".geojson") || fileName.endsWith(".json")) {
+      format = "cog";
+    } else if (fileName.endsWith(".mbtiles")) {
       dataType = "vector";
-      format = "geojson";
-    } else if (fileName.endsWith(".gpkg")) {
-      dataType = "vector";
-      format = "geopackage";
+      format = "mbtiles";
     } else {
       // Default fallback - try to guess from filename
       if (
@@ -99,16 +96,16 @@ async function extractLayerMetadata(
         layerType === "relevance"
       ) {
         dataType = "raster";
-        format = "tiff";
+        format = "cog";
       } else {
         dataType = "vector";
-        format = "geopackage";
+        format = "mbtiles";
       }
     }
 
     return {
       id: layerId,
-      name: layerId.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+      name: formatDisplayName(layerId),
       dataType,
       format,
       bounds: [-180, -90, 180, 90],
@@ -123,6 +120,18 @@ async function extractLayerMetadata(
     console.error("Error extracting layer metadata:", error);
     return null;
   }
+}
+
+function formatDisplayName(layerId: string): string {
+  // Create a more readable display name
+  return layerId
+    .replace(/_/g, " ")           // Replace underscores with spaces
+    .replace(/-/g, " ")           // Replace hyphens with spaces  
+    .replace(/\b\w/g, (l) => l.toUpperCase())  // Capitalize first letter of each word
+    .replace(/\bSlr\b/g, "SLR")   // Fix SLR capitalization
+    .replace(/\bGdp\b/g, "GDP")   // Fix GDP capitalization
+    .replace(/\bHrst\b/g, "HRST") // Fix HRST capitalization
+    .trim();
 }
 
 function determineLayerType(fileName: string): string {
