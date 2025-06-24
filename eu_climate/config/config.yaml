@@ -161,7 +161,7 @@ data:
     minimum_samples: 10
     alpha_parameter_divisor: 0.3
     hole_area_threshold: 0.20
-    minimum_polygon_area_square_meters: 100000
+    minimum_polygon_area_square_meters: 125000
     smoothing_buffer_meters: 150
     polygon_simplification_tolerance: 50
     natural_smoothing_iterations: 2
