@@ -253,7 +253,6 @@ export function NeuralClimateNetwork() {
                   }}
                   transition={{
                     duration: 0.3,
-                    ease: "easeOut",
                   }}
                 >
                   <motion.div

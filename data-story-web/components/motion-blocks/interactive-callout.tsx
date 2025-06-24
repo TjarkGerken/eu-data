@@ -36,6 +36,7 @@ export function InteractiveCallout() {
         : "Scientists warn we are approaching a critical tipping point. Without drastic action by 2030, irreversible climate changes could occur. Europe has already made significant progress, but the pace of change must double to meet Paris climate goals.",
     action: {
       label: language === "de" ? "Mehr erfahren" : "Learn More",
+      url: "#",
     },
     stats: [
       {
@@ -101,7 +102,7 @@ export function InteractiveCallout() {
         initial={{ opacity: 0, y: 50 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
+        transition={{ duration: 0.8 }}
       >
         <Card className={`${colors.bg} ${colors.border} border-2 overflow-hidden`}>
           <CardContent className="p-0">

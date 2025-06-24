@@ -94,7 +94,7 @@ export class MapTileService {
     }
   }
 
-  async getVectorLayerData(layerId: string): Promise<any> {
+  async getVectorLayerData(layerId: string): Promise<unknown> {
     const response = await fetch(`/api/map-data/vector/${layerId}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch vector data: ${response.statusText}`);

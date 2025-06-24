@@ -20,10 +20,16 @@ export function ClimateMapStatic() {
     { name: "UK", x: 30, y: 35, temp: 1.2, renewable: 43, color: "#f59e0b" },
   ]
 
-  const getTemperatureColor = (temp: number) => {
+  const getTemperatureColor = (temp: number): string => {
+    if (temp < 0.5) return "#3b82f6"; // blue for lower temps
+    if (temp < 1.0) return "#f59e0b"; // amber for medium temps
+    return "#ef4444"; // red for higher temps
   }
 
-  const getRenewableColor = (renewable: number) => {
+  const getRenewableColor = (renewable: number): string => {
+    if (renewable < 25) return "#ef4444"; // red for low renewable
+    if (renewable < 50) return "#f59e0b"; // amber for medium renewable
+    return "#10b981"; // green for high renewable
   }
 
   return (

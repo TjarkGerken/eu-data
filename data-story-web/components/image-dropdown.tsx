@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Check, ChevronsUpDown, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,7 @@ export function ImageDropdown({
       console.log("Received images data:", data);
 
       const formattedImages = (data.images || [])
-        .map((img: any) => {
+        .map((img: { path?: string; url: string; metadata?: { id?: string; category?: string; scenario?: string; description?: string } }) => {
           const filename =
             img.path?.split("/").pop() || img.metadata?.id || "unknown";
           return {
@@ -71,7 +72,7 @@ export function ImageDropdown({
             description: img.metadata?.description,
           };
         })
-        .filter((img: any) => img.url && img.name !== "unknown");
+        .filter((img: ImageOption) => img.url && img.name !== "unknown");
 
       console.log("Formatted images:", formattedImages);
       setImages(formattedImages);
@@ -114,10 +115,12 @@ export function ImageDropdown({
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {selectedImage ? (
               <>
-                <img
+                <Image
                   src={selectedImage.url}
                   alt={selectedImage.name}
-                  className="w-8 h-6 object-cover rounded border"
+                  width={32}
+                  height={24}
+                  className="object-cover rounded border"
                 />
                 <div className="flex flex-col items-start min-w-0">
                   <span className="text-sm truncate">{selectedImage.name}</span>
@@ -164,7 +167,7 @@ export function ImageDropdown({
                   value={`${image.name} ${image.category} ${
                     image.scenario || ""
                   }`}
-                  onSelect={(value) => {
+                  onSelect={() => {
                     onImageChange(image.id, {
                       category: image.category,
                       scenario: image.scenario,
@@ -179,10 +182,12 @@ export function ImageDropdown({
                       selectedImageId === image.id ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <img
+                  <Image
                     src={image.url}
                     alt={image.name}
-                    className="w-16 h-12 object-cover rounded border shrink-0"
+                    width={64}
+                    height={48}
+                    className="object-cover rounded border shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{image.name}</p>

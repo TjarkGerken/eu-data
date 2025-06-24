@@ -62,7 +62,7 @@ export interface TimelineBlock {
 }
 
 export interface VisualizationBlock {
-  data: any;
+  data: Record<string, unknown>;
   type: "visualization";
   title: string;
   description: string;
@@ -311,4 +311,5 @@ export interface ImageOption {
   url: string;
   category: string;
   scenario?: string;
+  description?: string;
 }

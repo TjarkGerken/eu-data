@@ -32,6 +32,34 @@ export default function LeafletMap({
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
+  // Add custom CSS for popup styling
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const existingStyle = document.getElementById('leaflet-custom-popup-style');
+      if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'leaflet-custom-popup-style';
+        style.textContent = `
+          .custom-popup .leaflet-popup-content-wrapper {
+            padding: 8px 12px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: none;
+            background: white;
+          }
+          .custom-popup .leaflet-popup-content {
+            margin: 0;
+            line-height: 1.4;
+          }
+          .custom-popup .leaflet-popup-tip {
+            background: white;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -84,9 +112,7 @@ export default function LeafletMap({
           featureCount: vectorData?.features?.length || 0,
           type: vectorData?.type,
           firstFeature: vectorData?.features?.[0]
-        });
-
-        if (vectorData && vectorData.features && vectorData.features.length > 0) {
+        });        if (vectorData && vectorData.features && vectorData.features.length > 0) {
           const geoJSONLayer = L.geoJSON(vectorData, {
             style: () => {
               // Use the improved color scale, but fallback to a visible color
@@ -98,7 +124,8 @@ export default function LeafletMap({
                 opacity: layer.opacity,
                 fillOpacity: layer.opacity * 0.6,
               };
-            },            onEachFeature: (feature, layer) => {
+            },
+            onEachFeature: (feature, layer) => {
               // Add popup or tooltip functionality here if needed
               if (feature.properties) {                const formatNumber = (value: number): string => {
                   if (typeof value !== 'number' || isNaN(value)) return value?.toString() || '';
@@ -125,9 +152,7 @@ export default function LeafletMap({
                     return formatNumber(numValue);
                   }
                   return value?.toString() || '';
-                };
-
-                const formatPropertyName = (key: string): string => {
+                };                const formatPropertyName = (key: string): string => {
                   let formattedName = key
                     .replace(/_/g, ' ')
                     .replace(/([A-Z])/g, ' $1')
@@ -166,8 +191,8 @@ export default function LeafletMap({
                       text-align: center;
                       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     ">
-                      ${feature.properties.name || feature.properties.risk_cluster_id ? 
-                        `Cluster ID: ${feature.properties.risk_cluster_id || feature.properties.name}` : 
+                      ${feature.properties.name || feature.properties.cluster_id ? 
+                        `Cluster ID: ${feature.properties.cluster_id || feature.properties.name}` : 
                         'Feature Details'}
                     </div>
                     <div style="padding: 4px 0;">
