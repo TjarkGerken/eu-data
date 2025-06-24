@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchContentByLanguage } from "@/lib/content-service";
 import { supabase } from "@/lib/supabase";
-import { ContentBlockInsert } from "@/lib/supabase";
 
 export async function GET(request: NextRequest) {
   try {
@@ -143,10 +142,11 @@ export async function PUT(request: NextRequest) {
       en: createdEnBlock,
       de: createdDeBlock,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating content block:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: "Failed to create content block", details: error.message },
+      { error: "Failed to create content block", details: errorMessage },
       { status: 500 }
     );
   }

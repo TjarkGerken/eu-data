@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const layerName = formData.get("layerName") as string;
-    const layerType = formData.get("layerType") as string;
 
     if (!file || !layerName) {
       return NextResponse.json(
@@ -90,7 +89,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Upload to Supabase
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("map-layers")
       .upload(path.basename(tempOutputPath), optimizedFile, {
         cacheControl: "3600",
@@ -154,9 +153,7 @@ async function optimizeGeoTIFF(
 
     console.log(`Running GDAL PNG command: ${pngCommand}`);
     try {
-      const { stdout: pngStdout, stderr: pngStderr } = await execAsync(
-        pngCommand
-      );
+      await execAsync(pngCommand);
 
       // Check PNG size
       const pngStats = await fs.stat(pngOutputPath);
@@ -186,9 +183,7 @@ async function optimizeGeoTIFF(
     const cogCommand = `gdal_translate -of COG -co COMPRESS=LZW -co PREDICTOR=2 -co OVERVIEW_RESAMPLING=AVERAGE -co BLOCKSIZE=512 -outsize 15% 15% "${inputPath}" "${cogOutputPath}"`;
 
     console.log(`Running GDAL COG command: ${cogCommand}`);
-    const { stdout: cogStdout, stderr: cogStderr } = await execAsync(
-      cogCommand
-    );
+    const { stderr: cogStderr } = await execAsync(cogCommand);
 
     if (cogStderr && !cogStderr.includes("Warning")) {
       throw new Error(`GDAL error: ${cogStderr}`);
@@ -225,7 +220,7 @@ async function optimizeGeoPackage(
     const command = `ogr2ogr -f GeoJSON -lco COORDINATE_PRECISION=6 -simplify 0.0001 "${outputPath}" "${inputPath}"`;
 
     console.log(`Running OGR command: ${command}`);
-    const { stdout, stderr } = await execAsync(command);
+    const { stderr } = await execAsync(command);
 
     if (stderr && !stderr.includes("Warning")) {
       throw new Error(`OGR error: ${stderr}`);
@@ -263,7 +258,7 @@ async function optimizeGeoJSON(
 
     // Round coordinates to 6 decimal places for optimization
     if (geojsonData.features) {
-      geojsonData.features.forEach((feature: any) => {
+      geojsonData.features.forEach((feature: { geometry?: { coordinates?: unknown } }) => {
         if (feature.geometry && feature.geometry.coordinates) {
           feature.geometry.coordinates = roundCoordinates(
             feature.geometry.coordinates,
@@ -291,14 +286,17 @@ async function optimizeGeoJSON(
   }
 }
 
-function roundCoordinates(coords: any, precision: number): any {
-  if (typeof coords[0] === "number") {
-    return coords.map(
-      (coord: number) =>
-        Math.round(coord * Math.pow(10, precision)) / Math.pow(10, precision)
-    );
+function roundCoordinates(coords: unknown, precision: number): unknown {
+  if (Array.isArray(coords)) {
+    if (typeof coords[0] === "number") {
+      return coords.map(
+        (coord: number) =>
+          Math.round(coord * Math.pow(10, precision)) / Math.pow(10, precision)
+      );
+    }
+    return coords.map((coord: unknown) => roundCoordinates(coord, precision));
   }
-  return coords.map((coord: any) => roundCoordinates(coord, precision));
+  return coords;
 }
 
 function getOptimizedMimeType(filePath: string): string {

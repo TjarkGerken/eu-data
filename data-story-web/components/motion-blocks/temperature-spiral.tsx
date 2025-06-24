@@ -11,17 +11,20 @@ export function TemperatureSpiral() {
     const data = []
     const centerX = 200
     const centerY = 200
+    const years = 144 // 1880 to 2024
+    const tempAnomaly = 1.2 // Example temperature anomaly
+    const angle = (2 * Math.PI) / 12 // Monthly intervals
 
     for (let index = 0; index < years; index++) {
       const year = 1880 + index
       const baseRadius = 20
       const radius = baseRadius + (index / years) * 120 + tempAnomaly * 20
 
-      const x = centerX + Math.cos(angle) * radius
-      const y = centerY + Math.sin(angle) * radius
+      const x = centerX + Math.cos(angle * index) * radius
+      const y = centerY + Math.sin(angle * index) * radius
 
       const temp = tempAnomaly
-      if (temp > 0.5)
+      const color = temp > 0.5 ? "#ef4444" : temp > 0 ? "#f59e0b" : "#3b82f6"
 
       data.push({
         x,

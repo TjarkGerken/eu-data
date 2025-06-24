@@ -67,7 +67,6 @@ export function ClimateTimelineBlock({
       opacity: 1,
       transition: {
         duration: 0.8,
-        ease: "easeOut",
       },
     },
   };
@@ -106,7 +105,7 @@ export function ClimateTimelineBlock({
         <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#2d5a3d] to-[#c4a747]" />
 
         <div className="space-y-8">
-          {events.map((event, index) => {
+          {events.map((event) => {
             const IconComponent = getIconComponent(event.icon);
 
             return (

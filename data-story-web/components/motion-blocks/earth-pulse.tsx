@@ -17,6 +17,9 @@ export function EarthPulse() {
   })
 
   const getTemperatureColor = (temp: number) => {
+    // Temperature color gradient from blue (cold) to red (hot)
+    const intensity = Math.min(Math.max((temp - 1) / 0.5, 0), 1)
+    return `hsl(${240 - intensity * 240}, 100%, 50%)`
   }
 
   const continents = [

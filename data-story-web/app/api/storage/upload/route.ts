@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       scenario || "default"
     }/${Date.now()}.${fileExt}`;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("climate-images")
       .upload(fileName, file, {
         cacheControl: "3600",

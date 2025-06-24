@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SupabaseImageManager } from "@/lib/blob-manager";
-import { BLOB_CONFIG } from "@/lib/blob-config";
+import { BLOB_CONFIG, ImageCategory, ImageScenario } from "@/lib/blob-config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,14 +30,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
     }
 
-    if (!BLOB_CONFIG.categories.includes(category as any)) {
+    if (!BLOB_CONFIG.categories.includes(category as ImageCategory)) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
 
     const result = await SupabaseImageManager.uploadImage(file, {
       id,
-      category: category as any,
-      scenario: scenario === "" ? undefined : (scenario as any),
+      category: category as ImageCategory,
+      scenario: scenario === "" ? undefined : (scenario as ImageScenario),
       description,
     });
 

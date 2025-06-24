@@ -123,8 +123,8 @@ export default function ClimateImage({
   };
 
   if (fill) {
-    return <Image {...imageProps} fill />;
+    return <Image {...imageProps} alt={alt} fill />;
   }
 
-  return <Image {...imageProps} width={width || 800} height={height || 450} />;
+  return <Image {...imageProps} alt={alt} width={width || 800} height={height || 450} />;
 }

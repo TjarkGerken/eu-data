@@ -32,7 +32,7 @@ export async function GET(
           category: img.category,
           scenario: img.scenario,
           description: img.description,
-          uploadedAt: new Date(img.created_at),
+          uploadedAt: new Date(img.created_at || new Date()),
           size: img.file_size,
         },
       })) || [];

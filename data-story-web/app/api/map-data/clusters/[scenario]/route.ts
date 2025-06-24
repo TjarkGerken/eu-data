@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import path from "path";
+import { promises as fs } from "fs";
+import { exec } from "child_process";
+import { promisify } from "util";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { scenario: string } }
+  { params }: { params: Promise<{ scenario: string }> }
 ) {
   try {
-    const { scenario } = params;
+    const { scenario } = await params;
 
     if (!scenario) {
       return NextResponse.json(
@@ -101,11 +104,8 @@ function getLocalClusterFilePath(scenario: string): string {
   );
 }
 
-async function convertGeoPackageToGeoJSON(buffer: Buffer): Promise<any> {
+async function convertGeoPackageToGeoJSON(buffer: Buffer): Promise<object | null> {
   try {
-    const fs = require("fs").promises;
-    const { exec } = require("child_process");
-    const { promisify } = require("util");
     const execAsync = promisify(exec);
 
     const tempGpkgPath = `/tmp/temp_${Date.now()}.gpkg`;
@@ -128,10 +128,8 @@ async function convertGeoPackageToGeoJSON(buffer: Buffer): Promise<any> {
   }
 }
 
-async function loadLocalClusterFile(filePath: string): Promise<any> {
+async function loadLocalClusterFile(filePath: string): Promise<object | null> {
   try {
-    const fs = require("fs").promises;
-
     const fileContent = await fs.readFile(filePath, "utf8");
     return JSON.parse(fileContent);
   } catch (error) {

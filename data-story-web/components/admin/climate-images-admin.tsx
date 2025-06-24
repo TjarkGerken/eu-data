@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase, type ClimateImage } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Upload, Edit, Eye } from "lucide-react";
+import { Trash2, Upload, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
@@ -52,11 +52,7 @@ export default function ClimateImagesAdmin() {
   });
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchImages();
-  }, []);
-
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("climate_images")
@@ -75,7 +71,11 @@ export default function ClimateImagesAdmin() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchImages();
+  }, [fetchImages]);
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();

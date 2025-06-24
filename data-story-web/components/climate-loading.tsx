@@ -20,7 +20,7 @@ export function ClimateLoading() {
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+          transition={{ duration: 0.8 }}
           className="mb-8"
         >
           <Image
@@ -76,7 +76,7 @@ export function ClimateLoading() {
           className="text-center"
         >
           <p className="text-white/90 text-base italic mb-3 leading-relaxed">
-            "{selectedQuote}"
+            &ldquo;{selectedQuote}&rdquo;
           </p>
           <div className="flex items-center justify-center space-x-2">
             <motion.div

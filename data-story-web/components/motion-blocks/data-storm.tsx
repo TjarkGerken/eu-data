@@ -225,7 +225,6 @@ export function DataStorm() {
                   duration: 4,
                   repeat: Number.POSITIVE_INFINITY,
                   delay: index * 1.3,
-                  ease: "easeOut",
                 }}
                 style={{
                   width: "100px",

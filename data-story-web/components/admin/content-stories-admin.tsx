@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   supabase,
   type ContentStory,
@@ -27,13 +27,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   Card,
   CardContent,
   CardDescription,
@@ -59,11 +52,7 @@ export default function ContentStoriesAdmin() {
   const [editForm, setEditForm] = useState<ContentStoryUpdate>({});
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchStories();
-  }, []);
-
-  const fetchStories = async () => {
+  const fetchStories = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("content_stories")
@@ -82,7 +71,11 @@ export default function ContentStoriesAdmin() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchStories();
+  }, [fetchStories]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import type { Json } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -31,7 +31,6 @@ import {
   Languages,
   Copy,
   Link,
-  X,
   Plus,
   Trash2,
   Edit,
@@ -39,12 +38,8 @@ import {
   ArrowDown,
   AlertCircle,
 } from "lucide-react";
-import { MultiSelectReferences } from "@/components/ui/multi-select-references";
 import { useToast } from "@/hooks/use-toast";
 import {
-  validateContentBlock,
-  getFieldError,
-  hasFieldError,
   getDefaultBlockData,
   type ValidationError,
   type ContentBlockFormData,
@@ -56,7 +51,7 @@ interface ContentBlock {
   story_id: string | null;
   block_type: string;
   order_index: number;
-  data: any;
+  data: Json;
   title?: string;
   content?: string;
   language?: string;
@@ -205,7 +200,7 @@ export default function ContentBlockEditor() {
     setValidationErrors([]);
   };
 
-  const updateFormField = (field: keyof ContentBlockFormData, value: any) => {
+  const updateFormField = (field: keyof ContentBlockFormData, value: string | Json) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
     if (validationErrors.length > 0) {
@@ -531,15 +526,16 @@ export default function ContentBlockEditor() {
       // Invalidate content cache to update main page
       contentCacheService.invalidate();
     } catch (error) {
+      console.error("Failed to move block pair:", error);
       toast({
         title: "Failed to move block pair",
-        description: "Could not reorder blocks",
+        description: error instanceof Error ? error.message : "Could not reorder blocks",
         variant: "destructive",
       });
     }
   };
 
-  const updateSharedField = (fieldPath: string[], value: any) => {
+  const updateSharedField = (fieldPath: string[], value: unknown) => {
     if (!selectedPair) return;
 
     const updatedPair = { ...selectedPair };
@@ -548,17 +544,19 @@ export default function ContentBlockEditor() {
       if (block) {
         if (fieldPath.length === 0) {
           // Replace entire data object
-          block.data = value;
+          block.data = value as Json;
         } else {
           // Update specific field path
-          let current = block.data;
+          let current = block.data as Record<string, unknown>;
+          
+          if (current && typeof current === 'object' && !Array.isArray(current)) {
+            for (let i = 0; i < fieldPath.length - 1; i++) {
+              if (!current[fieldPath[i]]) current[fieldPath[i]] = {};
+              current = current[fieldPath[i]] as Record<string, unknown>;
+            }
 
-          for (let i = 0; i < fieldPath.length - 1; i++) {
-            if (!current[fieldPath[i]]) current[fieldPath[i]] = {};
-            current = current[fieldPath[i]];
+            current[fieldPath[fieldPath.length - 1]] = value;
           }
-
-          current[fieldPath[fieldPath.length - 1]] = value;
         }
       }
     });
@@ -661,7 +659,7 @@ export default function ContentBlockEditor() {
       toLanguage === "en" ? updatedPair.english : updatedPair.german;
 
     if (targetBlock) {
-      targetBlock.data = { ...fromBlock.data };
+      targetBlock.data = fromBlock.data;
       targetBlock.title = fromBlock.title;
       targetBlock.content = fromBlock.content;
       setSelectedPair(updatedPair);
@@ -700,8 +698,7 @@ export default function ContentBlockEditor() {
 
   const renderLanguageSpecificFields = (
     block: ContentBlock | null,
-    updateBlock: (updatedBlock: ContentBlock) => void,
-    language: "en" | "de"
+    updateBlock: (updatedBlock: ContentBlock) => void
   ) => {
     if (!block) return null;
 
@@ -978,8 +975,7 @@ export default function ContentBlockEditor() {
                           setSelectedPair({
                             ...selectedPair,
                             english: updatedBlock,
-                          }),
-                        "en"
+                          })
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">
@@ -1022,8 +1018,7 @@ export default function ContentBlockEditor() {
                           setSelectedPair({
                             ...selectedPair,
                             german: updatedBlock,
-                          }),
-                        "de"
+                          })
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">
