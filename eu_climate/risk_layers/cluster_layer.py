@@ -31,6 +31,7 @@ class ClusterConfiguration:
     polygon_simplification_tolerance: float = 15
     natural_smoothing_iterations: int = 2
     corner_rounding_radius: float = 30
+    use_contour_method: bool = False
     export_formats: List[str] = None
     
     def __post_init__(self):
@@ -73,7 +74,8 @@ class ClusterLayer:
             smoothing_buffer_meters=self.cluster_config.smoothing_buffer_meters,
             polygon_simplification_tolerance=self.cluster_config.polygon_simplification_tolerance,
             natural_smoothing_iterations=self.cluster_config.natural_smoothing_iterations,
-            corner_rounding_radius=self.cluster_config.corner_rounding_radius
+            corner_rounding_radius=self.cluster_config.corner_rounding_radius,
+            use_contour_method=getattr(self.cluster_config, 'use_contour_method', False)
         )
         self.cluster_analyzer = RiskClusterAnalyzer()
         
@@ -98,6 +100,7 @@ class ClusterLayer:
             polygon_simplification_tolerance=clustering_config.get('polygon_simplification_tolerance', 15),
             natural_smoothing_iterations=clustering_config.get('natural_smoothing_iterations', 2),
             corner_rounding_radius=clustering_config.get('corner_rounding_radius', 30),
+            use_contour_method=clustering_config.get('use_contour_method', False),
             export_formats=clustering_config.get('export_formats', ['gpkg', 'png'])
         )
         
@@ -195,8 +198,8 @@ class ClusterLayer:
     def process_risk_clusters_sequential(self, 
                                        custom_risk_files: Optional[Dict[str, str]] = None,
                                        visualize: bool = True) -> Dict[str, gpd.GeoDataFrame]:
-        """Process risk outputs to extract clusters using sequential pattern: calculate → visualize → write."""
-        logger.info("Starting sequential cluster processing: calculate → visualize → write per scenario")
+        """Process risk outputs to extract clusters using sequential pattern: calculate -> visualize -> write."""
+        logger.info("Starting sequential cluster processing: calculate -> visualize -> write per scenario")
         
         if custom_risk_files:
             risk_file_paths = {"custom": custom_risk_files}
@@ -210,26 +213,26 @@ class ClusterLayer:
         all_cluster_results = {}
         
         for scenario_name, scenario_files in risk_file_paths.items():
-            logger.info(f"\n→ Processing scenario: {scenario_name}")
+            logger.info(f"\n-> Processing scenario: {scenario_name}")
             
             for file_key, file_path in scenario_files.items():
-                logger.info(f"  → Calculate clusters for: {file_key}")
+                logger.info(f"  -> Calculate clusters for: {file_key}")
                 
                 cluster_result = self._process_single_risk_file(file_path, file_key)
                 
                 if not cluster_result.empty:
                     all_cluster_results[file_key] = cluster_result
-                    logger.info(f"  ✓ Calculated: {len(cluster_result)} clusters")
+                    logger.info(f"  + Calculated: {len(cluster_result)} clusters")
                     
-                    logger.info(f"  → Visualize & Write: {file_key}")
+                    logger.info(f"  -> Visualize & Write: {file_key}")
                     self._export_single_cluster_result(file_key, cluster_result, visualize)
-                    logger.info(f"  ✓ Completed processing for: {file_key}")
+                    logger.info(f"  + Completed processing for: {file_key}")
                 else:
-                    logger.info(f"  ⚠ No clusters found in: {file_key}")
+                    logger.info(f"  ! No clusters found in: {file_key}")
                     
-            logger.info(f"✓ Scenario {scenario_name} complete")
+            logger.info(f"+ Scenario {scenario_name} complete")
         
-        logger.info(f"\n✓ Sequential cluster processing complete: {len(all_cluster_results)} scenarios processed")
+        logger.info(f"\n+ Sequential cluster processing complete: {len(all_cluster_results)} scenarios processed")
         return all_cluster_results
     
     def process_risk_clusters(self, 

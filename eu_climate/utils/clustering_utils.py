@@ -7,6 +7,8 @@ from typing import List, Tuple, Optional, Dict
 import rasterio
 from rasterio.transform import xy
 from skimage.morphology import binary_closing, disk
+from skimage.measure import find_contours
+from skimage.filters import gaussian
 try:
     import alphashape
 except ImportError:
@@ -32,26 +34,31 @@ class RiskClusterExtractor:
                  smoothing_buffer_meters: float = 45,
                  polygon_simplification_tolerance: float = 15,
                  natural_smoothing_iterations: int = 2,
-                 corner_rounding_radius: float = 30):
+                 corner_rounding_radius: float = 30,
+                 use_contour_method: bool = False):
         self.risk_threshold = risk_threshold
         self.cell_size_meters = cell_size_meters
         self.morphological_closing_disk_size = morphological_closing_disk_size
+        self.use_contour_method = use_contour_method
         self.cluster_epsilon = cluster_epsilon_multiplier * cell_size_meters
         self.minimum_samples = minimum_samples
         self.alpha_parameter = alpha_parameter_divisor / cell_size_meters
         self.hole_area_threshold = hole_area_threshold
         self.minimum_polygon_area_square_meters = minimum_polygon_area_square_meters
-        self.smoothing_buffer_meters = smoothing_buffer_meters
-        self.polygon_simplification_tolerance = polygon_simplification_tolerance
+        self.base_smoothing_buffer_meters = smoothing_buffer_meters  # Keep as reference for scaling
+        self.base_polygon_simplification_tolerance = polygon_simplification_tolerance
         self.natural_smoothing_iterations = natural_smoothing_iterations
-        self.corner_rounding_radius = corner_rounding_radius
+        self.base_corner_rounding_radius = corner_rounding_radius
         
-        logger.info(f"RiskClusterExtractor initialized with:")
+        logger.info(f"RiskClusterExtractor initialized with enhanced fuzzy clustering:")
         logger.info(f"  - risk_threshold: {self.risk_threshold}")
         logger.info(f"  - cluster_epsilon: {self.cluster_epsilon} meters")
         logger.info(f"  - minimum_samples: {self.minimum_samples}")
         logger.info(f"  - minimum_polygon_area: {self.minimum_polygon_area_square_meters} m²")
-        logger.info(f"  - smoothing_buffer: {self.smoothing_buffer_meters} meters")
+        logger.info(f"  - base_smoothing_buffer: {self.base_smoothing_buffer_meters} meters (scale-adaptive)")
+        logger.info(f"  - morphological_closing_disk: {self.morphological_closing_disk_size}")
+        logger.info(f"  - hole_area_threshold: {self.hole_area_threshold} (scale-adaptive)")
+        logger.info(f"  - processing_order: morphology -> individual_smoothing -> merge -> area_filter")
         
     def extract_risk_clusters(self, 
                              risk_data: np.ndarray, 
@@ -68,8 +75,13 @@ class RiskClusterExtractor:
             logger.info(f"Insufficient risk points ({len(risk_points)}) for clustering")
             return self._create_empty_geodataframe(target_crs)
             
-        cluster_labels = self._perform_clustering(risk_points)
-        cluster_polygons = self._create_cluster_polygons(risk_points, cluster_labels)
+        if self.use_contour_method:
+            # Use contour-based method for more natural boundaries
+            cluster_polygons = self._create_contour_polygons(binary_risk_mask, transform)
+        else:
+            # Use traditional DBSCAN + alpha-shape method
+            cluster_labels = self._perform_clustering(risk_points)
+            cluster_polygons = self._create_cluster_polygons(risk_points, cluster_labels)
         
         return self._finalize_geodataframe(cluster_polygons, target_crs)
     
@@ -78,9 +90,24 @@ class RiskClusterExtractor:
         return np.any(risk_data >= self.risk_threshold)
     
     def _create_binary_risk_mask(self, risk_data: np.ndarray) -> np.ndarray:
-        """Create binary mask from risk data with configurable morphological closing."""
+        """Create binary mask from risk data with scale-aware morphological operations."""
         binary_mask = risk_data >= self.risk_threshold
-        return binary_closing(binary_mask, disk(self.morphological_closing_disk_size))
+        
+        if self.use_contour_method:
+            # Scale-aware morphological closing
+            total_area = np.sum(binary_mask) * (self.cell_size_meters ** 2)
+            scale_aware_radius = max(self.morphological_closing_disk_size, 
+                                   int(np.ceil((total_area**0.5) / 600)))
+            
+            processed_mask = binary_closing(binary_mask, disk(scale_aware_radius))
+            
+            # Optional Gaussian blur for fuzzy outlines
+            processed_mask = gaussian(processed_mask.astype(float), 
+                                    sigma=scale_aware_radius/2)
+            
+            return processed_mask >= 0.5
+        else:
+            return binary_closing(binary_mask, disk(self.morphological_closing_disk_size))
     
     def _extract_risk_points(self, binary_mask: np.ndarray, transform: rasterio.Affine) -> np.ndarray:
         """Extract coordinate points from binary risk mask."""
@@ -125,7 +152,7 @@ class RiskClusterExtractor:
         if polygon is None:
             polygon = self._create_convex_hull_polygon(cluster_points)
             
-        return self._process_polygon_holes(polygon) if polygon else None
+        return polygon
     
     def _try_alpha_shape_polygon(self, points: np.ndarray) -> Optional[Polygon]:
         """Try to create alpha-shape polygon, fallback to None if not available."""
@@ -165,9 +192,16 @@ class RiskClusterExtractor:
             
         return polygon
     
+    def _scale_factor(self, polygon: Polygon) -> float:
+        """Calculate scale factor based on polygon size (km-based scaling)."""
+        return max(1.0, (polygon.area**0.5) / 1_000)
+    
     def _should_fill_hole(self, hole_polygon: Polygon, parent_polygon: Polygon) -> bool:
-        """Determine if hole should be filled based on area threshold."""
-        return hole_polygon.area / parent_polygon.area < self.hole_area_threshold
+        """Determine if hole should be filled based on scale-adaptive area threshold."""
+        scale = self._scale_factor(parent_polygon)
+        # Dynamic hole rule: threshold grows with size so small holes in large polygons survive
+        adaptive_threshold = self.hole_area_threshold * (scale**0.5)
+        return hole_polygon.area / parent_polygon.area < adaptive_threshold
     
     def _finalize_geodataframe(self, polygons: List[Polygon], target_crs: str) -> gpd.GeoDataFrame:
         """Create final GeoDataFrame with processed polygons."""
@@ -181,51 +215,78 @@ class RiskClusterExtractor:
         )
     
     def _process_final_polygons(self, polygons: List[Polygon]) -> List[Polygon]:
-        """Apply final processing to polygons: smoothing buffer, simplify, filter by area."""
-        merged_polygons = unary_union(polygons)
+        """Apply scale-aware processing: individual smoothing -> merge -> area filter."""
+        if not polygons:
+            return []
         
-        if isinstance(merged_polygons, Polygon):
-            processed_geometry = self._apply_smoothing_operations(merged_polygons)
-            return [processed_geometry] if self._meets_minimum_area(processed_geometry) else []
+        # Step 1: Process each polygon individually (no early merge to avoid melting)
+        individually_processed = []
+        for polygon in polygons:
+            # Process holes with scale-aware threshold
+            hole_processed = self._process_polygon_holes(polygon)
+            
+            # Apply scale-aware smoothing to preserve relative detail
+            smoothed_polygon = self._apply_scale_aware_smoothing(hole_processed)
+            
+            individually_processed.append(smoothed_polygon)
+        
+        # Step 2: Merge only after individual processing to preserve detail
+        if len(individually_processed) == 1:
+            final_polygons = individually_processed
         else:
-            final_polygons = []
-            for geometry in merged_polygons.geoms:
-                if isinstance(geometry, Polygon):
-                    processed_geometry = self._apply_smoothing_operations(geometry)
-                    if self._meets_minimum_area(processed_geometry):
-                        final_polygons.append(processed_geometry)
-            return final_polygons
+            merged_result = unary_union(individually_processed)
+            if isinstance(merged_result, Polygon):
+                final_polygons = [merged_result]
+            else:
+                final_polygons = [geom for geom in merged_result.geoms if isinstance(geom, Polygon)]
+        
+        # Step 3: Apply area filter as final step
+        return [poly for poly in final_polygons if self._meets_minimum_area(poly)]
     
-    def _apply_smoothing_operations(self, polygon: Polygon) -> Polygon:
-        """Apply natural smoothing operations to create organic-looking polygons."""
+    def _apply_scale_aware_smoothing(self, polygon: Polygon) -> Polygon:
+        """Apply scale-adaptive smoothing - keeps relative fuzziness constant across sizes."""
+        scale = self._scale_factor(polygon)
+        
+        # Scale-adaptive parameters
+        buffer_distance = self.base_smoothing_buffer_meters * scale
+        corner_radius = self.base_corner_rounding_radius * scale
+        simplify_tolerance = self.base_polygon_simplification_tolerance * scale
+        
+        # Adaptive resolution based on perimeter to avoid straight edges on large polygons
+        perimeter = polygon.length
+        resolution = max(16, min(64, int(perimeter / 1000)))  # 16-64 based on perimeter
+        
         smoothed_polygon = polygon
         
+        # Gradual smoothing iterations with scale-aware parameters
         for iteration in range(self.natural_smoothing_iterations):
-            buffer_distance = self.smoothing_buffer_meters * (1.0 - iteration * 0.3)
+            iteration_buffer = buffer_distance * (1.0 - iteration * 0.25)
             
+            # Expand and contract with adaptive resolution
             smoothed_polygon = smoothed_polygon.buffer(
-                buffer_distance, 
-                resolution=16, 
-                cap_style=1, 
+                iteration_buffer,
+                resolution=resolution,
+                cap_style=1,
                 join_style=1
             )
             smoothed_polygon = smoothed_polygon.buffer(
-                -buffer_distance * 0.9,
-                resolution=16,
+                -iteration_buffer * 0.85,
+                resolution=resolution,
                 cap_style=1,
                 join_style=1
             )
         
+        # Scale-aware corner rounding
         corner_rounded_polygon = smoothed_polygon.buffer(
-            self.corner_rounding_radius,
-            resolution=32
+            corner_radius,
+            resolution=resolution
         ).buffer(
-            -self.corner_rounding_radius,
-            resolution=32
+            -corner_radius * 0.9,
+            resolution=resolution
         )
         
         return corner_rounded_polygon.simplify(
-            self.polygon_simplification_tolerance,
+            simplify_tolerance,
             preserve_topology=True
         )
     
@@ -239,6 +300,38 @@ class RiskClusterExtractor:
             {'geometry': [], 'risk_cluster_id': []},
             crs=target_crs
         )
+    
+    def _create_contour_polygons(self, binary_mask: np.ndarray, transform: rasterio.Affine) -> List[Polygon]:
+        """Create polygons from binary mask using contour extraction for natural boundaries."""
+        contours = find_contours(binary_mask, 0.5)
+        polygons = []
+        
+        for contour in contours:
+            if len(contour) < 4:  # Need at least 4 points for a polygon
+                continue
+                
+            try:
+                # Convert contour coordinates to map coordinates
+                x_coords, y_coords = xy(transform, contour[:, 0], contour[:, 1], offset='center')
+                coords = list(zip(x_coords, y_coords))
+                
+                # Close the polygon if not already closed
+                if coords[0] != coords[-1]:
+                    coords.append(coords[0])
+                
+                polygon = Polygon(coords)
+                
+                # Apply buffer(0) to fix any self-intersections
+                polygon = polygon.buffer(0)
+                
+                if isinstance(polygon, Polygon) and polygon.is_valid and polygon.area > 0:
+                    polygons.append(polygon)
+                    
+            except Exception as e:
+                logger.warning(f"Failed to create polygon from contour: {e}")
+                continue
+        
+        return polygons
 
 
 class RiskClusterAnalyzer:
