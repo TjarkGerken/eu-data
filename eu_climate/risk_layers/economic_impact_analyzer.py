@@ -485,7 +485,7 @@ class EconomicImpactAnalyzer:
             # Get valid risk files (only GDP, Population, Freight)
             scenario_cluster_files = self._get_scenario_risk_files(scenario_dir)
             if not scenario_cluster_files:
-                logger.warning(f"⚠ No valid risk files found for {scenario_name}")
+                logger.warning(f"! No valid risk files found for {scenario_name}")
                 continue
                 
             logger.info(f"Found {len(scenario_cluster_files)} indicators: {list(scenario_cluster_files.keys())}")
@@ -542,7 +542,7 @@ class EconomicImpactAnalyzer:
             logger.info("EXPORTING SUMMARY RESULTS")
             logger.info(f"{'='*80}")
             self._export_summary_results(impact_metrics)
-            logger.info("✓ Summary results exported")
+            logger.info("+ Summary results exported")
         
         logger.info(f"\n{'='*80}")
         logger.info(f"ECONOMIC IMPACT ANALYSIS COMPLETE")
@@ -615,12 +615,12 @@ class EconomicImpactAnalyzer:
         
         for indicator, cluster_gdf in scenario_clusters.items():
             if cluster_gdf.empty:
-                logger.info(f"    → Skipping {indicator}: no clusters")
+                logger.info(f"    -> Skipping {indicator}: no clusters")
                 continue
                 
             indicator_key = self._map_indicator_to_key(indicator)
             if indicator_key not in at_risk_values:
-                logger.info(f"    → Skipping {indicator}: unmapped indicator")
+                logger.info(f"    -> Skipping {indicator}: unmapped indicator")
                 continue
                 
             logger.info(f"    -> Processing {len(cluster_gdf)} clusters for {indicator}")

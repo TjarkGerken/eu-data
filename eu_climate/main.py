@@ -21,6 +21,13 @@ Version: 1.0.0
 import os
 import sys
 import argparse
+
+# Add parent directory to path to handle imports correctly
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.hazard_layer import HazardLayer, SeaLevelScenario
 from eu_climate.risk_layers.relevance_layer import RelevanceLayer
@@ -30,25 +37,16 @@ from eu_climate.risk_layers.cluster_layer import ClusterLayer
 from eu_climate.risk_layers.economic_impact_analyzer import EconomicImpactAnalyzer
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging, suppress_warnings
-from eu_climate.utils.data_loading import check_data_integrity, get_config, upload_data, validate_env_vars
+from eu_climate.utils.data_loading import check_data_integrity, upload_data
 from eu_climate.utils.cache_utils import initialize_caching, create_cached_layers, print_cache_status
 from eu_climate.utils.caching_wrappers import cache_relevance_layer
 import numpy as np
-import rasterio
 import rasterio.mask
 import rasterio.features
 import rasterio.warp
-from rasterio.enums import Resampling
-import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Tuple, List, Dict, Optional, Any
-from dataclasses import dataclass
+from typing import List, Dict, Any
 from enum import Enum
-from sklearn.preprocessing import MinMaxScaler
-import subprocess
-from datetime import datetime
-from huggingface_hub import HfApi
-from dotenv import load_dotenv
 
 # Set up logging for the main module
 logger = setup_logging(__name__)
@@ -383,7 +381,7 @@ class RiskAssessment:
                 logger.info(f"   - Non-zero pixels: {np.sum(freight_data > 0):,}")
                 logger.info(f"   - Enhanced with Zeevart maritime port data")
             else:
-                logger.warning("⚠️  Freight layer not found in results")
+                logger.warning("!  Freight layer not found in results")
                 
         except Exception as e:
             logger.error(f"❌ Error in freight relevance analysis: {str(e)}")
