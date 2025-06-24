@@ -20,8 +20,8 @@ export async function DELETE(
 
     console.log(`Attempting to delete layer: ${layerId}`);
 
-    let deletedFiles: string[] = [];
-    let foundFiles: string[] = [];
+    const deletedFiles: string[] = [];
+    const foundFiles: string[] = [];
 
     // First, get all files from Supabase storage and find matches
     try {

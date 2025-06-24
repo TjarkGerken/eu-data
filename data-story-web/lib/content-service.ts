@@ -27,7 +27,7 @@ export interface ContentBlock {
   orderIndex: number;
   title?: string;
   content?: string;
-  data: any;
+  data: Record<string, unknown> | null;
   references?: ContentReference[];
 }
 
@@ -82,15 +82,17 @@ export async function fetchContentByLanguage(
       return null;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const processedBlocks: ContentBlock[] = (blocksData || []).map((block: any) => ({
       id: block.id,
       storyId: block.story_id,
       blockType: block.block_type,
       orderIndex: block.order_index,
-      title: block.title || null,
-      content: block.content || null,
-      data: block.data || {},
+      title: block.title || undefined,
+      content: block.content || undefined,
+      data: (block.data as Record<string, unknown>) || null,
       references:
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         block.block_references?.map((br: any) => br.content_references) || [],
     }));
 
@@ -171,8 +173,9 @@ export async function fetchBlocksByType(
       storyId: block.story_id,
       blockType: block.block_type,
       orderIndex: block.order_index,
-      data: block.data,
+      data: block.data as Record<string, unknown> | null,
       references:
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         block.block_references?.map((br: any) => br.content_references) || [],
     }));
   } catch (error) {

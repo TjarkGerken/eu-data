@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,11 +25,8 @@ import {
 import {
   Upload,
   Trash2,
-  Download,
   FileImage,
   Map,
-  AlertCircle,
-  CheckCircle,
   Loader2,
 } from "lucide-react";
 import {
@@ -50,15 +47,12 @@ export default function LayerManager() {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadLayers();
-  }, []);
-
-  const loadLayers = async () => {
+  const loadLayers = useCallback(async () => {
     try {
       const availableLayers = await mapTileService.getAvailableLayers();
       setLayers(availableLayers);
     } catch (error) {
+      console.error("Failed to load layers:", error);
       toast({
         title: "Error",
         description: "Failed to load layers",
@@ -67,7 +61,11 @@ export default function LayerManager() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadLayers();
+  }, [loadLayers]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -147,6 +145,7 @@ export default function LayerManager() {
       });
       await loadLayers();
     } catch (error) {
+      console.error("Failed to delete layer:", error);
       toast({
         title: "Error",
         description: "Failed to delete layer",

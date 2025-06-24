@@ -82,11 +82,11 @@ export function MultiSelectReferences({
     onSelectionChange(selectedReferenceIds.filter((id) => id !== referenceId));
   };
 
-  const formatReferenceDisplay = (reference: ContentReference) => {
-    return `${reference.title} (${reference.authors.join(", ")}, ${
-      reference.year
-    })`;
-  };
+  // const formatReferenceDisplay = (reference: ContentReference) => {
+  //   return `${reference.title} (${reference.authors.join(", ")}, ${
+  //     reference.year
+  //   })`;
+  // };
 
   const formatReferenceShort = (reference: ContentReference) => {
     const firstAuthor = reference.authors[0] || "Unknown";

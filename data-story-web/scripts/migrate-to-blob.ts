@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
-import { BlobImageManager } from "../lib/blob-manager";
+import { SupabaseImageManager } from "../lib/blob-manager";
 
 // Load environment variables from .env.local
 config({ path: ".env.local" });
@@ -67,7 +67,7 @@ async function migrateImages() {
 
           const metadata =
             IMAGE_MAPPINGS[filename as keyof typeof IMAGE_MAPPINGS];
-          const result = await BlobImageManager.uploadImage(file, metadata);
+          const result = await SupabaseImageManager.uploadImage(file, metadata);
 
           console.log(`✅ Migrated ${filename} -> ${result.url}`);
           migratedCount++;

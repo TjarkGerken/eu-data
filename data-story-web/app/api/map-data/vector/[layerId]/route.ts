@@ -13,28 +13,31 @@ proj4.defs(
   "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
 );
 
+type Coordinate = [number, number];
+type CoordinateArray = Coordinate | Coordinate[] | Coordinate[][] | Coordinate[][][];
+
 function transformCoordinates(
-  coords: any,
+  coords: CoordinateArray | null | undefined,
   sourceCRS: string = "EPSG:3857"
-): any {
+): CoordinateArray | null | undefined {
   if (!coords) return coords;
 
   // Check if coordinates look like they're already in lat/lng (WGS84)
-  if (Array.isArray(coords) && coords.length >= 2) {
-    const [x, y] = coords;
+  if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
+    const [x, y] = coords as Coordinate;
     if (x >= -180 && x <= 180 && y >= -90 && y <= 90) {
       // Already in WGS84, no transformation needed
       return coords;
     }
   }
 
-  if (Array.isArray(coords[0])) {
+  if (Array.isArray(coords) && Array.isArray(coords[0])) {
     // Array of coordinates
-    return coords.map((coord: any) => transformCoordinates(coord, sourceCRS));
-  } else if (coords.length >= 2) {
+    return (coords as CoordinateArray[]).map((coord) => transformCoordinates(coord, sourceCRS)) as CoordinateArray;
+  } else if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
     // Single coordinate pair
     try {
-      const [x, y] = coords;
+      const [x, y] = coords as Coordinate;
       
       // Skip transformation if coordinates are clearly invalid
       if (!isFinite(x) || !isFinite(y)) {
@@ -42,7 +45,7 @@ function transformCoordinates(
         return coords;
       }
       
-      const transformed = proj4(sourceCRS, "EPSG:4326", [x, y]);
+      const transformed = proj4(sourceCRS, "EPSG:4326", [x, y]) as Coordinate;
       return transformed;
     } catch (error) {
       console.warn("Failed to transform coordinates:", coords, error);
@@ -53,7 +56,25 @@ function transformCoordinates(
   return coords;
 }
 
-function transformGeoJSONCoordinates(geojson: any): any {
+interface GeoJSONFeature {
+  type: string;
+  geometry?: {
+    coordinates?: CoordinateArray;
+  };
+  properties?: Record<string, unknown>;
+}
+
+interface GeoJSONObject {
+  type: string;
+  features?: GeoJSONFeature[];
+  crs?: {
+    properties?: {
+      name?: string;
+    };
+  };
+}
+
+function transformGeoJSONCoordinates(geojson: GeoJSONObject): GeoJSONObject {
   if (!geojson || !geojson.features) return geojson;
 
   // Check if CRS is specified in the GeoJSON
@@ -74,16 +95,17 @@ function transformGeoJSONCoordinates(geojson: any): any {
     "to EPSG:4326"
   );
 
-  const transformedFeatures = geojson.features.map((feature: any) => {
+  const transformedFeatures = geojson.features.map((feature: GeoJSONFeature) => {
     if (feature.geometry && feature.geometry.coordinates) {
+      const transformedCoords = transformCoordinates(
+        feature.geometry.coordinates,
+        sourceCRS
+      );
       return {
         ...feature,
         geometry: {
           ...feature.geometry,
-          coordinates: transformCoordinates(
-            feature.geometry.coordinates,
-            sourceCRS
-          ),
+          coordinates: transformedCoords || feature.geometry.coordinates,
         },
       };
     }

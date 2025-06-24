@@ -94,6 +94,7 @@ export function CarbonMoleculeDance() {
           ...molecule,
           x: newX,
           y: newY,
+          vx: newVx * 0.99,
           vy: newVy * 0.99,
         }
       }),

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import { supabase } from "@/lib/supabase";
 import sharp from "sharp";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let createCanvas: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let CanvasImageData: any = null;
 let canvasAvailable = false;
 
@@ -68,7 +69,7 @@ export async function GET(
     const cacheKey = `map-tile-${layerName}-${zoom}-${x}-${y}`;
 
     try {
-      const cachedTile = await getCachedTile(cacheKey);
+      const cachedTile = await getCachedTile();
       if (cachedTile) {
         return new NextResponse(cachedTile, {
           headers: {
@@ -77,13 +78,13 @@ export async function GET(
           },
         });
       }
-    } catch (cacheError) {
+    } catch {
       console.warn("Cache miss for tile:", cacheKey);
     }
 
     const tileBuffer = await generateTile({ layerName, zoom, x, y });
 
-    await cacheTile(cacheKey, tileBuffer);
+    await cacheTile();
 
     return new NextResponse(tileBuffer, {
       headers: {
@@ -163,7 +164,7 @@ function getTileExtent(
 async function extractRegionFromBuffer(
   buffer: Buffer,
   extent: [number, number, number, number]
-): Promise<any> {
+): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
   const image = sharp(buffer);
   const metadata = await image.metadata();
 
@@ -229,7 +230,7 @@ async function extractRegionFromBuffer(
 }
 
 async function renderTileWithColormap(
-  imageData: any,
+  imageData: { data: Uint8ClampedArray; width: number; height: number },
   layerName: string
 ): Promise<Buffer> {
   await initializeCanvas();
@@ -271,7 +272,7 @@ async function renderTileWithColormap(
 }
 
 async function renderTileWithSharp(
-  imageData: any,
+  imageData: { data: Uint8ClampedArray; width: number; height: number },
   layerName: string
 ): Promise<Buffer> {
   // Simple Sharp-based rendering without colormap for now
@@ -381,13 +382,13 @@ async function getSourceFileFromStorage(
   }
 }
 
-async function getCachedTile(key: string): Promise<Buffer | null> {
+async function getCachedTile(): Promise<Buffer | null> {
   // Simple in-memory cache implementation
   // In production, you'd want Redis or similar
   return null;
 }
 
-async function cacheTile(key: string, buffer: Buffer): Promise<void> {
+async function cacheTile(): Promise<void> {
   // Simple in-memory cache implementation
   // In production, you'd want Redis or similar
 }

@@ -41,8 +41,6 @@ import {
   DataStoryBlock,
   Reference,
   ContentData,
-  Visualization,
-  Story,
 } from "@/lib/types";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
 import { ImageDropdown } from "@/components/image-dropdown";
@@ -333,6 +331,7 @@ export default function ContentAdminPage() {
       case "quote":
         return {
           type: "quote",
+          title: isGerman ? "Zitat" : "Quote",
           content: isGerman
             ? "Geben Sie hier den Zitattext ein."
             : "Enter quote text here.",
@@ -342,6 +341,8 @@ export default function ContentAdminPage() {
       case "statistics":
         return {
           type: "statistics",
+          title: isGerman ? "Statistiken" : "Statistics",
+          description: isGerman ? "Wichtige Kennzahlen" : "Key Metrics",
           stats: [
             {
               label: isGerman ? "Metrik" : "Metric",
@@ -353,6 +354,8 @@ export default function ContentAdminPage() {
       case "timeline":
         return {
           type: "timeline",
+          title: isGerman ? "Zeitleiste" : "Timeline",
+          description: isGerman ? "Wichtige Ereignisse" : "Important Events",
           events: [
             {
               year: "2024",
@@ -364,6 +367,14 @@ export default function ContentAdminPage() {
       case "visualization":
         return {
           type: "visualization",
+          title: isGerman ? "Neue Visualisierung" : "New Visualization",
+          description: isGerman ? "Beschreibung" : "Description",
+          content: isGerman ? "Inhalt" : "Content",
+          visualizationType: "map" as const,
+          imageCategory: "",
+          imageScenario: "",
+          imageId: "",
+          references: [],
           data: {
             title: isGerman ? "Neue Visualisierung" : "New Visualization",
             description: isGerman ? "Beschreibung" : "Description",
@@ -372,7 +383,7 @@ export default function ContentAdminPage() {
             imageCategory: "",
             imageId: "",
             references: [],
-          } as Visualization,
+          } as Record<string, unknown>,
         };
       case "interactive-map":
         return {
@@ -381,7 +392,7 @@ export default function ContentAdminPage() {
           description: isGerman
             ? "Interaktive Klimarisiko-Karte"
             : "Interactive climate risk map",
-          layers: [],
+          selectedLayers: [],
         };
       case "animated-quote":
         return {
@@ -612,7 +623,7 @@ export default function ContentAdminPage() {
           description: isGerman
             ? "Interaktive Klimarisiko-Karte"
             : "Interactive climate risk map",
-          layers: [],
+          selectedLayers: [],
         };
       default:
         return {
@@ -729,7 +740,7 @@ export default function ContentAdminPage() {
     setContent(updatedContent);
   };
 
-  const saveBlockAndClose = async (index: number) => {
+  const saveBlockAndClose = async () => {
     if (!content) return;
 
     setEditingBlockIndex(null);
@@ -769,7 +780,7 @@ export default function ContentAdminPage() {
   const updateReference = (
     index: number,
     field: keyof Reference,
-    value: any
+    value: string | string[] | number
   ) => {
     if (!content) return;
 
@@ -810,7 +821,7 @@ export default function ContentAdminPage() {
   };
 
   const renderBlockEditor = (block: DataStoryBlock, isNew = false) => {
-    const updateField = (field: string, value: any) => {
+    const updateField = (field: string, value: string | number | boolean | object) => {
       if (isNew && newBlock) {
         setNewBlock({ ...newBlock, [field]: value });
       } else if (!isNew) {
@@ -911,7 +922,7 @@ export default function ContentAdminPage() {
         return (
           <div className="space-y-4">
             <Label>Statistics</Label>
-            {blockData.stats?.map((stat: any, index: number) => (
+            {blockData.stats?.map((stat: { label: string; value: string; description?: string }, index: number) => (
               <div key={index} className="grid grid-cols-3 gap-2">
                 <Input
                   placeholder="Label"
@@ -966,7 +977,7 @@ export default function ContentAdminPage() {
         return (
           <div className="space-y-4">
             <Label>Timeline Events</Label>
-            {blockData.events?.map((event: any, index: number) => (
+            {blockData.events?.map((event: { year: string; title: string; description: string }, index: number) => (
               <div key={index} className="grid grid-cols-3 gap-2">
                 <Input
                   placeholder="Year"
@@ -1024,7 +1035,7 @@ export default function ContentAdminPage() {
             <div>
               <Label>Title</Label>
               <Input
-                value={blockData.data.title}
+                value={blockData.data.title as string}
                 onChange={(e) => {
                   updateField("data", {
                     ...blockData.data,
@@ -1036,7 +1047,7 @@ export default function ContentAdminPage() {
             <div>
               <Label>Description</Label>
               <Textarea
-                value={blockData.data.description}
+                value={blockData.data.description as string}
                 onChange={(e) => {
                   updateField("data", {
                     ...blockData.data,
@@ -1048,7 +1059,7 @@ export default function ContentAdminPage() {
             <div>
               <Label>Content</Label>
               <Textarea
-                value={blockData.data.content}
+                value={blockData.data.content as string}
                 onChange={(e) => {
                   updateField("data", {
                     ...blockData.data,
@@ -1060,7 +1071,7 @@ export default function ContentAdminPage() {
             <div>
               <Label>Type</Label>
               <Select
-                value={blockData.data.type}
+                value={blockData.data.type as string}
                 onValueChange={(value) => {
                   updateField("data", { ...blockData.data, type: value });
                 }}
@@ -1078,7 +1089,7 @@ export default function ContentAdminPage() {
             <div>
               <Label>Image</Label>
               <ImageDropdown
-                selectedImageId={blockData.data.imageId}
+                selectedImageId={blockData.data.imageId as string}
                 onImageChange={(imageId, imageData) => {
                   updateField("data", {
                     ...blockData.data,
@@ -1092,7 +1103,7 @@ export default function ContentAdminPage() {
             <div>
               <Label>References</Label>
               <MultiSelectReferences
-                selectedReferenceIds={blockData.data.references || []}
+                selectedReferenceIds={(blockData.data.references as string[]) || []}
                 onSelectionChange={(selectedIds) => {
                   updateField("data", {
                     ...blockData.data,
@@ -1871,7 +1882,7 @@ export default function ContentAdminPage() {
                         <div className="space-y-4">
                           {renderBlockEditor(block)}
                           <div className="flex space-x-2">
-                            <Button onClick={() => saveBlockAndClose(index)}>
+                            <Button onClick={() => saveBlockAndClose()}>
                               <Save className="h-4 w-4 mr-2" />
                               Save
                             </Button>
@@ -1897,7 +1908,7 @@ export default function ContentAdminPage() {
                             {block.type === "timeline" &&
                               `${block.events?.length} events`}
                             {block.type === "visualization" &&
-                              block.data?.title}
+                              (block.data?.title as string)}
                           </p>
                         </div>
                       )}

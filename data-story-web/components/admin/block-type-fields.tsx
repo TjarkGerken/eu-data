@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageDropdown } from "@/components/image-dropdown";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
-import { Plus, Trash2, Move, Palette, Layers, Settings } from "lucide-react";
+import { Trash2, Layers, Settings } from "lucide-react";
 import { getFieldError, type ValidationError } from "@/lib/validation";
 import { Switch } from "@/components/ui/switch";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
@@ -24,7 +24,9 @@ import LayerManager from "./layer-manager";
 
 interface BlockTypeFieldsProps {
   blockType: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onDataChange: (newData: any) => void;
   validationErrors: ValidationError[];
   title?: string;
@@ -34,9 +36,19 @@ interface BlockTypeFieldsProps {
   mode?: "shared" | "language-specific" | "all";
 }
 
+interface MapLayerData {
+  selectedLayers?: string[];
+  height?: string;
+  centerLat?: string | number;
+  centerLng?: string | number;
+  zoom?: string | number;
+  autoFitBounds?: boolean;
+  enableLayerControls?: boolean;
+}
+
 interface MapLayerSelectorProps {
-  data: any;
-  onDataChange: (newData: any) => void;
+  data: MapLayerData;
+  onDataChange: (newData: MapLayerData) => void;
 }
 
 function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
@@ -62,7 +74,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
     }
   };
 
-  const updateDataField = (field: string, value: any) => {
+  const updateDataField = (field: keyof MapLayerData, value: string | boolean | string[] | number) => {
     onDataChange({ ...data, [field]: value });
   };
 
@@ -259,28 +271,28 @@ export function BlockTypeFields({
   onContentChange,
   mode = "all",
 }: BlockTypeFieldsProps) {
-  const updateDataField = (path: string, value: any) => {
+  const updateDataField = (path: string, value: unknown) => {
     const newData = { ...data };
     const pathParts = path.split(".");
-    let current = newData;
+    let current: Record<string, unknown> = newData;
 
     for (let i = 0; i < pathParts.length - 1; i++) {
       if (!current[pathParts[i]]) current[pathParts[i]] = {};
-      current = current[pathParts[i]];
+      current = current[pathParts[i]] as Record<string, unknown>;
     }
 
     current[pathParts[pathParts.length - 1]] = value;
     onDataChange(newData);
   };
 
-  const addArrayItem = (arrayPath: string, defaultItem: any) => {
+  const addArrayItem = (arrayPath: string, defaultItem: unknown) => {
     const currentArray = getNestedValue(data, arrayPath) || [];
-    updateDataField(arrayPath, [...currentArray, defaultItem]);
+    updateDataField(arrayPath, [...(currentArray as unknown[]), defaultItem]);
   };
 
   const removeArrayItem = (arrayPath: string, index: number) => {
     const currentArray = getNestedValue(data, arrayPath) || [];
-    const newArray = currentArray.filter((_: any, i: number) => i !== index);
+    const newArray = (currentArray as unknown[]).filter((_: unknown, i: number) => i !== index);
     updateDataField(arrayPath, newArray);
   };
 
@@ -288,16 +300,20 @@ export function BlockTypeFields({
     arrayPath: string,
     index: number,
     field: string,
-    value: any
+    value: unknown
   ) => {
     const currentArray = getNestedValue(data, arrayPath) || [];
-    const newArray = [...currentArray];
+    const newArray = [...(currentArray as Record<string, unknown>[])];
     newArray[index] = { ...newArray[index], [field]: value };
     updateDataField(arrayPath, newArray);
   };
 
-  const getNestedValue = (obj: any, path: string): any => {
-    return path.split(".").reduce((current, key) => current?.[key], obj);
+  const getNestedValue = (obj: Record<string, unknown>, path: string): unknown => {
+    return path.split(".").reduce((current: unknown, key: string) => {
+      return current && typeof current === 'object' && !Array.isArray(current) 
+        ? (current as Record<string, unknown>)[key] 
+        : undefined;
+    }, obj);
   };
 
   const renderFieldError = (fieldPath: string) => {
@@ -381,7 +397,7 @@ export function BlockTypeFields({
           <div className="space-y-4">
             <Label>Statistics Configuration *</Label>
             {renderFieldError("data.stats")}
-            {(data?.stats || []).map((stat: any, index: number) => (
+            {((data?.stats as Record<string, unknown>[]) || []).map((stat: Record<string, unknown>, index: number) => (
               <Card key={index}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -403,7 +419,7 @@ export function BlockTypeFields({
                     <div>
                       <Label>Trend</Label>
                       <Select
-                        value={stat?.trend || "up"}
+                        value={(stat?.trend as string) || "up"}
                         onValueChange={(value) =>
                           updateArrayItem("stats", index, "trend", value)
                         }
@@ -421,7 +437,7 @@ export function BlockTypeFields({
                       <Label>Color</Label>
                       <Input
                         type="color"
-                        value={stat?.color || "#000000"}
+                        value={(stat?.color as string) || "#000000"}
                         onChange={(e) =>
                           updateArrayItem(
                             "stats",
@@ -551,13 +567,13 @@ export function BlockTypeFields({
         return (
           <div className="space-y-4">
             {renderLanguageSpecificFields()}
-            {(data?.stats || []).map((stat: any, index: number) => (
+            {((data?.stats as Record<string, unknown>[]) || []).map((stat: Record<string, unknown>, index: number) => (
               <div key={index} className="p-4 border rounded-md space-y-3">
                 <h4 className="font-medium">Statistic {index + 1} Content</h4>
                 <div className="space-y-1">
                   <Label>Icon</Label>
                   <Input
-                    value={stat.icon || ""}
+                    value={(stat.icon as string) || ""}
                     onChange={(e) =>
                       updateArrayItem("stats", index, "icon", e.target.value)
                     }
@@ -566,7 +582,7 @@ export function BlockTypeFields({
                 <div className="space-y-1">
                   <Label>Value</Label>
                   <Input
-                    value={stat.value || ""}
+                    value={(stat.value as string) || ""}
                     onChange={(e) =>
                       updateArrayItem("stats", index, "value", e.target.value)
                     }
@@ -575,7 +591,7 @@ export function BlockTypeFields({
                 <div className="space-y-1">
                   <Label>Label</Label>
                   <Input
-                    value={stat.label || ""}
+                    value={(stat.label as string) || ""}
                     onChange={(e) =>
                       updateArrayItem("stats", index, "label", e.target.value)
                     }
@@ -584,7 +600,7 @@ export function BlockTypeFields({
                 <div className="space-y-1">
                   <Label>Change</Label>
                   <Input
-                    value={stat.change || ""}
+                    value={(stat.change as string) || ""}
                     onChange={(e) =>
                       updateArrayItem("stats", index, "change", e.target.value)
                     }
