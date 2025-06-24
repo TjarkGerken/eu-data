@@ -710,13 +710,30 @@ class LayerVisualizer:
         data_overlay = np.full_like(data, np.nan, dtype=np.float32)
         data_overlay[netherlands_mask] = data[netherlands_mask]
         
+        # Determine if this is an absolute relevance layer and set appropriate scaling
+        is_absolute_layer = layer_name.startswith('absolute_') or 'absolute' in layer_name.lower()
+        
+        if is_absolute_layer:
+            # For absolute layers, use actual min/max of the data for proper scaling
+            valid_data = data_overlay[~np.isnan(data_overlay)]
+            if len(valid_data) > 0:
+                vmin = np.min(valid_data)
+                vmax = np.max(valid_data)
+                logger.info(f"Using absolute scaling for {layer_name}: vmin={vmin:.6f}, vmax={vmax:.6f}")
+            else:
+                vmin, vmax = 0, 1
+                logger.warning(f"No valid data found for {layer_name}, using default scaling")
+        else:
+            # For normalized layers, use 0-1 scaling
+            vmin, vmax = 0, 1
+        
         # Overlay relevance data
         im = ax.imshow(
             data_overlay,
             cmap=ScientificStyle.RELEVANCE_CMAP,
             aspect='equal',
             extent=extent,
-            vmin=0, vmax=1,
+            vmin=vmin, vmax=vmax,
             alpha=0.85
         )
         
@@ -728,8 +745,12 @@ class LayerVisualizer:
         # Get proper layer title
         layer_titles = {
             'gdp': 'GDP Economic Relevance',
-                    'freight': 'Freight Economic Relevance',
-            'combined': 'Combined Economic Relevance'
+            'freight': 'Freight Economic Relevance',
+            'combined': 'Combined Economic Relevance',
+            'absolute_gdp': 'GDP Absolute Economic Relevance',
+            'absolute_freight': 'Freight Absolute Economic Relevance', 
+            'absolute_hrst': 'HRST Absolute Economic Relevance',
+            'absolute_population': 'Population Absolute Economic Relevance'
         }
         
         title = layer_titles.get(layer_name, f'{layer_name.title()} Relevance Layer')
@@ -739,8 +760,20 @@ class LayerVisualizer:
         ax.set_xlabel('Easting (m)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Northing (m)', fontsize=ScientificStyle.LABEL_SIZE)
         
-        # Add colorbar for relevance data
-        self.create_standard_colorbar(im, ax, 'Relevance Index (0-1)')
+        # Add colorbar with appropriate label
+        if is_absolute_layer:
+            # Determine appropriate units for colorbar label
+            unit_labels = {
+                'absolute_gdp': 'GDP Value (Million EUR)',
+                'absolute_freight': 'Freight Volume (Tonnes)',
+                'absolute_hrst': 'HRST Population (Persons)',
+                'absolute_population': 'Population (Persons)'
+            }
+            colorbar_label = unit_labels.get(layer_name, 'Absolute Value')
+        else:
+            colorbar_label = 'Relevance Index (0-1)'
+            
+        self.create_standard_colorbar(im, ax, colorbar_label)
         
         # Add zone legend
         import matplotlib.patches as mpatches

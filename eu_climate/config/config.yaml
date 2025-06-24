@@ -150,19 +150,36 @@ data:
     dpi: 300
   upload:
     enabled: true
+  web_exports:
+    enabled: true
+    create_cog: true
+    create_mvt: true
+    cog_settings:
+      compress: "LZW"
+      predictor: 2
+      blocksize: 512
+      overview_compress: "LZW"
+      overview_resampling: "average"
+      auto_overviews: true
+    mvt_settings:
+      min_zoom: 0
+      max_zoom: 14
+      simplification: "drop-densest-as-needed"
+      generate_ids: true
   building:
     base_floor_height: 3
     max_floors: 30
   clustering:
     risk_threshold: 0.35
     cell_size_meters: 30
-    morphological_closing_disk_size: 8
-    cluster_epsilon_multiplier: 5
+    morphological_closing_disk_size: 12
+    cluster_epsilon_multiplier: 6
     minimum_samples: 10
-    alpha_parameter_divisor: 0.3
-    hole_area_threshold: 0.20
-    minimum_polygon_area_square_meters: 100000
-    smoothing_buffer_meters: 150
+    alpha_parameter_divisor: 0.2
+    hole_area_threshold: 0.10
+    minimum_polygon_area_square_meters: 12_000_000
+    smoothing_buffer_meters: 200
     polygon_simplification_tolerance: 50
-    natural_smoothing_iterations: 2
+    natural_smoothing_iterations: 3
     corner_rounding_radius: 30
+    use_contour_method: true

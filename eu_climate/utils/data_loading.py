@@ -128,9 +128,9 @@ def download_data() -> bool:
         all_items_present = True
         for item_path, item_name in required_items_checks:
             if item_path.exists():
-                logger.info(f"✓ {item_name} found at: {item_path}")
+                logger.info(f"+ {item_name} found at: {item_path}")
             else:
-                logger.warning(f"✗ {item_name} not found at: {item_path}")
+                logger.warning(f"- {item_name} not found at: {item_path}")
                 if item_name == "source data directory":
                     all_items_present = False
         if all_items_present:
