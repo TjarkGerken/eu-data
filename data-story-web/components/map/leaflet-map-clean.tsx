@@ -32,6 +32,34 @@ export default function LeafletMap({
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
+  // Add custom CSS for popup styling
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const existingStyle = document.getElementById('leaflet-custom-popup-style');
+      if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'leaflet-custom-popup-style';
+        style.textContent = `
+          .custom-popup .leaflet-popup-content-wrapper {
+            padding: 8px 12px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: none;
+            background: white;
+          }
+          .custom-popup .leaflet-popup-content {
+            margin: 0;
+            line-height: 1.4;
+          }
+          .custom-popup .leaflet-popup-tip {
+            background: white;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -84,9 +112,7 @@ export default function LeafletMap({
           featureCount: vectorData?.features?.length || 0,
           type: vectorData?.type,
           firstFeature: vectorData?.features?.[0]
-        });
-
-        if (vectorData && vectorData.features && vectorData.features.length > 0) {
+        });        if (vectorData && vectorData.features && vectorData.features.length > 0) {
           const geoJSONLayer = L.geoJSON(vectorData, {
             style: () => {
               // Use the improved color scale, but fallback to a visible color
@@ -101,13 +127,115 @@ export default function LeafletMap({
             },
             onEachFeature: (feature, layer) => {
               // Add popup or tooltip functionality here if needed
-              if (feature.properties) {
-                layer.bindPopup(`
-                  <div>
-                    <h3 class="font-bold">${feature.properties.name || 'Feature'}</h3>
-                    <pre class="text-xs bg-gray-100 p-2 rounded mt-2">${JSON.stringify(feature.properties, null, 2)}</pre>
+              if (feature.properties) {                const formatNumber = (value: number): string => {
+                  if (typeof value !== 'number' || isNaN(value)) return value?.toString() || '';
+                  return new Intl.NumberFormat('de-DE', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 3
+                  }).format(value);
+                };const formatPropertyValue = (key: string, value: any): string => {
+                  if (typeof value === 'number') {
+                    // Convert square meters to square kilometers for area fields
+                    if (key.toLowerCase().includes('area') && key.toLowerCase().includes('square') && key.toLowerCase().includes('meter')) {
+                      const squareKm = value / 1000000; // Convert m² to km²
+                      return formatNumber(squareKm) + ' km²';
+                    }
+                    return formatNumber(value);
+                  }
+                  if (typeof value === 'string' && !isNaN(Number(value))) {
+                    const numValue = Number(value);
+                    // Convert square meters to square kilometers for area fields
+                    if (key.toLowerCase().includes('area') && key.toLowerCase().includes('square') && key.toLowerCase().includes('meter')) {
+                      const squareKm = numValue / 1000000; // Convert m² to km²
+                      return formatNumber(squareKm) + ' km²';
+                    }
+                    return formatNumber(numValue);
+                  }
+                  return value?.toString() || '';
+                };                const formatPropertyName = (key: string): string => {
+                  let formattedName = key
+                    .replace(/_/g, ' ')
+                    .replace(/([A-Z])/g, ' $1')
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                    .join(' ');
+                  
+                  // Replace "Square Meters" with "Square Kilometers" for area fields
+                  if (formattedName.toLowerCase().includes('square meters')) {
+                    formattedName = formattedName.replace(/Square Meters/gi, 'Square Kilometers');
+                  }
+                  
+                  return formattedName;
+                };                const propertyEntries = Object.entries(feature.properties)
+                  .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                  .filter(([key, value]) => !key.toLowerCase().includes('pixel_count') && !key.toLowerCase().includes('risk_density') && !key.toLowerCase().includes('cluster_id'))
+                  .map(([key, value]) => {
+                    const formattedKey = formatPropertyName(key);
+                    const formattedValue = formatPropertyValue(key, value);
+                    return { key: formattedKey, value: formattedValue };
+                  });
+
+                const popupContent = `
+                  <div style="
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    max-width: 300px;
+                    line-height: 1.4;
+                  ">                    <div style="
+                      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+                      color: white;
+                      padding: 12px 16px;
+                      margin: -8px -12px 12px -12px;
+                      border-radius: 8px 8px 0 0;
+                      font-weight: 600;
+                      font-size: 16px;
+                      text-align: center;
+                      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                      ${feature.properties.name || feature.properties.cluster_id ? 
+                        `Cluster ID: ${feature.properties.cluster_id || feature.properties.name}` : 
+                        'Feature Details'}
+                    </div>
+                    <div style="padding: 4px 0;">
+                      ${propertyEntries.map(({ key, value }) => `
+                        <div style="
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: center;
+                          padding: 8px 12px;
+                          margin: 2px 0;                          background: ${key.toLowerCase().includes('risk') ? '#fef2f2' : 
+                                     key.toLowerCase().includes('area') ? '#f0fdf4' :
+                                     key.toLowerCase().includes('density') ? '#f7fee7' : '#f9fafb'};
+                          border-left: 3px solid ${key.toLowerCase().includes('risk') ? '#ef4444' : 
+                                                  key.toLowerCase().includes('area') ? '#22c55e' :
+                                                  key.toLowerCase().includes('density') ? '#84cc16' : '#6b7280'};
+                          border-radius: 4px;
+                          font-size: 13px;
+                        ">
+                          <span style="
+                            font-weight: 500;
+                            color: #374151;
+                            margin-right: 12px;
+                            flex: 1;
+                          ">${key}:</span>
+                          <span style="
+                            font-weight: 600;
+                            color: #111827;
+                            font-family: 'Courier New', monospace;
+                            background: white;
+                            padding: 2px 6px;
+                            border-radius: 3px;
+                            border: 1px solid #e5e7eb;
+                          ">${value}</span>
+                        </div>
+                      `).join('')}
+                    </div>
                   </div>
-                `);
+                `;
+
+                layer.bindPopup(popupContent, {
+                  maxWidth: 350,
+                  className: 'custom-popup'
+                });
               }
             }
           });
