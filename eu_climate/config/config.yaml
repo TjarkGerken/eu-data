@@ -150,6 +150,22 @@ data:
     dpi: 300
   upload:
     enabled: true
+  web_exports:
+    enabled: true
+    create_cog: true
+    create_mvt: true
+    cog_settings:
+      compress: "LZW"
+      predictor: 2
+      blocksize: 512
+      overview_compress: "LZW"
+      overview_resampling: "average"
+      auto_overviews: true
+    mvt_settings:
+      min_zoom: 0
+      max_zoom: 14
+      simplification: "drop-densest-as-needed"
+      generate_ids: true
   building:
     base_floor_height: 3
     max_floors: 30
