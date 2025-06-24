@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,6 +23,17 @@ import {
 import { Search, Filter, Image as ImageIcon, X } from "lucide-react";
 import { ImageOption } from "@/lib/types";
 
+interface ImageApiResponse {
+  url: string;
+  path?: string;
+  metadata?: {
+    id?: string;
+    category?: string;
+    scenario?: string;
+    description?: string;
+  };
+}
+
 export default function GalleryPage() {
   const [images, setImages] = useState<ImageOption[]>([]);
   const [filteredImages, setFilteredImages] = useState<ImageOption[]>([]);
@@ -35,10 +47,6 @@ export default function GalleryPage() {
     loadImages();
   }, []);
 
-  useEffect(() => {
-    filterImages();
-  }, [images, searchTerm, categoryFilter, scenarioFilter]);
-
   const loadImages = async () => {
     try {
       const response = await fetch("/api/images");
@@ -49,7 +57,7 @@ export default function GalleryPage() {
       }
 
       const formattedImages = (data.images || [])
-        .map((img: any) => {
+        .map((img: ImageApiResponse) => {
           const filename =
             img.path?.split("/").pop() || img.metadata?.id || "unknown";
           return {
@@ -61,7 +69,7 @@ export default function GalleryPage() {
             description: img.metadata?.description,
           };
         })
-        .filter((img: any) => img.url && img.name !== "unknown");
+        .filter((img: ImageOption) => img.url && img.name !== "unknown");
 
       setImages(formattedImages);
     } catch (error) {
@@ -72,7 +80,7 @@ export default function GalleryPage() {
     }
   };
 
-  const filterImages = () => {
+  const filterImages = useCallback(() => {
     let filtered = [...images];
 
     if (searchTerm) {
@@ -93,11 +101,15 @@ export default function GalleryPage() {
     }
 
     setFilteredImages(filtered);
-  };
+  }, [images, searchTerm, categoryFilter, scenarioFilter]);
+
+  useEffect(() => {
+    filterImages();
+  }, [filterImages]);
 
   const categories = Array.from(new Set(images.map((img) => img.category)));
   const scenarios = Array.from(
-    new Set(images.map((img) => img.scenario).filter(Boolean))
+    new Set(images.map((img) => img.scenario).filter((scenario): scenario is string => Boolean(scenario)))
   );
 
   if (loading) {
@@ -180,10 +192,11 @@ export default function GalleryPage() {
           >
             <CardContent className="p-0">
               <div className="relative aspect-video overflow-hidden rounded-t-lg">
-                <img
+                <Image
                   src={image.url}
                   alt={image.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-200"
                 />
                 <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-200" />
               </div>
@@ -236,10 +249,11 @@ export default function GalleryPage() {
             <div className="flex flex-col lg:flex-row h-full">
               {/* Image Section */}
               <div className="flex-1 relative bg-black">
-                <img
+                <Image
                   src={selectedImage.url}
                   alt={selectedImage.name}
-                  className="w-full h-full object-contain"
+                  fill
+                  className="object-contain"
                 />
                 <Button
                   variant="ghost"

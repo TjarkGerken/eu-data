@@ -44,7 +44,7 @@ export default function AdminDashboard() {
               References
             </TabsTrigger>
             <TabsTrigger value="images" className="flex items-center gap-2">
-              <Image className="h-4 w-4" />
+              <Image className="h-4 w-4" aria-label="Images tab icon" />
               Images
             </TabsTrigger>
           </TabsList>

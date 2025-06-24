@@ -12,7 +12,7 @@ import {
   BarChart3,
   Globe,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/language-context";
+// import { useLanguage } from "@/contexts/language-context";
 
 interface AnimatedStatisticsBlockProps {
   title?: string;
@@ -42,7 +42,7 @@ export function AnimatedStatisticsBlock({
   description,
   stats,
 }: AnimatedStatisticsBlockProps) {
-  const { language } = useLanguage();
+  // const { language } = useLanguage();
 
   const getIconComponent = (iconName: string) => {
     return iconMap[iconName as keyof typeof iconMap] || BarChart3;
@@ -65,7 +65,6 @@ export function AnimatedStatisticsBlock({
       opacity: 1,
       transition: {
         duration: 0.6,
-        ease: "easeOut",
       },
     },
   };

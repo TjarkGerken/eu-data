@@ -56,7 +56,7 @@ export function Header() {
               <div className="flex flex-col">
                 <motion.span
                   className="text-lg font-bold transition-colors duration-300"
-                  style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
+                  style={{ color: textColor }}
                 >
                   EU GEOLYTICS
                 </motion.span>

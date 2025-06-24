@@ -42,7 +42,7 @@ export function HeroVideoSection() {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+          transition={{ duration: 0.8 }}
           className="mb-8"
         >
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6">
@@ -57,7 +57,7 @@ export function HeroVideoSection() {
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
+          transition={{ duration: 0.8, delay: 0.3 }}
           className="relative max-w-4xl mx-auto mb-16"
         >
           <Card className="relative aspect-video overflow-hidden border-0 shadow-2xl bg-black/20 backdrop-blur-sm">

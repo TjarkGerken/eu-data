@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Quote } from "lucide-react";
-import { useLanguage } from "@/contexts/language-context";
+// import { useLanguage } from "@/contexts/language-context";
 
 interface AnimatedQuoteBlockProps {
   text: string;
@@ -16,7 +16,7 @@ export function AnimatedQuoteBlock({
   author,
   role,
 }: AnimatedQuoteBlockProps) {
-  const { language } = useLanguage();
+  // const { language } = useLanguage();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -47,7 +47,7 @@ export function AnimatedQuoteBlock({
         initial={{ opacity: 0, scale: 0.9 }}
         whileInView={{ opacity: 1, scale: 1 }}
         viewport={{ once: true }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
+        transition={{ duration: 0.8 }}
       >
         <Card className="relative overflow-hidden bg-gradient-to-br from-[#2d5a3d]/5 to-[#c4a747]/5 border-none shadow-lg">
           <CardContent className="p-12 text-center">

@@ -106,7 +106,7 @@ export function ClimateTimelineMinimal() {
         <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#2d5a3d] via-[#c4a747] to-[#2d5a3d]"></div>
 
         <div className="space-y-8">
-          {events.map((event, index) => (
+          {events.map((event) => (
             <div key={event.year} className="relative flex items-start gap-6">
               <div
                 className={`relative z-10 flex items-center justify-center w-16 h-16 rounded-full ${event.color} shadow-lg flex-shrink-0`}

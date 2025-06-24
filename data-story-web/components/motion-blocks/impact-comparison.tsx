@@ -70,7 +70,6 @@ export function ImpactComparison() {
       opacity: 1,
       transition: {
         duration: 0.8,
-        ease: "easeOut",
       },
     },
   }
@@ -146,7 +145,7 @@ export function ImpactComparison() {
                     initial={{ width: 0 }}
                     whileInView={{ width: "100%" }}
                     viewport={{ once: true }}
-                    transition={{ delay: 0.5 + index * 0.2, duration: 1.5, ease: "easeOut" }}
+                    transition={{ delay: 0.5 + index * 0.2, duration: 1.5 }}
                   >
                     <Progress value={comparison.after.value} className={`h-2 ${comparison.color}`} />
                   </motion.div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,28 +55,7 @@ export function InteractiveMap({
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
 
-  useEffect(() => {
-    loadAvailableLayers();
-  }, []);
-
-  useEffect(() => {
-    if (availableLayers.length > 0) {
-      initializeLayerStates();
-    }
-  }, [availableLayers, selectedLayers]);
-
-  const loadAvailableLayers = async () => {
-    try {
-      const layers = await mapTileService.getAvailableLayers();
-      setAvailableLayers(layers);
-    } catch (error) {
-      console.error("Failed to load map layers:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const initializeLayerStates = () => {
+  const initializeLayerStates = useCallback(() => {
     if (!Array.isArray(availableLayers)) {
       console.warn("availableLayers is not an array:", availableLayers);
       return;
@@ -89,6 +68,27 @@ export function InteractiveMap({
       metadata: layer,
     }));
     setLayerStates(states);
+  }, [availableLayers, selectedLayers]);
+
+  useEffect(() => {
+    loadAvailableLayers();
+  }, []);
+
+  useEffect(() => {
+    if (availableLayers.length > 0) {
+      initializeLayerStates();
+    }
+  }, [availableLayers, initializeLayerStates]);
+
+  const loadAvailableLayers = async () => {
+    try {
+      const layers = await mapTileService.getAvailableLayers();
+      setAvailableLayers(layers);
+    } catch (error) {
+      console.error("Failed to load map layers:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleLayerVisibility = (layerId: string) => {

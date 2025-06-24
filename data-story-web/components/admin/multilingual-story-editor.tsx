@@ -67,29 +67,39 @@ export default function MultilingualStoryEditor() {
 
       if (error) throw error;
 
-      setStories(data || []);
+      const mappedStories: Story[] = (data || []).map(story => ({
+        id: story.id,
+        languageCode: story.language_code,
+        heroTitle: story.hero_title || '',
+        heroDescription: story.hero_description || '',
+        dataStoryTitle: story.data_story_title || '',
+        dataStorySubtitle: '', // Not in database, using default
+        introText: story.intro_text_1 || '', // Using intro_text_1 as introText
+      }));
+
+      setStories(mappedStories);
 
       // Populate form with existing data
-      const englishStory = data?.find((s) => s.language_code === "en");
-      const germanStory = data?.find((s) => s.language_code === "de");
+      const englishStory = mappedStories.find((s) => s.languageCode === "en");
+      const germanStory = mappedStories.find((s) => s.languageCode === "de");
 
       if (englishStory) {
         setEnglishData({
-          heroTitle: englishStory.hero_title || "",
-          heroDescription: englishStory.hero_description || "",
-          dataStoryTitle: englishStory.data_story_title || "",
-          introText1: englishStory.intro_text_1 || "",
-          introText2: englishStory.intro_text_2 || "",
+          heroTitle: englishStory.heroTitle || "",
+          heroDescription: englishStory.heroDescription || "",
+          dataStoryTitle: englishStory.dataStoryTitle || "",
+          introText1: englishStory.introText || "",
+          introText2: "", // Not available in mapped data
         });
       }
 
       if (germanStory) {
         setGermanData({
-          heroTitle: germanStory.hero_title || "",
-          heroDescription: germanStory.hero_description || "",
-          dataStoryTitle: germanStory.data_story_title || "",
-          introText1: germanStory.intro_text_1 || "",
-          introText2: germanStory.intro_text_2 || "",
+          heroTitle: germanStory.heroTitle || "",
+          heroDescription: germanStory.heroDescription || "",
+          dataStoryTitle: germanStory.dataStoryTitle || "",
+          introText1: germanStory.introText || "",
+          introText2: "", // Not available in mapped data
         });
       }
     } catch (err) {
@@ -105,7 +115,7 @@ export default function MultilingualStoryEditor() {
 
     try {
       const existingStory = stories.find(
-        (s) => s.language_code === languageCode
+        (s) => s.languageCode === languageCode
       );
 
       const storyData = {

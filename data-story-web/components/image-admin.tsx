@@ -15,12 +15,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Upload, RefreshCw, Eye } from "lucide-react";
-import { BlobImage } from "@/lib/blob-manager";
+import { SupabaseImage } from "@/lib/blob-manager";
 import { BLOB_CONFIG, ImageCategory, ImageScenario } from "@/lib/blob-config";
 import ClimateImage from "./climate-image";
 
 export default function ImageAdmin() {
-  const [images, setImages] = useState<BlobImage[]>([]);
+  const [images, setImages] = useState<SupabaseImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedCategory, setSelectedCategory] =
@@ -119,7 +119,7 @@ export default function ImageAdmin() {
     if (!acc[category]) acc[category] = [];
     acc[category].push(image);
     return acc;
-  }, {} as Record<string, BlobImage[]>);
+  }, {} as Record<string, SupabaseImage[]>);
 
   return (
     <div className="space-y-6">
@@ -262,7 +262,7 @@ export default function ImageAdmin() {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {categoryImages.map((image) => (
-                        <Card key={image.pathname} className="overflow-hidden">
+                        <Card key={image.path} className="overflow-hidden">
                           <div className="aspect-video relative">
                             <ClimateImage
                               category={image.metadata?.category || "combined"}
@@ -300,7 +300,7 @@ export default function ImageAdmin() {
                                 <Button
                                   variant="destructive"
                                   size="sm"
-                                  onClick={() => handleDelete(image.pathname)}
+                                  onClick={() => handleDelete(image.path)}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>

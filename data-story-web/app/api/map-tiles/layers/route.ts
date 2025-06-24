@@ -52,7 +52,7 @@ export async function GET() {
 }
 
 async function extractLayerMetadata(
-  layer: any
+  layer: { name: string; created_at?: string; updated_at?: string; metadata?: { size?: number } }
 ): Promise<MapLayerMetadata | null> {
   try {
     const fileName = layer.name;

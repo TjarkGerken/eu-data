@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import NextImage from "next/image";
 import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -42,20 +42,7 @@ export default function ImageSelector({
   const [selectedImageData, setSelectedImageData] =
     useState<ClimateImage | null>(null);
 
-  useEffect(() => {
-    fetchImages();
-  }, [category, scenario]);
-
-  useEffect(() => {
-    if (value && images.length > 0) {
-      const found = images.find(
-        (img) => img.id.toString() === value || img.filename === value
-      );
-      setSelectedImageData(found || null);
-    }
-  }, [value, images]);
-
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     try {
       let query = supabase.from("climate_images").select("*");
 
@@ -73,13 +60,36 @@ export default function ImageSelector({
 
       if (error) throw error;
 
-      setImages(data || []);
+      const mappedImages: ClimateImage[] = (data || []).map(item => ({
+        id: item.id,
+        filename: item.filename,
+        category: item.category,
+        scenario: item.scenario,
+        description: item.description,
+        publicUrl: item.public_url,
+        storageType: 'blob'
+      }));
+
+      setImages(mappedImages);
     } catch (error) {
       console.error("Error fetching images:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, scenario]);
+
+  useEffect(() => {
+    fetchImages();
+  }, [fetchImages]);
+
+  useEffect(() => {
+    if (value && images.length > 0) {
+      const found = images.find(
+        (img) => img.id.toString() === value || img.filename === value
+      );
+      setSelectedImageData(found || null);
+    }
+  }, [value, images]);
 
   const handleImageSelect = (imageId: string) => {
     const imageData = images.find((img) => img.id.toString() === imageId);
@@ -117,7 +127,7 @@ export default function ImageSelector({
           {images.map((image) => (
             <SelectItem key={image.id} value={image.id.toString()}>
               <div className="flex items-center space-x-2">
-                <Image className="h-4 w-4" />
+                <Image className="h-4 w-4" aria-label="Image icon" />
                 <span className="truncate max-w-48">{image.filename}</span>
                 <Badge
                   className={getCategoryColor(image.category)}
@@ -139,12 +149,13 @@ export default function ImageSelector({
           <CardContent className="p-4">
             <div className="space-y-3">
               <div className="aspect-video relative bg-gray-100 rounded-lg overflow-hidden">
-                <img
+                <NextImage
                   src={selectedImageData.publicUrl}
                   alt={
                     selectedImageData.description || selectedImageData.filename
                   }
-                  className="object-cover w-full h-full"
+                  fill
+                  className="object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = "/placeholder.svg";
                   }}
@@ -187,7 +198,7 @@ export default function ImageSelector({
 
       {images.length === 0 && (
         <div className="text-center p-8 text-muted-foreground">
-          <Image className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <Image className="h-12 w-12 mx-auto mb-4 opacity-50" aria-label="No images found" />
           <p>No images found</p>
           {(category || scenario) && (
             <p className="text-sm">

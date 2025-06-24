@@ -28,7 +28,7 @@ export class SupabaseImageManager {
       metadata.id
     }.${fileExt}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from(this.BUCKET)
       .upload(filename, file, {
         cacheControl: "3600",

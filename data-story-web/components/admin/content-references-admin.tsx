@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -16,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, Save, X, Edit } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { ContentReference } from "@/lib/supabase";
+import type { ContentReference, ContentReferenceInsert } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ContentReferencesAdmin() {
@@ -32,14 +31,10 @@ export default function ContentReferencesAdmin() {
     year: new Date().getFullYear(),
     journal: "",
     url: "",
-    type: "journal" as const,
+    type: "journal" as "journal" | "book" | "website" | "report",
   });
 
-  useEffect(() => {
-    loadReferences();
-  }, []);
-
-  const loadReferences = async () => {
+  const loadReferences = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -59,7 +54,11 @@ export default function ContentReferencesAdmin() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadReferences();
+  }, [loadReferences]);
 
   const resetForm = () => {
     setFormData({
@@ -68,7 +67,7 @@ export default function ContentReferencesAdmin() {
       year: new Date().getFullYear(),
       journal: "",
       url: "",
-      type: "journal",
+      type: "journal" as "journal" | "book" | "website" | "report",
     });
   };
 
@@ -83,9 +82,10 @@ export default function ContentReferencesAdmin() {
         if (error) throw error;
         toast({ title: "Reference updated successfully" });
       } else {
+        const insertData = formData as ContentReferenceInsert;
         const { error } = await supabase
           .from("content_references")
-          .insert([formData]);
+          .insert([insertData]);
 
         if (error) throw error;
         toast({ title: "Reference created successfully" });
@@ -255,7 +255,7 @@ export default function ContentReferencesAdmin() {
                 <Select
                   value={formData.type}
                   onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, type: value as any }))
+                    setFormData((prev) => ({ ...prev, type: value as "journal" | "book" | "website" | "report" }))
                   }
                 >
                   <SelectTrigger>
