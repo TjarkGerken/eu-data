@@ -13,6 +13,7 @@ from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.utils.normalise_data import AdvancedDataNormalizer, NormalizationStrategy
+from eu_climate.utils.freight_processor import SharedFreightProcessor
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 
 logger = setup_logging(__name__)
@@ -24,6 +25,7 @@ class EconomicDataLoader:
     def __init__(self, config: ProjectConfig):
         self.config = config
         self.data_dir = config.data_dir
+        self.freight_processor = SharedFreightProcessor(config)
         
     def load_economic_datasets(self) -> Dict[str, pd.DataFrame]:
         """Load all economic datasets and standardize format."""
@@ -38,7 +40,10 @@ class EconomicDataLoader:
         else:
             logger.error(f"GDP dataset not found: {gdp_path}")
             
-        datasets['freight'] = self._load_maritime_freight_data()
+        # Use shared freight processor
+        freight_data = self._load_maritime_freight_data()
+        if not freight_data.empty:
+            datasets['freight'] = freight_data
             
         hrst_path = self.data_dir / getattr(self.config, 'hrst_file_path', 'L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv')
         if hrst_path.exists():
@@ -128,117 +133,26 @@ class EconomicDataLoader:
         logger.info(f"Processed HRST data: {len(processed)} regions for year {latest_year}")
         return processed
     
-    def _create_unified_freight_data(self) -> pd.DataFrame:
-        """Create unified freight dataset by combining loading and unloading data."""
-        logger.info("Creating unified freight dataset from loading and unloading sources")
-        
-        # Load freight loading data
-        loading_path = self.data_dir / "L3-estat_road_go_loading" / "estat_road_go_na_rl3g_en.csv"
-        if not loading_path.exists():
-            raise FileNotFoundError(f"Freight loading dataset not found: {loading_path}")
-        
-        # Load freight unloading data  
-        unloading_path = self.data_dir / "L3-estat_road_go_unloading" / "estat_road_go_na_ru3g_en.csv"
-        if not unloading_path.exists():
-            raise FileNotFoundError(f"Freight unloading dataset not found: {unloading_path}")
-        
-        logger.info(f"Loading freight loading data from {loading_path}")
-        loading_df = pd.read_csv(loading_path)
-        loading_processed = self._process_freight_data(loading_df)
-        
-        logger.info(f"Loading freight unloading data from {unloading_path}")
-        unloading_df = pd.read_csv(unloading_path)
-        unloading_processed = self._process_freight_data(unloading_df)
-        
-        # Merge and sum the freight values
-        unified_data = loading_processed.merge(
-            unloading_processed, 
-            on=['nuts_code', 'region'], 
-            how='outer',
-            suffixes=('_loading', '_unloading')
-        )
-        
-        # Fill NaN values with 0 for proper summing
-        unified_data['freight_value_loading'] = unified_data['freight_value_loading'].fillna(0)
-        unified_data['freight_value_unloading'] = unified_data['freight_value_unloading'].fillna(0)
-        
-        # Sum loading and unloading values
-        unified_data['freight_value'] = (
-            unified_data['freight_value_loading'] + 
-            unified_data['freight_value_unloading']
-        )
-        
-        # Clean up columns and standardize format
-        result = unified_data[['nuts_code', 'freight_value', 'region']].copy()
-        result['unit'] = 'T'  # Tonnes (standard freight unit)
-        
-        # Remove rows with zero or NaN total freight
-        result = result[result['freight_value'] > 0].dropna()
-        
-        logger.info(f"Created unified freight data: {len(result)} regions with combined loading + unloading values")
-        logger.info(f"Total freight volume: {result['freight_value'].sum():,.0f} tonnes")
-        
-        # Save unified dataset for future use
-        unified_freight_path = self.data_dir / "unified_freight_data.csv"
-        result.to_csv(unified_freight_path, index=False)
-        logger.info(f"Saved unified freight dataset to {unified_freight_path}")
-        
-        return result
-    
     def _load_maritime_freight_data(self) -> pd.DataFrame:
-        """Load enhanced freight data combining NUTS road freight with Zeevart maritime data."""
-        logger.info("Loading enhanced freight dataset with maritime data integration")
+        """Load enhanced freight data using shared processor."""
+        logger.info("Loading freight data using shared processor")
         
-        # First load traditional NUTS freight data
-        unified_freight_path = self.data_dir / "unified_freight_data.csv"
-        if unified_freight_path.exists():
-            logger.info(f"Loading existing unified freight dataset from {unified_freight_path}")
-            nuts_freight_df = pd.read_csv(unified_freight_path)
-            nuts_freight_processed = self._process_unified_freight_data(nuts_freight_df)
-        else:
-            logger.info("Unified freight dataset not found, creating from loading and unloading data")
-            nuts_freight_processed = self._create_unified_freight_data()
-        
-        # Load and process Zeevart maritime freight data
-        zeevart_loader = ZeevartDataLoader(self.config)
-        zeevart_data = zeevart_loader.load_zeevart_freight_data()
-        
-        # Map freight data to ports using centralized approach
-        port_mapper = PortFreightMapper(self.config)
-        port_freight_gdf = port_mapper.map_freight_to_ports(zeevart_data)
-        
-        
-        freight_processor = CombinedFreightProcessor(self.config)
-        combined_datasets = freight_processor.combine_freight_datasets(
-            nuts_freight_processed, 
-            port_freight_gdf
-        )
-        
-        self.enhanced_freight_datasets = combined_datasets
-        
-        # For backward compatibility, return the NUTS freight data as primary
-        # The port data will be handled separately during rasterization
-        if 'nuts_freight' in combined_datasets:
-            return combined_datasets['nuts_freight']
-        else:
-            logger.warning("No NUTS freight data available, using empty dataset")
+        try:
+            nuts_freight_data, enhanced_datasets = self.freight_processor.load_and_process_freight_data()
+            
+            if enhanced_datasets:
+                self.enhanced_freight_datasets = enhanced_datasets
+                logger.info("Enhanced freight datasets available for distribution")
+            
+            if nuts_freight_data.empty:
+                logger.warning("No NUTS freight data available from shared processor")
+                return pd.DataFrame()
+            
+            return nuts_freight_data
+            
+        except Exception as e:
+            logger.error(f"Error loading freight data with shared processor: {e}")
             return pd.DataFrame()
-    
-    def _process_unified_freight_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process pre-unified freight dataset that was already combined."""
-        logger.info(f"Processing unified freight data: {len(df)} regions")
-        
-        # Ensure numeric values
-        df['freight_value'] = pd.to_numeric(df['freight_value'], errors='coerce')
-        
-        # Remove invalid data
-        processed = df.dropna()
-        processed = processed[processed['freight_value'] > 0]
-        
-        logger.info(f"Processed unified freight data: {len(processed)} regions")
-        logger.info(f"Total freight volume: {processed['freight_value'].sum():,.0f} tonnes")
-        
-        return processed
 
 
 class NUTSDataMapper:
@@ -581,285 +495,6 @@ class EconomicDistributor:
         except Exception as e:
             logger.error(f"Error rasterizing port freight data: {e}")
             return np.zeros(target_shape, dtype=np.float32)
-
-
-class ZeevartDataLoader:
-    """Handles loading and preprocessing of Zeevart maritime freight data."""
-    
-    def __init__(self, config: ProjectConfig):
-        self.config = config
-        self.data_dir = config.data_dir
-        self.transformer = RasterTransformer(
-            target_crs=config.target_crs,
-            config=config
-        )
-        
-    def load_zeevart_freight_data(self) -> pd.DataFrame:
-        """Load and process Zeevart maritime freight data."""
-        zeevart_path = self.config.zeevart_freight_path
-        
-        if not zeevart_path.exists():
-            logger.warning(f"Zeevart data not found: {zeevart_path}")
-            return pd.DataFrame()
-            
-        logger.info(f"Loading Zeevart freight data from {zeevart_path}")
-        
-        try:
-            zeevart_df = pd.read_excel(zeevart_path)
-            logger.info(f"Loaded Zeevart data with shape: {zeevart_df.shape}")
-            logger.info(f"Columns: {zeevart_df.columns.tolist()}")
-            
-            processed_data = self._process_zeevart_data(zeevart_df)
-            return processed_data
-            
-        except Exception as e:
-            logger.error(f"Error loading Zeevart data: {e}")
-            return pd.DataFrame()
-    
-    def _process_zeevart_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process Zeevart data to extract relevant freight values."""
-        # Filter for "Aan- en afvoer" (combined import/export) data
-        combined_flow_data = df[df['Vervoerstromen'] == 'Aan- en afvoer']
-        
-        # Get most recent full year (2022*)
-        latest_year = '2022*'
-        if latest_year not in combined_flow_data['Perioden'].values:
-            available_years = combined_flow_data['Perioden'].unique()
-            latest_year = sorted([year for year in available_years if '*' in year and 'kwartaal' not in year])[-1]
-            logger.info(f"Using latest available year: {latest_year}")
-        
-        latest_data = combined_flow_data[combined_flow_data['Perioden'] == latest_year]
-        
-        # Group by port category and sum freight volumes
-        aggregated = latest_data.groupby('Nederlandse zeehavens').agg({
-            'Overgeslagen brutogewicht (1 000 ton)': 'sum'
-        }).reset_index()
-        
-        # Clean and standardize column names
-        aggregated.columns = ['port_category', 'freight_volume_1000_tons']
-        
-        # Convert to tonnes (multiply by 1000)
-        aggregated['freight_value'] = aggregated['freight_volume_1000_tons'] * 1000
-        
-        # Remove 'Totaal' category to avoid double counting
-        aggregated = aggregated[aggregated['port_category'] != 'Totaal']
-        
-        # Ensure numeric values
-        aggregated['freight_value'] = pd.to_numeric(aggregated['freight_value'], errors='coerce')
-        aggregated = aggregated.dropna()
-        
-        logger.info(f"Processed Zeevart data: {len(aggregated)} port categories for year {latest_year}")
-        logger.info(f"Total maritime freight volume: {aggregated['freight_value'].sum():,.0f} tonnes")
-        
-        return aggregated
-
-
-class PortFreightMapper:
-    """Maps freight data to individual port geometries using centralized transformation utilities."""
-    
-    def __init__(self, config: ProjectConfig):
-        self.config = config
-        self.transformer = RasterTransformer(
-            target_crs=config.target_crs,
-            config=config
-        )
-        
-    def load_port_mapping(self) -> pd.DataFrame:
-        """Load port ID to category mapping file."""
-        mapping_path = self.config.port_mapping_path
-        
-        if not mapping_path.exists():
-            logger.error(f"Port mapping file not found: {mapping_path}")
-            return pd.DataFrame()
-            
-        try:
-            mapping_df = pd.read_excel(mapping_path)
-            logger.info(f"Loaded port mapping with shape: {mapping_df.shape}")
-            return mapping_df
-            
-        except Exception as e:
-            logger.error(f"Error loading port mapping: {e}")
-            return pd.DataFrame()
-    
-    def load_port_shapefile(self) -> gpd.GeoDataFrame:
-        """Load port shapefile using consistent coordinate transformation."""
-        if not self.config.port_path.exists():
-            logger.error(f"Port shapefile not found: {self.config.port_path}")
-            return gpd.GeoDataFrame()
-            
-        try:
-            port_gdf = gpd.read_file(self.config.port_path)
-            logger.info(f"Loaded port shapefile with {len(port_gdf)} ports")
-            logger.info(f"Port shapefile columns: {port_gdf.columns.tolist()}")
-            
-            # Transform to target CRS using consistent approach
-            target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
-            if port_gdf.crs != target_crs:
-                port_gdf = port_gdf.to_crs(target_crs)
-                logger.info(f"Transformed port data to {target_crs}")
-                
-            return port_gdf
-            
-        except Exception as e:
-            logger.error(f"Error loading port shapefile: {e}")
-            return gpd.GeoDataFrame()
-    
-    def map_freight_to_ports(self, zeevart_data: pd.DataFrame) -> gpd.GeoDataFrame:
-        """Map Zeevart freight data to individual port geometries."""
-        # Load port shapefile and mapping
-        port_gdf = self.load_port_shapefile()
-        mapping_df = self.load_port_mapping()
-        
-        if port_gdf.empty or mapping_df.empty or zeevart_data.empty:
-            logger.warning("Missing required data for port freight mapping")
-            return gpd.GeoDataFrame()
-        
-        # Merge port geometries with categories
-        port_with_categories = port_gdf.merge(
-            mapping_df, 
-            left_on='PORT_ID', 
-            right_on='PORT_ID', 
-            how='left'
-        )
-        
-        # Merge with freight data
-        port_with_freight = port_with_categories.merge(
-            zeevart_data,
-            left_on='Category',
-            right_on='port_category',
-            how='left'
-        )
-        
-        # Fill missing freight values with 0 and ensure proper float type
-        port_with_freight['freight_value'] = port_with_freight['freight_value'].fillna(0).astype(float)
-        
-        # Distribute freight values among ports in each category to avoid duplication
-        # Calculate the number of ports per category and distribute the total freight
-        if not port_with_freight.empty:
-            category_port_counts = port_with_freight.groupby('port_category').size()
-            logger.info("Distributing freight among ports by category:")
-            
-            for category, count in category_port_counts.items():
-                if category in zeevart_data['port_category'].values:
-                    total_freight = zeevart_data[zeevart_data['port_category'] == category]['freight_value'].iloc[0]
-                    freight_per_port = total_freight / count if count > 0 else 0
-                    
-                    # Update freight values for this category (ensure proper data type)
-                    mask = port_with_freight['port_category'] == category
-                    port_with_freight.loc[mask, 'freight_value'] = float(freight_per_port)
-                    
-                    logger.info(f"  {category}: {total_freight:,.0f} tonnes / {count} ports = {freight_per_port:,.0f} tonnes per port")
-        
-        # Include all ports - those with categories get freight, those without get 0 freight
-        valid_ports = port_with_freight.copy()
-        
-        # Ensure all ports have a freight value (NaN categories get 0 freight)  
-        valid_ports['freight_value'] = valid_ports['freight_value'].fillna(0)
-        
-        # Filter out any ports with invalid geometries
-        valid_ports = valid_ports[valid_ports['geometry'].notna()].copy()
-        
-        # Clip to study area using existing NUTS boundaries
-        nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
-        if nuts_l3_path.exists():
-            try:
-                nuts_gdf = gpd.read_file(nuts_l3_path)
-                target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
-                if nuts_gdf.crs != target_crs:
-                    nuts_gdf = nuts_gdf.to_crs(target_crs)
-                
-                study_area = nuts_gdf.geometry.unary_union
-                ports_in_study_area = valid_ports[valid_ports.geometry.intersects(study_area)]
-                
-                logger.info(f"Clipped to study area: {len(ports_in_study_area)} ports with freight data "
-                           f"(from {len(valid_ports)} total valid ports)")
-                valid_ports = ports_in_study_area
-                
-            except Exception as e:
-                logger.warning(f"Could not clip ports to study area: {e}")
-        
-        logger.info(f"Mapped freight to {len(valid_ports)} ports")
-        if len(valid_ports) > 0:
-            total_mapped_freight = valid_ports['freight_value'].sum()
-            logger.info(f"Total mapped maritime freight: {total_mapped_freight:,.0f} tonnes")
-            
-            # Log freight distribution by category
-            freight_by_category = valid_ports.groupby('port_category')['freight_value'].sum().sort_values(ascending=False)
-            logger.info("Freight distribution by port category:")
-            for category, freight in freight_by_category.items():
-                logger.info(f"  {category}: {freight:,.0f} tonnes")
-        
-        return valid_ports
-
-
-class CombinedFreightProcessor:
-    """Combines NUTS-based and port-based freight data using centralized normalization."""
-    
-    def __init__(self, config: ProjectConfig):
-        self.config = config
-        self.transformer = RasterTransformer(
-            target_crs=config.target_crs,
-            config=config
-        )
-        self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.ECONOMIC_OPTIMIZED)
-        
-    def combine_freight_datasets(self, nuts_freight_data: pd.DataFrame, 
-                                port_freight_gdf: gpd.GeoDataFrame) -> Dict[str, pd.DataFrame]:
-        """Combine NUTS and port freight data ensuring no double counting."""
-        combined_datasets = {}
-        
-        if not nuts_freight_data.empty:
-            combined_datasets['nuts_freight'] = nuts_freight_data.copy()
-            nuts_total = nuts_freight_data['freight_value'].sum()
-            logger.info(f"NUTS freight total: {nuts_total:,.0f} tonnes")
-        
-        if not port_freight_gdf.empty:
-            port_data = pd.DataFrame({
-                'port_id': port_freight_gdf['PORT_ID'],
-                'freight_value': port_freight_gdf['freight_value'],
-                'geometry': port_freight_gdf['geometry'],
-                'port_category': port_freight_gdf['port_category']
-            })
-            combined_datasets['port_freight'] = port_data
-            port_total = port_data['freight_value'].sum()
-            logger.info(f"Port freight total: {port_total:,.0f} tonnes")
-        
-        if 'nuts_freight' in combined_datasets and 'port_freight' in combined_datasets:
-            logger.info("Created combined freight dataset with both NUTS and port components")
-            
-            combined_total = nuts_total + port_total
-            logger.info(f"Combined freight total: {combined_total:,.0f} tonnes")
-            logger.info(f"NUTS share: {(nuts_total/combined_total)*100:.1f}%, Port share: {(port_total/combined_total)*100:.1f}%")
-            
-        return combined_datasets
-    
-    def normalize_combined_freight_data(self, combined_datasets: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        """Apply sophisticated normalization across all freight datasets."""
-        normalized_datasets = {}
-        
-        for dataset_name, dataset in combined_datasets.items():
-            if 'freight_value' in dataset.columns:
-                valid_mask = (dataset['freight_value'] > 0) & dataset['freight_value'].notna()
-                
-                if valid_mask.sum() > 0:
-                    freight_values = dataset['freight_value'].values
-                    normalized_values = self.normalizer.normalize_economic_data(
-                        data=freight_values,
-                        economic_mask=valid_mask.values
-                    )
-                    
-                    normalized_dataset = dataset.copy()
-                    normalized_dataset['freight_value_normalized'] = normalized_values
-                    normalized_datasets[dataset_name] = normalized_dataset
-                    
-                    logger.info(f"Normalized {dataset_name}: {valid_mask.sum()} valid freight entries")
-                else:
-                    logger.warning(f"No valid freight data found in {dataset_name}")
-                    normalized_datasets[dataset_name] = dataset.copy()
-            else:
-                normalized_datasets[dataset_name] = dataset.copy()
-        
-        return normalized_datasets
 
 
 class RelevanceLayer:

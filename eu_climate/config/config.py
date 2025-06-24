@@ -1,8 +1,20 @@
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any, Optional, List
 import numpy as np
-from rasterio.enums import Resampling
+try:
+    from rasterio.enums import Resampling
+    RASTERIO_AVAILABLE = True
+except ImportError:
+    print("Warning: rasterio not available. Web export features will be limited.")
+    RASTERIO_AVAILABLE = False
+    
+    # Create a fallback Resampling enum
+    class Resampling:
+        nearest = 'nearest'
+        bilinear = 'bilinear'
+        cubic = 'cubic'
+        average = 'average'
 import yaml
 from eu_climate.utils.utils import setup_logging
 # from eu_climate.utils.data_loading import get_config
@@ -93,6 +105,14 @@ class ProjectConfig:
         # Store visualization parameters
         self.figure_size = tuple(self.config['visualization']['figure_size'])
         self.dpi = self.config['visualization']['dpi']
+        
+        # Store web export parameters
+        self.web_exports = self.config.get('web_exports', {})
+        self.web_exports_enabled = self.web_exports.get('enabled', True)
+        self.create_cog = self.web_exports.get('create_cog', True)
+        self.create_mvt = self.web_exports.get('create_mvt', True)
+        self.cog_settings = self.web_exports.get('cog_settings', {})
+        self.mvt_settings = self.web_exports.get('mvt_settings', {})
         
         # Store hazard layer parameters
         hazard_config = self.config.get('hazard', {})

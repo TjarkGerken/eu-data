@@ -11,6 +11,7 @@ from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.utils.caching_wrappers import CacheAwareMethod
 from eu_climate.utils.clustering_utils import RiskClusterExtractor, RiskClusterAnalyzer
+from eu_climate.utils.web_export_mixin import WebExportMixin
 from eu_climate.risk_layers.hazard_layer import SeaLevelScenario
 
 logger = setup_logging(__name__)
@@ -31,6 +32,7 @@ class ClusterConfiguration:
     polygon_simplification_tolerance: float = 15
     natural_smoothing_iterations: int = 2
     corner_rounding_radius: float = 30
+    use_contour_method: bool = False
     export_formats: List[str] = None
     
     def __post_init__(self):
@@ -38,7 +40,7 @@ class ClusterConfiguration:
             self.export_formats = ['gpkg', 'png']
 
 
-class ClusterLayer:
+class ClusterLayer(WebExportMixin):
     """
     Cluster Layer Implementation
     ===========================
@@ -57,6 +59,7 @@ class ClusterLayer:
     
     def __init__(self, config: ProjectConfig):
         """Initialize the Cluster Layer with project configuration."""
+        super().__init__()
         self.config = config
         self.cluster_config = self._load_cluster_configuration()
         
@@ -73,7 +76,8 @@ class ClusterLayer:
             smoothing_buffer_meters=self.cluster_config.smoothing_buffer_meters,
             polygon_simplification_tolerance=self.cluster_config.polygon_simplification_tolerance,
             natural_smoothing_iterations=self.cluster_config.natural_smoothing_iterations,
-            corner_rounding_radius=self.cluster_config.corner_rounding_radius
+            corner_rounding_radius=self.cluster_config.corner_rounding_radius,
+            use_contour_method=getattr(self.cluster_config, 'use_contour_method', False)
         )
         self.cluster_analyzer = RiskClusterAnalyzer()
         
@@ -98,6 +102,7 @@ class ClusterLayer:
             polygon_simplification_tolerance=clustering_config.get('polygon_simplification_tolerance', 15),
             natural_smoothing_iterations=clustering_config.get('natural_smoothing_iterations', 2),
             corner_rounding_radius=clustering_config.get('corner_rounding_radius', 30),
+            use_contour_method=clustering_config.get('use_contour_method', False),
             export_formats=clustering_config.get('export_formats', ['gpkg', 'png'])
         )
         
@@ -147,17 +152,27 @@ class ClusterLayer:
         return risk_file_paths
     
     def _should_skip_file(self, file_stem: str) -> bool:
-        """Check if file should be skipped from clustering analysis."""
-        patterns_to_skip = [
-            'freight_loading',
-            'freight_unloading',
-            'population'
+        """Only process GDP, Population, and Freight (combined) for economic impact analysis."""
+        filename_lower = file_stem.lower()
+        
+        # Only keep these three specific indicators
+        allowed_indicators = [
+            '_gdp',
+            '_population', 
+            '_freight'  # Only combined freight, not loading/unloading
         ]
         
-        for pattern in patterns_to_skip:
-            if pattern in file_stem.lower():
-                return True
-        return False
+        # Check if file contains any allowed indicator
+        for indicator in allowed_indicators:
+            if indicator in filename_lower:
+                # Special check for freight - skip loading/unloading variants
+                if indicator == '_freight':
+                    if '_loading' in filename_lower or '_unloading' in filename_lower:
+                        return True  # Skip freight loading/unloading
+                return False  # Keep this file
+                
+        # Skip all other files (COMBINED, HRST, etc.)
+        return True
     
     def parse_risk_filename(self, filename: str) -> Tuple[str, str, Optional[str]]:
         """Parse risk filename to extract scenario and economic components."""
@@ -185,8 +200,8 @@ class ClusterLayer:
     def process_risk_clusters_sequential(self, 
                                        custom_risk_files: Optional[Dict[str, str]] = None,
                                        visualize: bool = True) -> Dict[str, gpd.GeoDataFrame]:
-        """Process risk outputs to extract clusters, processing and plotting one at a time."""
-        logger.info("Processing risk clusters sequentially from existing outputs...")
+        """Process risk outputs to extract clusters using sequential pattern: calculate -> visualize -> write."""
+        logger.info("Starting sequential cluster processing: calculate -> visualize -> write per scenario")
         
         if custom_risk_files:
             risk_file_paths = {"custom": custom_risk_files}
@@ -200,23 +215,26 @@ class ClusterLayer:
         all_cluster_results = {}
         
         for scenario_name, scenario_files in risk_file_paths.items():
-            logger.info(f"Processing clusters for scenario: {scenario_name}")
+            logger.info(f"\n-> Processing scenario: {scenario_name}")
             
             for file_key, file_path in scenario_files.items():
-                logger.info(f"Processing and plotting clusters for: {file_key}")
+                logger.info(f"  -> Calculate clusters for: {file_key}")
                 
                 cluster_result = self._process_single_risk_file(file_path, file_key)
                 
                 if not cluster_result.empty:
                     all_cluster_results[file_key] = cluster_result
-                    logger.info(f"Extracted {len(cluster_result)} clusters from {file_key}")
+                    logger.info(f"  + Calculated: {len(cluster_result)} clusters")
                     
+                    logger.info(f"  -> Visualize & Write: {file_key}")
                     self._export_single_cluster_result(file_key, cluster_result, visualize)
-                    logger.info(f"Completed processing and plotting for {file_key}")
+                    logger.info(f"  + Completed processing for: {file_key}")
                 else:
-                    logger.info(f"No clusters found in {file_key}")
+                    logger.info(f"  ! No clusters found in: {file_key}")
+                    
+            logger.info(f"+ Scenario {scenario_name} complete")
         
-        logger.info(f"Processed clusters for {len(all_cluster_results)} risk scenarios")
+        logger.info(f"\n+ Sequential cluster processing complete: {len(all_cluster_results)} scenarios processed")
         return all_cluster_results
     
     def process_risk_clusters(self, 
@@ -295,8 +313,9 @@ class ClusterLayer:
     def _export_single_cluster_result(self, 
                                     file_key: str, 
                                     cluster_geodataframe: gpd.GeoDataFrame,
-                                    create_visualizations: bool) -> None:
-        """Export single cluster result with proper directory structure."""
+                                    create_visualizations: bool,
+                                    create_web_formats: bool = True) -> None:
+        """Export single cluster result with proper directory structure and web formats."""
         slr_scenario, economic_indicator, full_scenario_name = self.parse_risk_filename(file_key)
         
         output_dir = self._create_cluster_output_directory(slr_scenario)
@@ -306,8 +325,19 @@ class ClusterLayer:
         if 'gpkg' in self.cluster_config.export_formats:
             gpkg_path = output_dir / "gpkg" / f"{cluster_filename}.gpkg"
             gpkg_path.parent.mkdir(parents=True, exist_ok=True)
-            cluster_geodataframe.to_file(gpkg_path, driver='GPKG')
+            
+            # Use the web export mixin to save both legacy and web formats
+            results = self.save_vector_with_web_exports(
+                gdf=cluster_geodataframe,
+                output_path=gpkg_path,
+                layer_name=cluster_filename,
+                create_web_formats=create_web_formats
+            )
+            
+            if results.get('gpkg', False):
             logger.info(f"Saved cluster GeoPackage: {gpkg_path}")
+            if results.get('mvt', False):
+                logger.info(f"Created web-optimized MVT for cluster: {cluster_filename}")
         
         if create_visualizations and 'png' in self.cluster_config.export_formats:
             png_path = output_dir / f"{cluster_filename}.png"
