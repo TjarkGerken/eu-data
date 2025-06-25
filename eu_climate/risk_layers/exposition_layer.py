@@ -67,7 +67,7 @@ class ExpositionLayer(WebExportMixin):
         # Data paths
         self.ghs_built_c_path = self.config.ghs_built_c_path
         self.ghs_built_v_path = self.config.ghs_built_v_path
-        self.population_path = self.config.population_path
+        self.population_path = self.config.population_2025_path
         self.electricity_consumption_path = self.config.electricity_consumption_path
         self.vierkant_stats_path = self.config.vierkant_stats_path
         self.nuts_paths = self.config.nuts_paths
@@ -481,7 +481,13 @@ class ExpositionLayer(WebExportMixin):
         ghs_built_v, _ = self.load_and_preprocess_raster(self.ghs_built_v_path)
         logger.info(f"GHS Built-V after preprocessing - Min: {np.nanmin(ghs_built_v)}, Max: {np.nanmax(ghs_built_v)}, Mean: {np.nanmean(ghs_built_v)}")
         
-        population, _ = self.load_and_preprocess_raster(self.population_path)
+        # Use corrected 2025 population loading with proper resolution handling
+        from ..utils.data_loading import load_population_2025_with_validation
+        population, _, validation_passed = load_population_2025_with_validation(
+            config=self.config,
+            apply_study_area_mask=True
+        )
+        logger.info(f"Loaded 2025 population data with validation: {validation_passed}")
         logger.info(f"Population after preprocessing - Min: {np.nanmin(population)}, Max: {np.nanmax(population)}, Mean: {np.nanmean(population)}")
         
         electricity_consumption, _ = self.load_and_preprocess_raster(self.electricity_consumption_path)

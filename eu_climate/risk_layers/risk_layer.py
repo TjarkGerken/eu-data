@@ -444,22 +444,21 @@ class RiskLayer:
         return risk_scenarios
 
     @CacheAwareMethod(cache_type='raster_data',
-                     input_files=['population_path'],
+                     input_files=['population_2025_path'],
                      config_attrs=['target_crs', 'target_resolution'])
     def load_population_data(self) -> np.ndarray:
-        """Load and transform population data from VRT file."""
-        logger.info("Loading population data...")
+        """Load 2025 population data with corrected resolution handling."""
+        logger.info("Loading 2025 population data with corrected resolution handling...")
         
-        nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp" 
-        reference_bounds = self.transformer.get_reference_bounds(nuts_l3_path)
+        from ..utils.data_loading import load_population_2025_with_validation
         
-        population_data, transform, crs = self.transformer.transform_raster(
-            self.config.population_path,
-            reference_bounds=reference_bounds,
-            resampling_method=self.config.resampling_method.name.lower() 
-            if hasattr(self.config.resampling_method, 'name') 
-            else str(self.config.resampling_method).lower()
+        # Use the corrected 2025 population loading function
+        population_data, metadata, validation_passed = load_population_2025_with_validation(
+            config=self.config,
+            apply_study_area_mask=True
         )
+        
+        logger.info(f"2025 population validation passed: {validation_passed}")
         
         # Normalize population data ensuring full range utilization
         valid_mask = ~np.isnan(population_data) & (population_data >= 0)
@@ -543,7 +542,7 @@ class RiskLayer:
         return risk_data
     
     @CacheAwareMethod(cache_type='final_results',
-                     input_files=['dem_path', 'land_mass_path', 'population_path'],
+                     input_files=['dem_path', 'land_mass_path', 'population_2025_path'],
                      config_attrs=['target_crs', 'target_resolution', 'risk_weights'])
     def process_population_risk_scenarios(self, 
                                          custom_sea_level_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
