@@ -9,7 +9,7 @@ data:
     dem_file: "ClippedCopernicusHeightProfile.tif"
     ghs_built_c_file: "GHS_BUILT_C/GHS_BUILT_C.vrt"
     ghs_built_v_file: "Clipped_GHS_Built-V-100m/Clipped_GHS_Built-V-100m.vrt"
-    population_file: "Clipped_GHS_POP_3ss/Clipped_GHS_POP_3ss.vrt"
+    population_2025_file: "Pop/POP_GHS_2025.tif"
     nuts_files:
       l0: "NUTS-L0-NL.shp"
       l1: "NUTS-L1-NL.shp"
@@ -30,6 +30,11 @@ data:
   processing:
     resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
     target_resolution: 30.0
+    # GHS data native resolution (3 arcsecond, varies by latitude)
+    ghs_native_resolution_arcsec: 3.0
+    ghs_native_resolution_meters_equator: 92.8  # At equator
+    ghs_native_resolution_meters_netherlands: 57.1  # Longitude at 52°N
+    ghs_latitude_resolution_meters: 92.8  # Latitude resolution (constant)
     smoothing_sigma: 1.0
     target_crs: "EPSG:3035"
   hazard:
