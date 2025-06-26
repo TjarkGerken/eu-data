@@ -1,5 +1,12 @@
-import { supabase } from "./supabase";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+} from "@aws-sdk/client-s3";
 import { ImageCategory, ImageScenario } from "./blob-config";
+import { R2_CONFIG, R2_BUCKET_NAME, R2_PUBLIC_URL_BASE } from "./r2-config";
 
 export interface ImageMetadata {
   id: string;
@@ -10,14 +17,14 @@ export interface ImageMetadata {
   size: number;
 }
 
-export interface SupabaseImage {
+export interface CloudflareR2Image {
   url: string;
   path: string;
   metadata?: ImageMetadata;
 }
 
-export class SupabaseImageManager {
-  private static BUCKET = "climate-images";
+export class CloudflareR2Manager {
+  private static s3Client = new S3Client(R2_CONFIG);
 
   static async uploadImage(
     file: File,
@@ -28,20 +35,23 @@ export class SupabaseImageManager {
       metadata.id
     }.${fileExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(this.BUCKET)
-      .upload(filename, file, {
-        cacheControl: "3600",
-        upsert: true,
-      });
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    if (uploadError) {
-      throw new Error(`Failed to upload image: ${uploadError.message}`);
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: filename,
+      Body: buffer,
+      ContentType: file.type || "application/octet-stream",
+      CacheControl: "public, max-age=31536000, immutable",
+    });
+
+    try {
+      await this.s3Client.send(command);
+    } catch (error) {
+      throw new Error(`Failed to upload image: ${error}`);
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(this.BUCKET).getPublicUrl(filename);
+    const publicUrl = `${R2_PUBLIC_URL_BASE}/${filename}`;
 
     const fullMetadata: ImageMetadata = {
       ...metadata,
@@ -56,83 +66,97 @@ export class SupabaseImageManager {
 
   static async getImagesByCategory(
     category: ImageCategory
-  ): Promise<SupabaseImage[]> {
-    const { data: files, error } = await supabase.storage
-      .from(this.BUCKET)
-      .list(category, {
-        limit: 100,
-        sortBy: { column: "name", order: "asc" },
-      });
+  ): Promise<CloudflareR2Image[]> {
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: `${category}/`,
+      MaxKeys: 100,
+    });
 
-    if (error) {
-      throw new Error(`Failed to list images: ${error.message}`);
-    }
+    try {
+      const response = await this.s3Client.send(command);
 
-    if (!files) return [];
+      if (!response.Contents) return [];
 
-    const images = await Promise.all(
-      files
-        .filter((file) => !file.name.endsWith(".json"))
-        .map(async (file) => {
-          const fullPath = `${category}/${file.name}`;
-          const {
-            data: { publicUrl },
-          } = supabase.storage.from(this.BUCKET).getPublicUrl(fullPath);
+      const images = await Promise.all(
+        response.Contents.filter(
+          (object) => object.Key && !object.Key.endsWith(".json")
+        ).map(async (object) => {
+          const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
 
-          const id = file.name.split(".")[0];
+          const pathParts = object.Key!.split("/");
+          const fileName = pathParts[pathParts.length - 1];
+          const id = fileName.split(".")[0];
           const metadata = await this.getMetadata(id);
 
           return {
             url: publicUrl,
-            path: fullPath,
+            path: object.Key!,
             metadata,
           };
         })
-    );
+      );
 
-    return images;
+      return images;
+    } catch (error) {
+      throw new Error(`Failed to list images: ${error}`);
+    }
   }
 
   static async getImageByIdAndCategory(
     id: string,
     category: ImageCategory,
     scenario?: ImageScenario
-  ): Promise<SupabaseImage | null> {
-    const searchPath = scenario ? `${category}/${scenario}` : category;
+  ): Promise<CloudflareR2Image | null> {
+    const searchPrefix = scenario ? `${category}/${scenario}/` : `${category}/`;
 
-    const { data: files, error } = await supabase.storage
-      .from(this.BUCKET)
-      .list(searchPath, {
-        limit: 100,
-      });
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: searchPrefix,
+      MaxKeys: 100,
+    });
 
-    if (error || !files) return null;
+    try {
+      const response = await this.s3Client.send(command);
 
-    const matchingFile = files.find(
-      (file) => file.name.startsWith(`${id}.`) && !file.name.endsWith(".json")
-    );
+      if (!response.Contents) return null;
 
-    if (!matchingFile) return null;
+      const matchingObject = response.Contents.find(
+        (object) =>
+          object.Key &&
+          object.Key.includes(`${id}.`) &&
+          !object.Key.endsWith(".json")
+      );
 
-    const fullPath = `${searchPath}/${matchingFile.name}`;
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(this.BUCKET).getPublicUrl(fullPath);
+      if (!matchingObject?.Key) return null;
 
-    const metadata = await this.getMetadata(id);
+      const publicUrl = `${R2_PUBLIC_URL_BASE}/${matchingObject.Key}`;
+      const id_extracted = matchingObject.Key.split("/").pop()?.split(".")[0];
+      const metadata = id_extracted
+        ? await this.getMetadata(id_extracted)
+        : undefined;
 
-    return {
-      url: publicUrl,
-      path: fullPath,
-      metadata,
-    };
+      return {
+        url: publicUrl,
+        path: matchingObject.Key,
+        metadata,
+      };
+    } catch (error) {
+      console.error("Error fetching image:", error);
+      return null;
+    }
   }
 
   static async deleteImage(path: string): Promise<void> {
-    const { error } = await supabase.storage.from(this.BUCKET).remove([path]);
+    const command = new DeleteObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: path,
+    });
 
-    if (error) {
-      throw new Error(`Failed to delete image: ${error.message}`);
+    try {
+      await this.s3Client.send(command);
+    } catch (error) {
+      throw new Error(`Failed to delete image: ${error}`);
     }
 
     const id = path.split("/").pop()?.split(".")[0];
@@ -145,14 +169,14 @@ export class SupabaseImageManager {
     }
   }
 
-  static async getAllImages(): Promise<SupabaseImage[]> {
+  static async getAllImages(): Promise<CloudflareR2Image[]> {
     const categories: ImageCategory[] = [
       "risk",
       "exposition",
       "hazard",
       "combined",
     ];
-    const allImages: SupabaseImage[] = [];
+    const allImages: CloudflareR2Image[] = [];
 
     for (const category of categories) {
       try {
@@ -173,20 +197,17 @@ export class SupabaseImageManager {
     const metadataPath = `metadata/${id}.json`;
 
     try {
-      const metadataBlob = new Blob([JSON.stringify(metadata)], {
-        type: "application/json",
+      const metadataBuffer = Buffer.from(JSON.stringify(metadata));
+
+      const command = new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: metadataPath,
+        Body: metadataBuffer,
+        ContentType: "application/json",
+        CacheControl: "public, max-age=3600",
       });
 
-      const { error } = await supabase.storage
-        .from(this.BUCKET)
-        .upload(metadataPath, metadataBlob, {
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (error) {
-        throw new Error(`Failed to save metadata: ${error.message}`);
-      }
+      await this.s3Client.send(command);
     } catch (error) {
       console.warn("Failed to save metadata:", error);
     }
@@ -198,34 +219,36 @@ export class SupabaseImageManager {
     try {
       const metadataPath = `metadata/${id}.json`;
 
-      const { data, error } = await supabase.storage
-        .from(this.BUCKET)
-        .download(metadataPath);
+      const command = new GetObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: metadataPath,
+      });
 
-      if (error || !data) return undefined;
+      const response = await this.s3Client.send(command);
 
-      const text = await data.text();
-      const metadata = JSON.parse(text);
-
-      return {
-        ...metadata,
-        uploadedAt: new Date(metadata.uploadedAt),
-      };
+      if (response.Body) {
+        const metadataStr = await response.Body.transformToString();
+        return JSON.parse(metadataStr);
+      }
     } catch (error) {
-      console.warn("Failed to load metadata:", error);
-      return undefined;
+      console.warn("Failed to get metadata:", error);
     }
+
+    return undefined;
   }
 
   private static async deleteMetadata(id: string): Promise<void> {
-    const metadataPath = `metadata/${id}.json`;
+    try {
+      const metadataPath = `metadata/${id}.json`;
 
-    const { error } = await supabase.storage
-      .from(this.BUCKET)
-      .remove([metadataPath]);
+      const command = new DeleteObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: metadataPath,
+      });
 
-    if (error) {
-      throw new Error(`Failed to delete metadata: ${error.message}`);
+      await this.s3Client.send(command);
+    } catch (error) {
+      console.warn("Failed to delete metadata:", error);
     }
   }
 }

@@ -22,13 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Upload,
-  Trash2,
-  FileImage,
-  Map,
-  Loader2,
-} from "lucide-react";
+import { Upload, Trash2, FileImage, Map, Loader2 } from "lucide-react";
 import {
   mapTileService,
   MapLayerMetadata,
@@ -75,7 +69,7 @@ export default function LayerManager() {
       setLayerName(baseName);
 
       const extension = file.name.split(".").pop()?.toLowerCase();
-      if (extension === "cog") {
+      if (extension === "cog" || extension === "tif" || extension === "tiff") {
         setLayerType("raster");
       } else if (extension === "mbtiles") {
         setLayerType("vector");
@@ -204,14 +198,15 @@ export default function LayerManager() {
                 <Input
                   id="file"
                   type="file"
-                  accept=".cog,.mbtiles"
+                  accept=".cog,.mbtiles,.tif,.tiff"
                   onChange={handleFileSelect}
                   disabled={uploading}
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Supported formats: COG (Cloud Optimized GeoTIFF), MBTiles
+                  Supported formats: COG, MBTiles, TIFF (for cluster processing)
                   <br />
-                  Files are already web-optimized and ready for efficient serving
+                  Files are already web-optimized and ready for efficient
+                  serving
                 </p>
               </div>
 
@@ -248,9 +243,7 @@ export default function LayerManager() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="raster">Raster (COG)</SelectItem>
-                    <SelectItem value="vector">
-                      Vector (MBTiles)
-                    </SelectItem>
+                    <SelectItem value="vector">Vector (MBTiles)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

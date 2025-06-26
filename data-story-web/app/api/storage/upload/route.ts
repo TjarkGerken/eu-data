@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import {
+  S3Client,
+  PutObjectCommand,
+  ListObjectsV2Command,
+} from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME, R2_PUBLIC_URL_BASE } from "@/lib/r2-config";
+
+const s3Client = new S3Client(R2_CONFIG);
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,53 +14,37 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const category = formData.get("category") as string;
     const scenario = formData.get("scenario") as string;
-    const description = formData.get("description") as string;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
     const fileExt = file.name.split(".").pop();
-    const fileName = `${category}/${
+    const fileName = `climate-images/${category}/${
       scenario || "default"
     }/${Date.now()}.${fileExt}`;
 
-    const { error } = await supabase.storage
-      .from("climate-images")
-      .upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    if (error) {
-      console.error("Supabase storage error:", error);
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: fileName,
+      Body: buffer,
+      ContentType: file.type || "application/octet-stream",
+      CacheControl: "public, max-age=3600",
+    });
+
+    try {
+      await s3Client.send(command);
+    } catch (error) {
+      console.error("R2 storage error:", error);
       return NextResponse.json(
-        { error: "Failed to upload file" },
+        { error: "Failed to upload file to R2" },
         { status: 500 }
       );
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("climate-images").getPublicUrl(fileName);
-
-    const uniqueFilename = fileName.split("/").pop() || fileName; // Use the timestamped filename
-
-    const { error: dbError } = await supabase.from("climate_images").insert({
-      filename: uniqueFilename,
-      category,
-      scenario: scenario || "default",
-      storage_path: fileName,
-      public_url: publicUrl,
-      description: description || `${category} ${scenario} image`,
-      file_size: file.size,
-      mime_type: file.type || "image/png",
-    });
-
-    if (dbError) {
-      console.error("Database save error:", dbError);
-      // Continue anyway since file was uploaded successfully
-    }
+    const publicUrl = `${R2_PUBLIC_URL_BASE}/${fileName}`;
 
     return NextResponse.json({
       url: publicUrl,
@@ -76,45 +67,40 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get("category");
     const scenario = searchParams.get("scenario");
 
-    let path = "";
+    let prefix = "climate-images/";
     if (category && scenario) {
-      path = `${category}/${scenario}`;
+      prefix += `${category}/${scenario}/`;
     } else if (category) {
-      path = category;
+      prefix += `${category}/`;
     }
 
-    const { data, error } = await supabase.storage
-      .from("climate-images")
-      .list(path, {
-        limit: 100,
-        sortBy: { column: "name", order: "asc" },
-      });
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: prefix,
+      MaxKeys: 100,
+    });
 
-    if (error) {
-      console.error("Error listing files:", error);
-      return NextResponse.json(
-        { error: "Failed to list files" },
-        { status: 500 }
-      );
+    const response = await s3Client.send(command);
+
+    if (!response.Contents) {
+      return NextResponse.json({ files: [] });
     }
 
-    const files =
-      data?.map((file) => {
-        const fullPath = path ? `${path}/${file.name}` : file.name;
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("climate-images").getPublicUrl(fullPath);
+    const files = response.Contents.map((object) => {
+      const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
+      const pathParts = object.Key!.split("/");
+      const fileName = pathParts[pathParts.length - 1];
 
-        return {
-          id: file.name,
-          name: file.name,
-          url: publicUrl,
-          category: category || "default",
-          scenario: scenario || "default",
-          size: file.metadata?.size || 0,
-          created_at: file.created_at,
-        };
-      }) || [];
+      return {
+        id: fileName,
+        name: fileName,
+        url: publicUrl,
+        category: category || "default",
+        scenario: scenario || "default",
+        size: object.Size || 0,
+        created_at: object.LastModified?.toISOString(),
+      };
+    });
 
     return NextResponse.json({ files });
   } catch (error) {

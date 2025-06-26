@@ -451,12 +451,12 @@ class WebOptimizedExporter:
                 # Standard simplification
                 cmd.append(f'--{simplification}')
             
-            # Add explicit bounds if available
+            # Note: Skip explicit bounds as this tippecanoe version doesn't support --bounds
+            # Tippecanoe will calculate bounds automatically from the data
             if 'bounds_str' in locals() and bounds_str:
-                cmd.extend(['--bounds', bounds_str])
-                logger.info(f"Using explicit bounds for tippecanoe: {bounds_str}")
+                logger.info(f"Data bounds (will be auto-calculated by tippecanoe): {bounds_str}")
             else:
-                logger.warning("No explicit bounds available - tippecanoe will calculate automatically")
+                logger.info("Tippecanoe will auto-calculate bounds from data")
             
             # File size optimization: Add compression and optimization flags
             if max_zoom > 10:  # For detailed zoom levels, add size optimizations
@@ -561,20 +561,22 @@ class WebOptimizedExporter:
                 'maxzoom': str(max_zoom)
             }
             
-            # Get bounds
-            bounds = gdf.total_bounds
-            metadata['bounds'] = f"{bounds[0]},{bounds[1]},{bounds[2]},{bounds[3]}"
-            
-            # Validate bounds before adding to metadata
+            # Get bounds in WGS84 for MBTiles specification
+            gdf_wgs84 = gdf.to_crs('EPSG:4326')
+            bounds = gdf_wgs84.total_bounds
             west, south, east, north = bounds
+            metadata['bounds'] = f"{west:.6f},{south:.6f},{east:.6f},{north:.6f}"
+            
+            # Validate WGS84 bounds
             if (west < -180 or west > 180 or east < -180 or east > 180 or 
                 south < -90 or south > 90 or north < -90 or north > 90 or
                 abs(north - south) < 0.001 or abs(east - west) < 0.001):
-                logger.warning(f"Invalid bounds detected in Python MVT: {bounds}")
+                logger.warning(f"Invalid WGS84 bounds detected: {bounds}")
                 logger.warning("Using European bounds fallback")
                 metadata['bounds'] = "-15,30,35,75"  # European bounds
             else:
-                logger.info(f"Using calculated bounds: {metadata['bounds']}")
+                logger.info(f"Using calculated WGS84 bounds: {metadata['bounds']}")
+                logger.info(f"Original CRS was: {gdf.crs}")
             
             for name, value in metadata.items():
                 cursor.execute('INSERT INTO metadata (name, value) VALUES (?, ?)', (name, value))
