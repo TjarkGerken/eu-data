@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME, R2_PUBLIC_URL_BASE } from "@/lib/r2-config";
 import path from "path";
 import { promises as fs } from "fs";
 
@@ -9,6 +10,8 @@ interface ProcessingResult {
   size?: number;
   error?: string;
 }
+
+const s3Client = new S3Client(R2_CONFIG);
 
 export async function POST(request: NextRequest) {
   const tempDir = path.join(process.cwd(), "temp");
@@ -30,10 +33,11 @@ export async function POST(request: NextRequest) {
 
     const fileExtension = file.name.split(".").pop()?.toLowerCase();
 
-    if (!["cog", "mbtiles"].includes(fileExtension || "")) {
+    if (!["cog", "mbtiles", "tif", "tiff"].includes(fileExtension || "")) {
       return NextResponse.json(
         {
-          error: "Unsupported file type. Please upload .cog or .mbtiles files only",
+          error:
+            "Unsupported file type. Please upload .cog, .mbtiles, .tif, or .tiff files only",
         },
         { status: 400 }
       );
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
     const processingResult: ProcessingResult = {
       success: true,
       outputPath: tempInputPath,
-      size: buffer.length
+      size: buffer.length,
     };
 
     if (!processingResult.success || !processingResult.outputPath) {
@@ -58,38 +62,35 @@ export async function POST(request: NextRequest) {
     }
 
     const optimizedBuffer = await fs.readFile(processingResult.outputPath);
-    const optimizedFile = new File(
-      [optimizedBuffer],
-      path.basename(processingResult.outputPath),
-      {
-        type: getOptimizedMimeType(processingResult.outputPath),
-      }
-    );
+    const finalFileName = `map-layers/${path.basename(
+      processingResult.outputPath
+    )}`;
 
-    const { error } = await supabase.storage
-      .from("map-layers")
-      .upload(path.basename(processingResult.outputPath), optimizedFile, {
-        cacheControl: "3600",
-        upsert: true,
-      });
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: finalFileName,
+      Body: optimizedBuffer,
+      ContentType: getOptimizedMimeType(processingResult.outputPath),
+      CacheControl: "public, max-age=3600",
+    });
 
-    if (error) {
-      console.error("Upload error:", error);
-      throw new Error(`Failed to upload file: ${error.message}`);
+    try {
+      await s3Client.send(command);
+    } catch (error) {
+      console.error("R2 upload error:", error);
+      throw new Error(`Failed to upload file to R2: ${error}`);
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from("map-layers")
-      .getPublicUrl(path.basename(processingResult.outputPath));
+    const publicUrl = `${R2_PUBLIC_URL_BASE}/${finalFileName}`;
 
     return NextResponse.json({
       success: true,
       layerId: layerName,
       fileName: path.basename(processingResult.outputPath),
-      url: publicUrlData.publicUrl,
+      url: publicUrl,
       originalSize: file.size,
       optimizedSize: optimizedBuffer.length,
-      message: "Web-optimized layer uploaded successfully",
+      message: "Web-optimized layer uploaded successfully to Cloudflare R2",
     });
   } catch (error) {
     console.error("Server error:", error);
@@ -115,6 +116,8 @@ function getOptimizedMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case ".cog":
+    case ".tif":
+    case ".tiff":
       return "image/tiff";
     case ".mbtiles":
       return "application/x-mbtiles";
