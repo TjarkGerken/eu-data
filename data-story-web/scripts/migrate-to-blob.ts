@@ -1,55 +1,63 @@
 import { config } from "dotenv";
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
-import { SupabaseImageManager } from "../lib/blob-manager";
+import { CloudflareR2Manager } from "../lib/blob-manager";
+import { ImageCategory } from "../lib/blob-config";
 
 // Load environment variables from .env.local
 config({ path: ".env.local" });
 
+// Mapping from filename to metadata
 const IMAGE_MAPPINGS = {
   "exposition_freight_loading.png": {
-    category: "exposition",
-    id: "freight-loading",
-    description: "Freight loading exposition data",
+    id: "exposition_freight_loading",
+    category: "exposition" as ImageCategory,
+    scenario: "current",
+    description:
+      "Freight loading exposition visualization showing transportation infrastructure vulnerability",
   },
-  "exposition_layer.png": {
-    category: "exposition",
-    id: "layer-overview",
-    description: "Exposition layer visualization",
+  "hazard_assessment_summary.png": {
+    id: "hazard_assessment_summary",
+    category: "hazard" as ImageCategory,
+    scenario: "current",
+    description:
+      "Comprehensive hazard assessment summary across all risk factors",
   },
   "hazard_risk_current_scenario.png": {
-    category: "hazard",
-    id: "current-scenario",
+    id: "hazard_risk_current",
+    category: "hazard" as ImageCategory,
     scenario: "current",
-    description: "Current hazard risk scenario",
+    description: "Current scenario hazard risk assessment visualization",
   },
   "hazard_risk_severe_scenario.png": {
-    category: "hazard",
-    id: "severe-scenario",
+    id: "hazard_risk_severe",
+    category: "hazard" as ImageCategory,
     scenario: "severe",
-    description: "Severe hazard risk scenario",
+    description:
+      "Severe scenario hazard risk assessment with projected impacts",
   },
   "risk_SLR-0-Current_COMBINED.png": {
-    category: "risk",
-    id: "slr-current",
+    id: "risk_slr_current_combined",
+    category: "risk" as ImageCategory,
     scenario: "current",
-    description: "Sea level rise current scenario",
+    description: "Combined risk assessment for current sea level rise scenario",
   },
   "risk_SLR-3-Severe_COMBINED.png": {
-    category: "risk",
-    id: "slr-severe",
+    id: "risk_slr_severe_combined",
+    category: "risk" as ImageCategory,
     scenario: "severe",
-    description: "Sea level rise severe scenario",
+    description: "Combined risk assessment for severe sea level rise scenario",
   },
   "flood_risk_relative_by_scenario.png": {
-    category: "risk",
-    id: "flood-relative",
-    description: "Flood risk relative by scenario",
+    id: "flood_risk_relative",
+    category: "combined" as ImageCategory,
+    scenario: "comparison",
+    description: "Relative flood risk comparison across different scenarios",
   },
-} as const;
+};
 
 async function migrateImages() {
-  console.log("Starting image migration to Vercel Blob Storage...");
+  console.log("Starting image migration to Cloudflare R2 Storage...");
 
   const publicDir = join(process.cwd(), "public");
 
@@ -67,7 +75,7 @@ async function migrateImages() {
 
           const metadata =
             IMAGE_MAPPINGS[filename as keyof typeof IMAGE_MAPPINGS];
-          const result = await SupabaseImageManager.uploadImage(file, metadata);
+          const result = await CloudflareR2Manager.uploadImage(file, metadata);
 
           console.log(`✅ Migrated ${filename} -> ${result.url}`);
           migratedCount++;
@@ -84,7 +92,7 @@ async function migrateImages() {
 
     if (migratedCount > 0) {
       console.log(
-        `\n🎉 All climate visualization images are now served from Vercel Blob Storage CDN!`
+        `\n🎉 All climate visualization images are now served from Cloudflare R2 Storage CDN!`
       );
     }
   } catch (error) {
@@ -93,8 +101,4 @@ async function migrateImages() {
   }
 }
 
-export default migrateImages;
-
-if (require.main === module) {
-  migrateImages();
-}
+migrateImages();

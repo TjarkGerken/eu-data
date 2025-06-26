@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME } from "@/lib/r2-config";
 import path from "path";
+
+const s3Client = new S3Client(R2_CONFIG);
 
 export interface MapLayerMetadata {
   id: string;
@@ -19,46 +22,56 @@ export async function GET() {
   try {
     const layers: MapLayerMetadata[] = [];
 
-    // Only get layers from Supabase storage
-    const { data: storageLayers, error: storageError } = await supabase.storage
-      .from("map-layers")
-      .list();
+    // Get layers from R2 storage
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: "map-layers/",
+      MaxKeys: 1000,
+    });
 
-    if (storageError) {
-      console.error("Error loading from Supabase storage:", storageError);
-      return NextResponse.json(
-        { error: "Failed to load layers from storage" },
-        { status: 500 }
-      );
+    const response = await s3Client.send(command);
+
+    if (!response.Contents) {
+      console.error("No contents found in R2 storage");
+      return NextResponse.json({ layers: [] });
     }
 
-    if (storageLayers) {
-      for (const layer of storageLayers) {
-        const layerMetadata = await extractLayerMetadata(layer);
-        if (layerMetadata) {
-          layers.push(layerMetadata);
-        }
+    for (const object of response.Contents) {
+      if (!object.Key) continue;
+
+      const layerMetadata = await extractLayerMetadata({
+        name: path.basename(object.Key),
+        created_at: object.LastModified?.toISOString(),
+        updated_at: object.LastModified?.toISOString(),
+        metadata: { size: object.Size },
+      });
+
+      if (layerMetadata) {
+        layers.push(layerMetadata);
       }
     }
 
     return NextResponse.json({ layers });
   } catch (error) {
-    console.error("Error listing layers:", error);
+    console.error("Error listing layers from R2:", error);
     return NextResponse.json(
-      { error: "Failed to list layers" },
+      { error: "Failed to load layers from R2 storage" },
       { status: 500 }
     );
   }
 }
 
-async function extractLayerMetadata(
-  layer: { name: string; created_at?: string; updated_at?: string; metadata?: { size?: number } }
-): Promise<MapLayerMetadata | null> {
+async function extractLayerMetadata(layer: {
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+  metadata?: { size?: number };
+}): Promise<MapLayerMetadata | null> {
   try {
     const fileName = layer.name;
     // Start with the full filename without extension
     let layerId = path.basename(fileName, path.extname(fileName));
-    
+
     // Handle special naming patterns for clusters to create more readable IDs
     if (fileName.includes("clusters_SLR")) {
       // Extract scenario and risk type from filename like "clusters_SLR-0-Current_GDP.mbtiles"
@@ -70,7 +83,7 @@ async function extractLayerMetadata(
       }
       // If no match, keep the original layerId (full filename without extension)
     }
-    
+
     // For all other files, preserve the original filename
     // This ensures files like "risk_SLR-3-Severe_COMBINED.cog" become "risk_SLR-3-Severe_COMBINED"
 
@@ -125,11 +138,11 @@ async function extractLayerMetadata(
 function formatDisplayName(layerId: string): string {
   // Create a more readable display name
   return layerId
-    .replace(/_/g, " ")           // Replace underscores with spaces
-    .replace(/-/g, " ")           // Replace hyphens with spaces  
-    .replace(/\b\w/g, (l) => l.toUpperCase())  // Capitalize first letter of each word
-    .replace(/\bSlr\b/g, "SLR")   // Fix SLR capitalization
-    .replace(/\bGdp\b/g, "GDP")   // Fix GDP capitalization
+    .replace(/_/g, " ") // Replace underscores with spaces
+    .replace(/-/g, " ") // Replace hyphens with spaces
+    .replace(/\b\w/g, (l) => l.toUpperCase()) // Capitalize first letter of each word
+    .replace(/\bSlr\b/g, "SLR") // Fix SLR capitalization
+    .replace(/\bGdp\b/g, "GDP") // Fix GDP capitalization
     .replace(/\bHrst\b/g, "HRST") // Fix HRST capitalization
     .trim();
 }

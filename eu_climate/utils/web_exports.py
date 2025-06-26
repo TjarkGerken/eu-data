@@ -172,9 +172,13 @@ class WebOptimizedExporter:
             logger.error(f"Input raster not found: {input_path}")
             return False
         
-        if output_path.exists() and not overwrite:
-            logger.info(f"COG already exists: {output_path}")
-            return True
+        if output_path.exists():
+            if not overwrite:
+                logger.info(f"COG already exists: {output_path}")
+                return True
+            else:
+                logger.info(f"Removing existing COG: {output_path}")
+                output_path.unlink()
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -245,10 +249,10 @@ class WebOptimizedExporter:
                            min_zoom: int = 0,
                            max_zoom: int = 14,
                            simplification: str = "drop-densest-as-needed",
-                           overwrite: bool = True,
-                           fallback_to_python: bool = True) -> bool:
+                           overwrite: bool = True) -> bool:
         """
         Export vector data as Mapbox Vector Tiles (MVT) in MBTiles format.
+        Requires tippecanoe to be installed and available in PATH.
         
         Args:
             input_path: Path to input vector file (GeoPackage, Shapefile, etc.)
@@ -269,9 +273,13 @@ class WebOptimizedExporter:
             logger.error(f"Input vector file not found: {input_path}")
             return False
         
-        if output_path.exists() and not overwrite:
-            logger.info(f"MVT already exists: {output_path}")
-            return True
+        if output_path.exists():
+            if not overwrite:
+                logger.info(f"MVT already exists: {output_path}")
+                return True
+            else:
+                logger.info(f"Removing existing MVT: {output_path}")
+                output_path.unlink()
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -284,27 +292,19 @@ class WebOptimizedExporter:
         logger.info(f"Exporting MVT with optimized settings: zoom {min_zoom}-{max_zoom}, simplification: {simplification}")
         
         # Check if tippecanoe is available
-        tippecanoe_available = False
         try:
             subprocess.run(['tippecanoe', '--version'], 
                           capture_output=True, check=True)
-            tippecanoe_available = True
+            logger.info("Tippecanoe found - proceeding with MVT generation")
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.warning("Tippecanoe not found. Trying alternatives...")
-            
-            if not fallback_to_python:
-                logger.error("Tippecanoe required but not available. See installation instructions.")
-                return False
+            logger.error("Tippecanoe not found. MVT export requires tippecanoe.")
+            logger.error("Install tippecanoe: https://github.com/mapbox/tippecanoe")
+            return False
         
         try:
-            if tippecanoe_available:
-                return self._export_mvt_with_tippecanoe(
-                    input_path, output_path, layer_name, min_zoom, max_zoom, simplification
-                )
-            else:
-                return self._export_mvt_with_python(
-                    input_path, output_path, layer_name, min_zoom, max_zoom
-                )
+            return self._export_mvt_with_tippecanoe(
+                input_path, output_path, layer_name, min_zoom, max_zoom, simplification
+            )
             
         except Exception as e:
             logger.error(f"Failed to create MVT {output_path}: {e}")
@@ -507,114 +507,7 @@ class WebOptimizedExporter:
             if temp_geojson and os.path.exists(temp_geojson.name):
                 os.unlink(temp_geojson.name)
     
-    def _export_mvt_with_python(self,
-                              input_path: Path,
-                              output_path: Path,
-                              layer_name: str,
-                              min_zoom: int,
-                              max_zoom: int) -> bool:
-        """Export MVT using pure Python libraries (Windows-compatible)."""
-        try:
-            # Try to import required libraries
-            try:
-                from shapely.geometry import mapping
-            except ImportError as e:
-                logger.error(f"Required libraries not available for Python MVT export: {e}")
-                logger.info("Install with: pip install shapely")
-                return False
-            
-            # Read the vector data
-            gdf = gpd.read_file(input_path)
-            
-            if gdf.empty:
-                logger.warning(f"No features found in {input_path}")
-                return False
-            
-            # Set layer name
-            if not layer_name:
-                layer_name = input_path.stem
-            
-            # Create MBTiles database
-            conn = sqlite3.connect(output_path)
-            cursor = conn.cursor()
-            
-            # Drop existing tables if they exist (for overwrite)
-            cursor.execute('DROP TABLE IF EXISTS metadata')
-            cursor.execute('DROP TABLE IF EXISTS tiles')
-            
-            # Create MBTiles schema
-            cursor.execute('''
-                CREATE TABLE metadata (name text, value text);
-            ''')
-            cursor.execute('''
-                CREATE TABLE tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob);
-            ''')
-            
-            # Add metadata
-            metadata = {
-                'name': layer_name,
-                'type': 'overlay',
-                'version': '1.0.0',
-                'description': f'Generated by eu_climate - {layer_name}',
-                'format': 'pbf',
-                'minzoom': str(min_zoom),
-                'maxzoom': str(max_zoom)
-            }
-            
-            # Get bounds in WGS84 for MBTiles specification
-            gdf_wgs84 = gdf.to_crs('EPSG:4326')
-            bounds = gdf_wgs84.total_bounds
-            west, south, east, north = bounds
-            metadata['bounds'] = f"{west:.6f},{south:.6f},{east:.6f},{north:.6f}"
-            
-            # Validate WGS84 bounds
-            if (west < -180 or west > 180 or east < -180 or east > 180 or 
-                south < -90 or south > 90 or north < -90 or north > 90 or
-                abs(north - south) < 0.001 or abs(east - west) < 0.001):
-                logger.warning(f"Invalid WGS84 bounds detected: {bounds}")
-                logger.warning("Using European bounds fallback")
-                metadata['bounds'] = "-15,30,35,75"  # European bounds
-            else:
-                logger.info(f"Using calculated WGS84 bounds: {metadata['bounds']}")
-                logger.info(f"Original CRS was: {gdf.crs}")
-            
-            for name, value in metadata.items():
-                cursor.execute('INSERT INTO metadata (name, value) VALUES (?, ?)', (name, value))
-            
-            # Create a simplified version for lower zoom levels
-            # For this basic implementation, we'll just save as GeoJSON-like structure
-            # This is a simplified approach - tippecanoe does much more sophisticated tiling
-            
-            logger.warning("Using simplified Python MVT export - consider installing tippecanoe for better performance")
-            logger.info("For Windows: Use WSL, Docker, or consider using COG for raster data instead")
-            
-            # For now, create a basic tile structure
-            # This is a minimal implementation - real MVT generation is quite complex
-            for zoom in range(min_zoom, min(max_zoom + 1, 10)):  # Limit to prevent excessive processing
-                # Simplified: create one tile per zoom level
-                # Real implementation would properly tile the data
-                simplified_gdf = gdf.simplify(tolerance=0.001 * (2 ** (10 - zoom)))
-                
-                # Convert to a basic format (this is very simplified)
-                geojson_str = simplified_gdf.to_json()
-                
-                # Store as a single tile (very basic approach)
-                cursor.execute(
-                    'INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?, ?, ?, ?)',
-                    (zoom, 0, 0, geojson_str.encode('utf-8'))
-                )
-            
-            conn.commit()
-            conn.close()
-            
-            logger.info(f"Created basic MVT using Python: {output_path}")
-            logger.warning("Note: This is a simplified MVT. For production use, install tippecanoe.")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to create MVT with Python: {e}")
-            return False
+
     
     def create_web_exports(self,
                          data_type: str,
