@@ -64,42 +64,140 @@ export class CloudflareR2Manager {
     return { url: publicUrl, metadata: fullMetadata };
   }
 
+  static async getAllImages(): Promise<
+    Array<{ url: string; path: string; metadata: ImageMetadata }>
+  > {
+    try {
+      const command = new ListObjectsV2Command({
+        Bucket: R2_BUCKET_NAME,
+        Prefix: "climate-images/",
+        MaxKeys: 1000,
+      });
+
+      const response = await this.s3Client.send(command);
+
+      if (!response.Contents) {
+        return [];
+      }
+
+      return response.Contents.filter(
+        (object) => object.Key && !object.Key.endsWith(".json")
+      ).map((object) => {
+        const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
+        const pathParts = object.Key!.split("/");
+        const fileName = pathParts[pathParts.length - 1];
+        const fileNameWithoutExt = fileName.split(".")[0];
+
+        return {
+          url: publicUrl,
+          path: object.Key!,
+          metadata: {
+            id: fileNameWithoutExt,
+            category: pathParts[1] as ImageCategory,
+            scenario: pathParts[2] || "default",
+            description: `Climate visualization: ${fileNameWithoutExt}`,
+            uploadedAt: object.LastModified || new Date(),
+            size: object.Size || 0,
+          },
+        };
+      });
+    } catch (error) {
+      console.error("Failed to get all images:", error);
+      return [];
+    }
+  }
+
   static async getImagesByCategory(
     category: ImageCategory
-  ): Promise<CloudflareR2Image[]> {
-    const command = new ListObjectsV2Command({
+  ): Promise<Array<{ url: string; path: string; metadata: ImageMetadata }>> {
+    try {
+      const command = new ListObjectsV2Command({
+        Bucket: R2_BUCKET_NAME,
+        Prefix: `climate-images/${category}/`,
+        MaxKeys: 1000,
+      });
+
+      const response = await this.s3Client.send(command);
+
+      if (!response.Contents) {
+        return [];
+      }
+
+      return response.Contents.filter(
+        (object) => object.Key && !object.Key.endsWith(".json")
+      ).map((object) => {
+        const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
+        const pathParts = object.Key!.split("/");
+        const fileName = pathParts[pathParts.length - 1];
+        const fileNameWithoutExt = fileName.split(".")[0];
+
+        return {
+          url: publicUrl,
+          path: object.Key!,
+          metadata: {
+            id: fileNameWithoutExt,
+            category: category,
+            scenario: pathParts[2] || "default",
+            description: `Climate visualization: ${fileNameWithoutExt}`,
+            uploadedAt: object.LastModified || new Date(),
+            size: object.Size || 0,
+          },
+        };
+      });
+    } catch (error) {
+      console.error(`Failed to get images for category ${category}:`, error);
+      return [];
+    }
+  }
+
+  static async deleteImage(imagePath: string): Promise<void> {
+    try {
+      const command = new DeleteObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: imagePath,
+      });
+
+      await this.s3Client.send(command);
+
+      // Also try to delete metadata file if it exists
+      const metadataPath = imagePath.replace(/\.[^/.]+$/, ".json");
+      try {
+        const metadataCommand = new DeleteObjectCommand({
+          Bucket: R2_BUCKET_NAME,
+          Key: metadataPath,
+        });
+        await this.s3Client.send(metadataCommand);
+      } catch (metadataError) {
+        // Metadata file might not exist, that's ok
+        console.warn(
+          `Metadata file ${metadataPath} not found or could not be deleted:`,
+          metadataError
+        );
+      }
+    } catch (error) {
+      throw new Error(`Failed to delete image: ${error}`);
+    }
+  }
+
+  private static async saveMetadata(
+    imageId: string,
+    metadata: ImageMetadata
+  ): Promise<void> {
+    const metadataKey = `metadata/${imageId}.json`;
+    const metadataContent = JSON.stringify(metadata, null, 2);
+
+    const command = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
-      Prefix: `${category}/`,
-      MaxKeys: 100,
+      Key: metadataKey,
+      Body: metadataContent,
+      ContentType: "application/json",
+      CacheControl: "public, max-age=3600",
     });
 
     try {
-      const response = await this.s3Client.send(command);
-
-      if (!response.Contents) return [];
-
-      const images = await Promise.all(
-        response.Contents.filter(
-          (object) => object.Key && !object.Key.endsWith(".json")
-        ).map(async (object) => {
-          const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
-
-          const pathParts = object.Key!.split("/");
-          const fileName = pathParts[pathParts.length - 1];
-          const id = fileName.split(".")[0];
-          const metadata = await this.getMetadata(id);
-
-          return {
-            url: publicUrl,
-            path: object.Key!,
-            metadata,
-          };
-        })
-      );
-
-      return images;
+      await this.s3Client.send(command);
     } catch (error) {
-      throw new Error(`Failed to list images: ${error}`);
+      console.error("Failed to save metadata:", error);
     }
   }
 
@@ -147,72 +245,6 @@ export class CloudflareR2Manager {
     }
   }
 
-  static async deleteImage(path: string): Promise<void> {
-    const command = new DeleteObjectCommand({
-      Bucket: R2_BUCKET_NAME,
-      Key: path,
-    });
-
-    try {
-      await this.s3Client.send(command);
-    } catch (error) {
-      throw new Error(`Failed to delete image: ${error}`);
-    }
-
-    const id = path.split("/").pop()?.split(".")[0];
-    if (id) {
-      try {
-        await this.deleteMetadata(id);
-      } catch (error) {
-        console.warn("Failed to delete metadata:", error);
-      }
-    }
-  }
-
-  static async getAllImages(): Promise<CloudflareR2Image[]> {
-    const categories: ImageCategory[] = [
-      "risk",
-      "exposition",
-      "hazard",
-      "combined",
-    ];
-    const allImages: CloudflareR2Image[] = [];
-
-    for (const category of categories) {
-      try {
-        const categoryImages = await this.getImagesByCategory(category);
-        allImages.push(...categoryImages);
-      } catch (error) {
-        console.warn(`Failed to fetch images for category ${category}:`, error);
-      }
-    }
-
-    return allImages;
-  }
-
-  private static async saveMetadata(
-    id: string,
-    metadata: ImageMetadata
-  ): Promise<void> {
-    const metadataPath = `metadata/${id}.json`;
-
-    try {
-      const metadataBuffer = Buffer.from(JSON.stringify(metadata));
-
-      const command = new PutObjectCommand({
-        Bucket: R2_BUCKET_NAME,
-        Key: metadataPath,
-        Body: metadataBuffer,
-        ContentType: "application/json",
-        CacheControl: "public, max-age=3600",
-      });
-
-      await this.s3Client.send(command);
-    } catch (error) {
-      console.warn("Failed to save metadata:", error);
-    }
-  }
-
   private static async getMetadata(
     id: string
   ): Promise<ImageMetadata | undefined> {
@@ -235,20 +267,5 @@ export class CloudflareR2Manager {
     }
 
     return undefined;
-  }
-
-  private static async deleteMetadata(id: string): Promise<void> {
-    try {
-      const metadataPath = `metadata/${id}.json`;
-
-      const command = new DeleteObjectCommand({
-        Bucket: R2_BUCKET_NAME,
-        Key: metadataPath,
-      });
-
-      await this.s3Client.send(command);
-    } catch (error) {
-      console.warn("Failed to delete metadata:", error);
-    }
   }
 }

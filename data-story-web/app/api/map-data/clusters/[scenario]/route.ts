@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { R2_PUBLIC_URL_BASE } from "@/lib/r2-config";
 import path from "path";
 import { promises as fs } from "fs";
 import { exec } from "child_process";
@@ -22,17 +22,12 @@ export async function GET(
     const geoPackagePath = getClusterGeoPackagePath(scenario);
 
     try {
-      const { data: publicUrlData } = supabase.storage
-        .from("clusters")
-        .getPublicUrl(geoPackagePath);
+      // Try to get from R2 storage first
+      const publicUrl = `${R2_PUBLIC_URL_BASE}/${geoPackagePath}`;
 
-      if (!publicUrlData.publicUrl) {
-        throw new Error("Cluster file not found");
-      }
-
-      const response = await fetch(publicUrlData.publicUrl);
+      const response = await fetch(publicUrl);
       if (!response.ok) {
-        throw new Error("Failed to fetch cluster file");
+        throw new Error("Cluster file not found in R2");
       }
 
       const buffer = Buffer.from(await response.arrayBuffer());
@@ -52,9 +47,10 @@ export async function GET(
           "Content-Type": "application/json",
         },
       });
-    } catch (blobError) {
-      console.error("Blob storage error:", blobError);
+    } catch (r2Error) {
+      console.error("R2 storage error:", r2Error);
 
+      // Fallback to local file if R2 fails
       const localFilePath = getLocalClusterFilePath(scenario);
 
       try {
@@ -104,7 +100,9 @@ function getLocalClusterFilePath(scenario: string): string {
   );
 }
 
-async function convertGeoPackageToGeoJSON(buffer: Buffer): Promise<object | null> {
+async function convertGeoPackageToGeoJSON(
+  buffer: Buffer
+): Promise<object | null> {
   try {
     const execAsync = promisify(exec);
 

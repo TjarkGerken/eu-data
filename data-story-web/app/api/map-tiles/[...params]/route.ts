@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME, R2_PUBLIC_URL_BASE } from "@/lib/r2-config";
+import path from "path";
+
+const s3Client = new S3Client(R2_CONFIG);
 
 export async function GET(
   request: NextRequest,
@@ -29,43 +33,46 @@ export async function GET(
 
     // Find the actual filename for this layer ID
     const actualFileName = await findFileByLayerId(layerName);
-    
+
     if (!actualFileName) {
-      return NextResponse.json(
-        { error: "Layer not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Layer not found" }, { status: 404 });
     }
 
     // For modern web formats (COG/MBTiles), we redirect to the appropriate service
     // COG files should be served directly via HTTP range requests
     // MBTiles should be served via tile server or extracted tiles
-    
+
     // Try to get the COG file directly from storage
     const cogFile = await getCogFile(actualFileName);
     if (cogFile) {
-      return NextResponse.json({
-        error: "COG files should be accessed directly via range requests",
-        cogUrl: cogFile,
-        recommendation: "Use a mapping library like Leaflet with georaster-layer-for-leaflet or OpenLayers with ol-source-geotiff"
-      }, { status: 410 });
+      return NextResponse.json(
+        {
+          error: "COG files should be accessed directly via range requests",
+          cogUrl: cogFile,
+          recommendation:
+            "Use a mapping library like Leaflet with georaster-layer-for-leaflet or OpenLayers with ol-source-geotiff",
+        },
+        { status: 410 }
+      );
     }
 
     // Check if this is an MBTiles file and return appropriate response
-    if (actualFileName.endsWith('.mbtiles') || actualFileName.endsWith('.db')) {
-      return NextResponse.json({
-        error: "MBTiles tile serving not fully implemented",
-        fileName: actualFileName,
-        recommendation: "Use a proper vector tile server like TileServer GL",
-        note: "MBTiles file found but tile extraction not implemented"
-      }, { status: 501 });
+    if (actualFileName.endsWith(".mbtiles") || actualFileName.endsWith(".db")) {
+      return NextResponse.json(
+        {
+          error: "MBTiles tile serving not fully implemented",
+          fileName: actualFileName,
+          recommendation: "Use a proper vector tile server like TileServer GL",
+          note: "MBTiles file found but tile extraction not implemented",
+        },
+        { status: 501 }
+      );
     }
 
     return NextResponse.json(
       { error: "Layer not found or not in supported format (COG/MBTiles)" },
       { status: 404 }
     );
-
   } catch (error) {
     console.error("Error serving tile:", error);
     return NextResponse.json(
@@ -77,20 +84,26 @@ export async function GET(
 
 async function findFileByLayerId(layerId: string): Promise<string | null> {
   try {
-    // Get all files from storage
-    const { data: files, error } = await supabase.storage
-      .from("map-layers")
-      .list();
+    // Get all files from R2 storage
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: "map-layers/",
+      MaxKeys: 1000,
+    });
 
-    if (error || !files) {
+    const response = await s3Client.send(command);
+
+    if (!response.Contents) {
       return null;
     }
 
     // Find the file that would generate this layer ID
-    for (const file of files) {
-      const generatedLayerId = convertFilenameToLayerId(file.name);
+    for (const object of response.Contents) {
+      if (!object.Key) continue;
+      const fileName = path.basename(object.Key);
+      const generatedLayerId = convertFilenameToLayerId(fileName);
       if (generatedLayerId === layerId) {
-        return file.name;
+        return fileName;
       }
     }
 
@@ -103,8 +116,14 @@ async function findFileByLayerId(layerId: string): Promise<string | null> {
 
 function convertFilenameToLayerId(fileName: string): string {
   // Remove extension
-  let layerId = fileName.substring(0, fileName.lastIndexOf('.'));
-  
+  let layerId = fileName.substring(0, fileName.lastIndexOf("."));
+
+  // Remove timestamp prefix if present (from upload process: "1234567890_originalname")
+  const timestampMatch = layerId.match(/^\d+_(.+)$/);
+  if (timestampMatch) {
+    layerId = timestampMatch[1];
+  }
+
   // Handle special naming patterns for clusters to create more readable IDs
   if (fileName.includes("clusters_SLR")) {
     // Extract scenario and risk type from filename like "123456_clusters_SLR-0-Current_GDP.mbtiles"
@@ -115,58 +134,32 @@ function convertFilenameToLayerId(fileName: string): string {
       layerId = `clusters-slr-${scenario}-${riskType}`;
     }
   }
-  
+
   return layerId;
 }
 
 async function getCogFile(fileName: string): Promise<string | null> {
   try {
-    if (!fileName.endsWith('.cog') && !fileName.endsWith('.tif')) {
+    if (!fileName.endsWith(".cog") && !fileName.endsWith(".tif")) {
       return null;
     }
 
-    const { data } = supabase.storage
-      .from("map-layers")
-      .getPublicUrl(fileName);
-    
-    if (data?.publicUrl) {
-      // Check if file exists by trying to head it
-      try {
-        const response = await fetch(data.publicUrl, { method: 'HEAD' });
-        if (response.ok) {
-          return data.publicUrl;
-        }
-      } catch {
-        return null;
+    // Construct R2 public URL
+    const publicUrl = `${R2_PUBLIC_URL_BASE}/map-layers/${fileName}`;
+
+    // Check if file exists by trying to head it
+    try {
+      const response = await fetch(publicUrl, { method: "HEAD" });
+      if (response.ok) {
+        return publicUrl;
       }
+    } catch {
+      return null;
     }
+
     return null;
   } catch (error) {
     console.error("Error getting COG file:", error);
-    return null;
-  }
-}
-
-async function getMBTilesTile(fileName: string, zoom: number, x: number, y: number): Promise<Buffer | null> {
-  try {
-    if (!fileName.endsWith('.mbtiles') && !fileName.endsWith('.db')) {
-      return null;
-    }
-
-    const { data, error } = await supabase.storage
-      .from("map-layers")
-      .download(fileName);
-
-    if (!error && data) {
-      // For now, return a placeholder response
-      // In a production setup, you'd want to use a proper MBTiles reader
-      console.log(`MBTiles tile requested: ${fileName}/${zoom}/${x}/${y}`);
-      console.warn("MBTiles tile extraction not implemented. Use a dedicated tile server like TileServer GL.");
-      return null;
-    }
-    return null;
-  } catch (error) {
-    console.error("Error getting MBTiles tile:", error);
     return null;
   }
 }

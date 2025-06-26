@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME } from "@/lib/r2-config";
+import path from "path";
+
+const s3Client = new S3Client(R2_CONFIG);
 
 export async function GET(
   request: NextRequest,
@@ -18,7 +26,7 @@ export async function GET(
 
     // Find the actual filename in storage that corresponds to this layer ID
     const actualFileName = await findFileByLayerId(layerId);
-    
+
     if (!actualFileName) {
       return NextResponse.json(
         { error: `Layer ${layerId} not found for download` },
@@ -27,19 +35,24 @@ export async function GET(
     }
 
     try {
-      const { data, error } = await supabase.storage
-        .from("map-layers")
-        .download(actualFileName);
+      const command = new GetObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: `map-layers/${actualFileName}`,
+      });
 
-      if (error || !data) {
+      const response = await s3Client.send(command);
+
+      if (!response.Body) {
         return NextResponse.json(
           { error: `Layer ${layerId} not found for download` },
           { status: 404 }
         );
       }
 
-      const fileBuffer = await data.arrayBuffer();
-      const extension = actualFileName.substring(actualFileName.lastIndexOf("."));
+      const fileBuffer = await response.Body.transformToByteArray();
+      const extension = actualFileName.substring(
+        actualFileName.lastIndexOf(".")
+      );
       const contentType = getContentType(extension);
 
       return new NextResponse(fileBuffer, {
@@ -67,20 +80,26 @@ export async function GET(
 
 async function findFileByLayerId(layerId: string): Promise<string | null> {
   try {
-    // Get all files from storage
-    const { data: files, error } = await supabase.storage
-      .from("map-layers")
-      .list();
+    // Get all files from R2 storage
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: "map-layers/",
+      MaxKeys: 1000,
+    });
 
-    if (error || !files) {
+    const response = await s3Client.send(command);
+
+    if (!response.Contents) {
       return null;
     }
 
     // Find the file that would generate this layer ID
-    for (const file of files) {
-      const generatedLayerId = convertFilenameToLayerId(file.name);
+    for (const object of response.Contents) {
+      if (!object.Key) continue;
+      const fileName = path.basename(object.Key);
+      const generatedLayerId = convertFilenameToLayerId(fileName);
       if (generatedLayerId === layerId) {
-        return file.name;
+        return fileName;
       }
     }
 
@@ -92,12 +111,17 @@ async function findFileByLayerId(layerId: string): Promise<string | null> {
 }
 
 function convertFilenameToLayerId(fileName: string): string {
-  // Remove extension
-  let layerId = fileName.substring(0, fileName.lastIndexOf('.'));
-  
+  let layerId = path.basename(fileName, path.extname(fileName));
+
+  // Remove timestamp prefix if present (from upload process: "1234567890_originalname")
+  const timestampMatch = layerId.match(/^\d+_(.+)$/);
+  if (timestampMatch) {
+    layerId = timestampMatch[1];
+  }
+
   // Handle special naming patterns for clusters to create more readable IDs
   if (fileName.includes("clusters_SLR")) {
-    // Extract scenario and risk type from filename like "123456_clusters_SLR-0-Current_GDP.mbtiles"
+    // Extract scenario and risk type from filename like "clusters_SLR-0-Current_GDP.mbtiles"
     const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_(\w+)/);
     if (match) {
       const scenario = match[2].toLowerCase(); // "current", "severe", etc.
@@ -105,17 +129,19 @@ function convertFilenameToLayerId(fileName: string): string {
       layerId = `clusters-slr-${scenario}-${riskType}`;
     }
   }
-  
+
   return layerId;
 }
 
 function getContentType(extension: string): string {
-  const contentTypes: { [key: string]: string } = {
+  const contentTypes: Record<string, string> = {
     ".cog": "image/tiff",
     ".tif": "image/tiff",
-    ".mbtiles": "application/x-mbtiles",
-    ".db": "application/x-mbtiles",
+    ".tiff": "image/tiff",
+    ".mbtiles": "application/vnd.mapbox-vector-tile",
+    ".gpkg": "application/geopackage+sqlite3",
+    ".geojson": "application/geo+json",
   };
 
-  return contentTypes[extension] || "application/octet-stream";
+  return contentTypes[extension.toLowerCase()] || "application/octet-stream";
 }

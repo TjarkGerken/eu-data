@@ -335,7 +335,7 @@ class ClusterLayer(WebExportMixin):
             )
             
             if results.get('gpkg', False):
-            logger.info(f"Saved cluster GeoPackage: {gpkg_path}")
+                logger.info(f"Saved cluster GeoPackage: {gpkg_path}")
             if results.get('mvt', False):
                 logger.info(f"Created web-optimized MVT for cluster: {cluster_filename}")
         
