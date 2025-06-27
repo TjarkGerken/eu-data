@@ -152,11 +152,29 @@ function convertFilenameToLayerId(fileName: string): string {
   return layerId;
 }
 
+interface CoverageAnalysis {
+  total_tiles: number;
+  min_zoom: number | null;
+  max_zoom: number | null;
+  min_x: number | null;
+  max_x: number | null;
+  min_y: number | null;
+  max_y: number | null;
+  features: Array<{
+    type: string;
+    geometry: {
+      type: string;
+      coordinates: number[][][];
+    };
+    properties: Record<string, string | number>;
+  }>;
+}
+
 async function analyzeMBTilesCoverage(
   mbtileBuffer: Buffer,
   layerId: string,
   fileName: string
-): Promise<any> {
+): Promise<CoverageAnalysis> {
   let tempFilePath: string | null = null;
 
   try {
@@ -179,35 +197,25 @@ async function analyzeMBTilesCoverage(
       metadata[row.name] = row.value;
     }
 
-    console.log("MBTiles metadata:", metadata);
-
-    // Analyze database structure to understand why tiles aren't found
-    console.log("=== DATABASE STRUCTURE ANALYSIS ===");
-
     // Check what tables exist
     const tablesStmt = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table'"
     );
     const tables = tablesStmt.all() as Array<{ name: string }>;
-    console.log(
-      "Available tables:",
-      tables.map((t) => t.name)
-    );
 
     // Check tiles table structure if it exists
     if (tables.some((t) => t.name === "tiles")) {
       const schemaStmt = db.prepare("PRAGMA table_info(tiles)");
       const schema = schemaStmt.all();
-      console.log("Tiles table schema:", schema);
 
       // Count total tiles
       const countStmt = db.prepare("SELECT COUNT(*) as count FROM tiles");
       const count = countStmt.get() as { count: number };
-      console.log("Total tiles in database:", count.count);
     }
 
     // Function to analyze MBTiles coverage with fallback query patterns
-    function analyzeMBTilesCoverage(db: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function analyzeCoverageFromDB(db: any) {
       const patterns = [
         // Standard MBTiles schema
         `SELECT 
@@ -246,10 +254,6 @@ async function analyzeMBTilesCoverage(
           const stmt = db.prepare(pattern);
           const result = stmt.get();
           if (result && result.total_tiles > 0) {
-            console.log(
-              "Coverage query succeeded with pattern:",
-              pattern.split("FROM")[1].trim()
-            );
             return result;
           }
         } catch (error) {
@@ -270,11 +274,10 @@ async function analyzeMBTilesCoverage(
     }
 
     // Get tile coverage information using the function
-    const coverage = analyzeMBTilesCoverage(db);
-    console.log("Tile coverage:", coverage);
+    const coverage = analyzeCoverageFromDB(db);
 
     // Try to get actual tiles using different query patterns
-    let sampleTiles: any[] = [];
+    let sampleTiles: Array<Record<string, number>> = [];
     const sampleQueries = [
       "SELECT zoom_level, tile_column, tile_row FROM tiles LIMIT 10",
       "SELECT z, x, y FROM tiles LIMIT 10",
@@ -284,17 +287,14 @@ async function analyzeMBTilesCoverage(
     for (const query of sampleQueries) {
       try {
         const stmt = db.prepare(query);
-        sampleTiles = stmt.all();
+        sampleTiles = stmt.all() as Array<Record<string, number>>;
         if (sampleTiles.length > 0) {
-          console.log("Sample tiles query succeeded:", query);
           break;
         }
       } catch (error) {
         console.log("Sample query failed:", query, (error as Error).message);
       }
     }
-
-    console.log("Sample tiles:", sampleTiles.slice(0, 3));
 
     // Close database
     db.close();
@@ -357,7 +357,7 @@ async function analyzeMBTilesCoverage(
       if (metadata.bounds) {
         try {
           bounds = metadata.bounds.split(",").map(Number);
-        } catch (e) {
+        } catch {
           console.warn(
             "Could not parse bounds from metadata:",
             metadata.bounds
@@ -389,26 +389,16 @@ async function analyzeMBTilesCoverage(
       });
     }
 
-    // Return GeoJSON FeatureCollection with coverage data
+    // Return coverage analysis with features
     return {
-      type: "FeatureCollection",
+      total_tiles: coverage.total_tiles,
+      min_zoom: coverage.min_zoom,
+      max_zoom: coverage.max_zoom,
+      min_x: coverage.min_x,
+      max_x: coverage.max_x,
+      min_y: coverage.min_y,
+      max_y: coverage.max_y,
       features: features,
-      properties: {
-        source: "MBTiles coverage analysis",
-        layerId: layerId,
-        fileName: fileName,
-        metadata: metadata,
-        coverage: coverage,
-        visualization_zoom:
-          sampleTiles.length > 0
-            ? sampleTiles[0].zoom_level
-            : coverage.min_zoom || 0,
-        scenario: scenario,
-        risk_type: riskType,
-        total_tiles: coverage.total_tiles,
-        zoom_range: `${coverage.min_zoom}-${coverage.max_zoom}`,
-        note: "Features represent actual tile coverage areas from MBTiles database",
-      },
     };
   } catch (error) {
     console.error("Error analyzing MBTiles coverage:", error);

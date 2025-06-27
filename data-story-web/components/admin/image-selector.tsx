@@ -21,7 +21,7 @@ interface ClimateImage {
   metadata: {
     id: string;
     category: string;
-    scenario: string;
+    scenario?: string;
     description: string;
     uploadedAt: Date;
     size: number;

@@ -20,12 +20,12 @@ interface LeafletMapProps {
   autoFitBounds?: boolean;
 }
 
-export default function LeafletMap({ 
-  layers, 
-  centerLat = 52.1326, 
-  centerLng = 5.2913, 
+export default function LeafletMap({
+  layers,
+  centerLat = 52.1326,
+  centerLng = 5.2913,
   zoom = 8,
-  autoFitBounds = false 
+  autoFitBounds = false,
 }: LeafletMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -34,11 +34,13 @@ export default function LeafletMap({
 
   // Add custom CSS for popup styling
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const existingStyle = document.getElementById('leaflet-custom-popup-style');
+    if (typeof window !== "undefined") {
+      const existingStyle = document.getElementById(
+        "leaflet-custom-popup-style"
+      );
       if (!existingStyle) {
-        const style = document.createElement('style');
-        style.id = 'leaflet-custom-popup-style';
+        const style = document.createElement("style");
+        style.id = "leaflet-custom-popup-style";
         style.textContent = `
           .custom-popup .leaflet-popup-content-wrapper {
             padding: 8px 12px;
@@ -104,15 +106,20 @@ export default function LeafletMap({
     try {
       console.log("Loading vector layer:", layer.id, layer.metadata);
       const response = await fetch(`/api/map-data/vector/${layer.id}`);
-      
+
       if (response.ok) {
         const vectorData = await response.json();
         console.log("Vector data loaded:", {
           layerId: layer.id,
           featureCount: vectorData?.features?.length || 0,
           type: vectorData?.type,
-          firstFeature: vectorData?.features?.[0]
-        });        if (vectorData && vectorData.features && vectorData.features.length > 0) {
+          firstFeature: vectorData?.features?.[0],
+        });
+        if (
+          vectorData &&
+          vectorData.features &&
+          vectorData.features.length > 0
+        ) {
           const geoJSONLayer = L.geoJSON(vectorData, {
             style: () => {
               // Use the improved color scale, but fallback to a visible color
@@ -127,48 +134,79 @@ export default function LeafletMap({
             },
             onEachFeature: (feature, layer) => {
               // Add popup or tooltip functionality here if needed
-              if (feature.properties) {                const formatNumber = (value: number): string => {
-                  if (typeof value !== 'number' || isNaN(value)) return value?.toString() || '';
-                  return new Intl.NumberFormat('de-DE', {
+              if (feature.properties) {
+                const formatNumber = (value: number): string => {
+                  if (typeof value !== "number" || isNaN(value))
+                    return value?.toString() || "";
+                  return new Intl.NumberFormat("de-DE", {
                     minimumFractionDigits: 0,
-                    maximumFractionDigits: 3
+                    maximumFractionDigits: 3,
                   }).format(value);
-                };const formatPropertyValue = (key: string, value: unknown): string => {
-                  if (typeof value === 'number') {
+                };
+                const formatPropertyValue = (
+                  key: string,
+                  value: unknown
+                ): string => {
+                  if (typeof value === "number") {
                     // Convert square meters to square kilometers for area fields
-                    if (key.toLowerCase().includes('area') && key.toLowerCase().includes('square') && key.toLowerCase().includes('meter')) {
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
                       const squareKm = value / 1000000; // Convert m² to km²
-                      return formatNumber(squareKm) + ' km²';
+                      return formatNumber(squareKm) + " km²";
                     }
                     return formatNumber(value);
                   }
-                  if (typeof value === 'string' && !isNaN(Number(value))) {
+                  if (typeof value === "string" && !isNaN(Number(value))) {
                     const numValue = Number(value);
                     // Convert square meters to square kilometers for area fields
-                    if (key.toLowerCase().includes('area') && key.toLowerCase().includes('square') && key.toLowerCase().includes('meter')) {
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
                       const squareKm = numValue / 1000000; // Convert m² to km²
-                      return formatNumber(squareKm) + ' km²';
+                      return formatNumber(squareKm) + " km²";
                     }
                     return formatNumber(numValue);
                   }
-                  return value?.toString() || '';
-                };                const formatPropertyName = (key: string): string => {
+                  return value?.toString() || "";
+                };
+                const formatPropertyName = (key: string): string => {
                   let formattedName = key
-                    .replace(/_/g, ' ')
-                    .replace(/([A-Z])/g, ' $1')
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                    .join(' ');
-                  
+                    .replace(/_/g, " ")
+                    .replace(/([A-Z])/g, " $1")
+                    .split(" ")
+                    .map(
+                      (word) =>
+                        word.charAt(0).toUpperCase() +
+                        word.slice(1).toLowerCase()
+                    )
+                    .join(" ");
+
                   // Replace "Square Meters" with "Square Kilometers" for area fields
-                  if (formattedName.toLowerCase().includes('square meters')) {
-                    formattedName = formattedName.replace(/Square Meters/gi, 'Square Kilometers');
+                  if (formattedName.toLowerCase().includes("square meters")) {
+                    formattedName = formattedName.replace(
+                      /Square Meters/gi,
+                      "Square Kilometers"
+                    );
                   }
-                  
+
                   return formattedName;
-                };                const propertyEntries = Object.entries(feature.properties)
-                  .filter(([, value]) => value !== null && value !== undefined && value !== '')
-                  .filter(([key]) => !key.toLowerCase().includes('pixel_count') && !key.toLowerCase().includes('risk_density') && !key.toLowerCase().includes('cluster_id'))
+                };
+                const propertyEntries = Object.entries(feature.properties)
+                  .filter(
+                    ([, value]) =>
+                      value !== null && value !== undefined && value !== ""
+                  )
+                  .filter(
+                    ([key]) =>
+                      !key.toLowerCase().includes("pixel_count") &&
+                      !key.toLowerCase().includes("risk_density") &&
+                      !key.toLowerCase().includes("cluster_id")
+                  )
                   .map(([key, value]) => {
                     const formattedKey = formatPropertyName(key);
                     const formattedValue = formatPropertyValue(key, value);
@@ -191,23 +229,42 @@ export default function LeafletMap({
                       text-align: center;
                       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     ">
-                      ${feature.properties.name || feature.properties.cluster_id ? 
-                        `Cluster ID: ${feature.properties.cluster_id || feature.properties.name}` : 
-                        'Feature Details'}
+                      ${
+                        feature.properties.name || feature.properties.cluster_id
+                          ? `Cluster ID: ${
+                              feature.properties.cluster_id ||
+                              feature.properties.name
+                            }`
+                          : "Feature Details"
+                      }
                     </div>
                     <div style="padding: 4px 0;">
-                      ${propertyEntries.map(({ key, value }) => `
+                      ${propertyEntries
+                        .map(
+                          ({ key, value }) => `
                         <div style="
                           display: flex;
                           justify-content: space-between;
                           align-items: center;
                           padding: 8px 12px;
-                          margin: 2px 0;                          background: ${key.toLowerCase().includes('risk') ? '#fef2f2' : 
-                                     key.toLowerCase().includes('area') ? '#f0fdf4' :
-                                     key.toLowerCase().includes('density') ? '#f7fee7' : '#f9fafb'};
-                          border-left: 3px solid ${key.toLowerCase().includes('risk') ? '#ef4444' : 
-                                                  key.toLowerCase().includes('area') ? '#22c55e' :
-                                                  key.toLowerCase().includes('density') ? '#84cc16' : '#6b7280'};
+                          margin: 2px 0;                          background: ${
+                            key.toLowerCase().includes("risk")
+                              ? "#fef2f2"
+                              : key.toLowerCase().includes("area")
+                              ? "#f0fdf4"
+                              : key.toLowerCase().includes("density")
+                              ? "#f7fee7"
+                              : "#f9fafb"
+                          };
+                          border-left: 3px solid ${
+                            key.toLowerCase().includes("risk")
+                              ? "#ef4444"
+                              : key.toLowerCase().includes("area")
+                              ? "#22c55e"
+                              : key.toLowerCase().includes("density")
+                              ? "#84cc16"
+                              : "#6b7280"
+                          };
                           border-radius: 4px;
                           font-size: 13px;
                         ">
@@ -227,24 +284,30 @@ export default function LeafletMap({
                             border: 1px solid #e5e7eb;
                           ">${value}</span>
                         </div>
-                      `).join('')}
+                      `
+                        )
+                        .join("")}
                     </div>
                   </div>
                 `;
 
                 layer.bindPopup(popupContent, {
                   maxWidth: 350,
-                  className: 'custom-popup'
+                  className: "custom-popup",
                 });
               }
-            }
+            },
           });
           vectorLayerGroupRef.current.addLayer(geoJSONLayer);
         } else {
           console.warn("No valid features found in vector data");
         }
       } else {
-        console.error("Failed to load vector layer:", response.status, response.statusText);
+        console.error(
+          "Failed to load vector layer:",
+          response.status,
+          response.statusText
+        );
       }
     } catch (error) {
       console.error("Failed to load vector layer:", error);
@@ -266,16 +329,24 @@ export default function LeafletMap({
 
     visibleLayers.forEach((layer) => {
       if (layer.metadata.dataType === "raster") {
-        const tileLayer = L.tileLayer(
-          `/api/map-tiles/${layer.id}/{z}/{x}/{y}.png`,
-          {
-            opacity: layer.opacity,
-            attribution: `${layer.metadata.name} - ${layer.metadata.dataType}`,
-            maxZoom: 18,
-            tileSize: 256,
-          }
-        );
-        layerGroupRef.current?.addLayer(tileLayer);
+        if (layer.metadata.format === "mbtiles") {
+          // Raster tiles from MBTiles
+          const tileLayer = L.tileLayer(
+            `/api/map-tiles/${layer.id}/{z}/{x}/{y}.png`,
+            {
+              opacity: layer.opacity,
+              attribution: `${layer.metadata.name} - ${layer.metadata.dataType}`,
+              maxZoom: 18,
+              tileSize: 256,
+            }
+          );
+          layerGroupRef.current?.addLayer(tileLayer);
+        } else if (layer.metadata.format === "cog") {
+          // COG files should not be served as tiles
+          console.warn(
+            `COG layer ${layer.id} cannot be displayed in clean map component. Use the main map component with georaster support.`
+          );
+        }
       } else if (layer.metadata.dataType === "vector") {
         loadVectorLayer(layer);
       }

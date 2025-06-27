@@ -34,10 +34,6 @@ export default function ImageAdmin() {
     description: "",
   });
 
-  useEffect(() => {
-    loadImages();
-  }, [loadImages]);
-
   const loadImages = useCallback(async () => {
     try {
       const allImages = await CloudflareR2Manager.getAllImages();
@@ -51,6 +47,10 @@ export default function ImageAdmin() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    loadImages();
+  }, [loadImages]);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();

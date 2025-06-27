@@ -56,14 +56,18 @@ export async function GET(
       );
     }
 
-    // Check if this is an MBTiles file and return appropriate response
+    // Check if this is an MBTiles file and redirect to proper tile server
     if (actualFileName.endsWith(".mbtiles") || actualFileName.endsWith(".db")) {
+      // For raster MBTiles, we would need to extract and serve the tiles
+      // For now, redirect to indicate this should be handled differently
       return NextResponse.json(
         {
-          error: "MBTiles tile serving not fully implemented",
+          error: "Raster MBTiles should be served via proper tile server",
           fileName: actualFileName,
-          recommendation: "Use a proper vector tile server like TileServer GL",
-          note: "MBTiles file found but tile extraction not implemented",
+          layerId: layerName,
+          recommendation:
+            "Use COG format for raster data or implement MBTiles tile extraction",
+          note: "MBTiles file found but raster tile extraction not implemented in this endpoint",
         },
         { status: 501 }
       );

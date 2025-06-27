@@ -43,6 +43,7 @@ import Image from "next/image";
 
 export default function ClimateImagesAdmin() {
   const [images, setImages] = useState<CloudflareR2Image[]>([]);
+  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedCategory, setSelectedCategory] =
@@ -54,6 +55,7 @@ export default function ClimateImagesAdmin() {
 
   const loadImages = useCallback(async () => {
     try {
+      setLoading(true);
       const allImages = await CloudflareR2Manager.getAllImages();
       setImages(allImages);
     } catch (error) {
@@ -63,6 +65,8 @@ export default function ClimateImagesAdmin() {
         description: "Failed to load images",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   }, [toast]);
 
@@ -259,7 +263,7 @@ export default function ClimateImagesAdmin() {
               </TableHeader>
               <TableBody>
                 {images.map((image) => (
-                  <TableRow key={image.id}>
+                  <TableRow key={image.metadata?.id || image.path}>
                     <TableCell>
                       <Dialog>
                         <DialogTrigger asChild>
@@ -269,12 +273,18 @@ export default function ClimateImagesAdmin() {
                         </DialogTrigger>
                         <DialogContent className="max-w-4xl">
                           <DialogHeader>
-                            <DialogTitle>{image.filename}</DialogTitle>
+                            <DialogTitle>
+                              {image.path.split("/").pop() || "Image"}
+                            </DialogTitle>
                           </DialogHeader>
                           <div className="relative aspect-video">
                             <Image
-                              src={image.public_url}
-                              alt={image.description || image.filename}
+                              src={image.url}
+                              alt={
+                                image.metadata?.description ||
+                                image.path.split("/").pop() ||
+                                "Image"
+                              }
                               fill
                               className="object-contain"
                             />
@@ -283,24 +293,34 @@ export default function ClimateImagesAdmin() {
                       </Dialog>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {image.filename}
+                      {image.path.split("/").pop() || "Unknown"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{image.category}</Badge>
+                      <Badge variant="secondary">
+                        {image.metadata?.category || "Unknown"}
+                      </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{image.scenario}</Badge>
+                      <Badge variant="outline">
+                        {image.metadata?.scenario || "Unknown"}
+                      </Badge>
                     </TableCell>
-                    <TableCell>{formatFileSize(image.file_size)}</TableCell>
-                    <TableCell>{formatDate(image.created_at)}</TableCell>
+                    <TableCell>
+                      {formatFileSize(image.metadata?.size || null)}
+                    </TableCell>
+                    <TableCell>
+                      {formatDate(
+                        image.metadata?.uploadedAt
+                          ? image.metadata.uploadedAt.toString()
+                          : null
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            window.open(image.public_url, "_blank")
-                          }
+                          onClick={() => window.open(image.url, "_blank")}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>

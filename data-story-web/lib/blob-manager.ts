@@ -94,7 +94,10 @@ export class CloudflareR2Manager {
           metadata: {
             id: fileNameWithoutExt,
             category: pathParts[1] as ImageCategory,
-            scenario: pathParts[2] || "default",
+            scenario:
+              pathParts[2] && pathParts[2] !== "default"
+                ? (pathParts[2] as ImageScenario)
+                : undefined,
             description: `Climate visualization: ${fileNameWithoutExt}`,
             uploadedAt: object.LastModified || new Date(),
             size: object.Size || 0,
@@ -137,7 +140,10 @@ export class CloudflareR2Manager {
           metadata: {
             id: fileNameWithoutExt,
             category: category,
-            scenario: pathParts[2] || "default",
+            scenario:
+              pathParts[2] && pathParts[2] !== "default"
+                ? (pathParts[2] as ImageScenario)
+                : undefined,
             description: `Climate visualization: ${fileNameWithoutExt}`,
             uploadedAt: object.LastModified || new Date(),
             size: object.Size || 0,

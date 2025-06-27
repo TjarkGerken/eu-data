@@ -13,3 +13,5 @@
 /**/output
 /**/.output
 /**/temp_download
+**/node_modules/** */
+**/node_modules/**
