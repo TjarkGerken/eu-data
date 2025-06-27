@@ -10,6 +10,12 @@ import parseGeoraster from "georaster";
 import GeoRasterLayer from "georaster-layer-for-leaflet";
 import { MapLayerMetadata } from "@/lib/map-tile-service";
 
+// Minimal interface for georaster object (library doesn't provide types)
+interface GeorasterObject {
+  noDataValue: number | null;
+  [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
 interface LayerState {
   id: string;
   visible: boolean;
@@ -48,6 +54,9 @@ export default function LeafletMap({
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const cogLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const loadedLayersRef = useRef<Map<string, { layer: L.Layer; opacity: number; visible: boolean; isCogLayer?: boolean }>>(new Map());
+  const dataCacheRef = useRef<Map<string, { data: ArrayBuffer | GeoJSON.FeatureCollection | string; timestamp: number; type: 'cog' | 'vector' | 'raster' }>>(new Map());
+  const georasterCacheRef = useRef<Map<string, GeorasterObject>>(new Map());
 
   // Add custom CSS for popup styling
   useEffect(() => {
@@ -155,21 +164,34 @@ export default function LeafletMap({
   );
 
   // Load vector layers with popups for GeoJSON data
-  const loadVectorLayer = useCallback(async (layer: LayerState) => {
+  const loadVectorLayer = useCallback(async (layer: LayerState, storeReference: boolean = true) => {
     if (!vectorLayerGroupRef.current || !L) return;
 
     try {
-      console.log("Loading vector layer:", layer.id, layer.metadata);
-      const response = await fetch(`/api/map-data/vector/${layer.id}`);
-
-      if (response.ok) {
-        const vectorData = await response.json();
-        console.log("Vector data loaded:", {
-          layerId: layer.id,
-          featureCount: vectorData?.features?.length || 0,
-          type: vectorData?.type,
-        });
+      // Check cache first
+      const cached = dataCacheRef.current.get(layer.id);
+      let vectorData;
+      
+      if (cached && cached.type === 'vector') {
+        vectorData = cached.data as GeoJSON.FeatureCollection;
+      } else {
+        const response = await fetch(`/api/map-data/vector/${layer.id}`);
         
+        if (response.ok) {
+          vectorData = await response.json();
+          // Cache the data
+          dataCacheRef.current.set(layer.id, {
+            data: vectorData,
+            timestamp: Date.now(),
+            type: 'vector'
+          });
+        } else {
+          console.error("Failed to load vector layer:", response.status, response.statusText);
+          return;
+        }
+      }
+
+      if (vectorData) {
         if (vectorData && vectorData.features && vectorData.features.length > 0) {
           const geoJSONLayer = L.geoJSON(vectorData, {
             style: () => {
@@ -179,7 +201,7 @@ export default function LeafletMap({
                 weight: 2,
                 color: "#ffffff",
                 opacity: layer.opacity,
-                fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
               };
             },
             onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
@@ -341,15 +363,18 @@ export default function LeafletMap({
             },
           });
           vectorLayerGroupRef.current.addLayer(geoJSONLayer);
+          
+          // Store layer reference if requested
+          if (storeReference) {
+            loadedLayersRef.current.set(layer.id, {
+              layer: geoJSONLayer,
+              opacity: layer.opacity,
+              visible: true
+            });
+          }
         } else {
           console.warn("No valid features found in vector data");
         }
-      } else {
-        console.error(
-          "Failed to load vector layer:",
-          response.status,
-          response.statusText
-        );
       }
     } catch (error) {
       console.error("Failed to load vector layer:", error);
@@ -361,14 +386,29 @@ export default function LeafletMap({
     if (!cogLayerGroupRef.current) return;
 
     try {
-      // Fetch the COG file from our API
-      const response = await fetch(`/api/map-data/cog/${layer.id}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch COG: ${response.statusText}`);
+      // Check georaster cache first
+      let georaster = georasterCacheRef.current.get(layer.id);
+      
+      if (georaster) {
+        // Using cached georaster
+      } else {
+        // Fetch the COG file from our API
+        const response = await fetch(`/api/map-data/cog/${layer.id}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch COG: ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        georaster = await parseGeoraster(arrayBuffer) as GeorasterObject;
+        
+        // Cache the parsed georaster object
+        georasterCacheRef.current.set(layer.id, georaster);
       }
 
-      const arrayBuffer = await response.arrayBuffer();
-      const georaster = await parseGeoraster(arrayBuffer);
+      // Ensure georaster is defined before proceeding
+      if (!georaster) {
+        throw new Error("Failed to load or parse georaster data");
+      }
 
       // Create a custom color scale based on layer metadata
       const colorScale = layer.metadata.colorScale;
@@ -443,6 +483,16 @@ export default function LeafletMap({
       });
 
       cogLayerGroupRef.current.addLayer(cogLayer);
+      
+      // Store layer reference
+      if (cogLayerGroupRef.current) {
+        loadedLayersRef.current.set(layer.id, {
+          layer: cogLayer,
+          opacity: layer.opacity,
+          visible: true,
+          isCogLayer: true
+        });
+      }
     } catch (error) {
       console.error(`Failed to load COG layer ${layer.id}:`, error);
     }
@@ -457,77 +507,113 @@ export default function LeafletMap({
     )
       return;
 
-    // Clear all layer groups
-    layerGroupRef.current.clearLayers();
-    vectorLayerGroupRef.current.clearLayers();
-    cogLayerGroupRef.current.clearLayers();
+    const currentLayerStates = new Map(layers.map(layer => [layer.id, { visible: layer.visible, opacity: layer.opacity }]));
+    const loadedLayers = loadedLayersRef.current;
 
+    // Remove layers that are no longer visible or no longer exist
+    for (const [layerId, loadedLayer] of loadedLayers.entries()) {
+      const currentState = currentLayerStates.get(layerId);
+      if (!currentState || !currentState.visible) {
+        // Remove from the correct layer group based on layer type
+        if (loadedLayer.isCogLayer && cogLayerGroupRef.current) {
+          cogLayerGroupRef.current.removeLayer(loadedLayer.layer);
+        } else if (vectorLayerGroupRef.current && vectorLayerGroupRef.current.hasLayer(loadedLayer.layer)) {
+          vectorLayerGroupRef.current.removeLayer(loadedLayer.layer);
+        } else if (layerGroupRef.current && layerGroupRef.current.hasLayer(loadedLayer.layer)) {
+          layerGroupRef.current.removeLayer(loadedLayer.layer);
+        } else {
+          // Fallback to map removal
+          mapRef.current.removeLayer(loadedLayer.layer);
+        }
+        loadedLayers.delete(layerId);
+      } else if (currentState.opacity !== loadedLayer.opacity) {
+        // Update opacity if changed
+        if ('setOpacity' in loadedLayer.layer && typeof (loadedLayer.layer as { setOpacity?: (opacity: number) => void }).setOpacity === 'function') {
+          (loadedLayer.layer as { setOpacity: (opacity: number) => void }).setOpacity(currentState.opacity);
+        }
+        loadedLayer.opacity = currentState.opacity;
+      }
+    }
+
+    // Add new visible layers or layers that need to be reloaded
     const visibleLayers = layers.filter((layer) => layer.visible);
-
+    
     visibleLayers.forEach((layer) => {
+      const loadedLayer = loadedLayers.get(layer.id);
+      
+      // Skip if layer is already loaded and hasn't changed
+      if (loadedLayer && loadedLayer.opacity === layer.opacity) {
+        return;
+      }
+      
       if (layer.metadata.dataType === "vector") {
         // Vector tiles from MBTiles
         if (layer.metadata.format === "mbtiles") {
           if (L && VectorGrid) {
-            // Get the actual layer name dynamically
-            getActualLayerName(layer.id)
-              .then((actualLayerName) => {
-                const vectorTileLayer = L.vectorGrid.protobuf(
-                  `/api/map-data/vector/${layer.id}/{z}/{x}/{y}`,
-                  {
-                    rendererFactory: L.canvas.tile,
-                    vectorTileLayerStyles: {
-                      // Use the actual layer name from the MBTiles file
-                      [actualLayerName]: {
-                        weight: 2,
-                        color: "#1e40af",
-                        opacity: 0.9,
-                        fillColor: "#1e3a8a",
-                        fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
-                      },
-                      // Also add a fallback with the converted layer ID
-                      [layer.id]: {
-                        weight: 2,
-                        color: "#1e40af",
-                        opacity: 0.9,
-                        fillColor: "#1e3a8a",
-                        fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
-                      },
+            // Check if we already have a cached layer name
+            const cachedLayerName = dataCacheRef.current.get(`${layer.id}_layername`);
+            
+            const createVectorTileLayer = (actualLayerName: string) => {
+              const vectorTileLayer = L.vectorGrid.protobuf(
+                `/api/map-data/vector/${layer.id}/{z}/{x}/{y}`,
+                {
+                  rendererFactory: L.canvas.tile,
+                  vectorTileLayerStyles: {
+                    // Use the actual layer name from the MBTiles file
+                    [actualLayerName]: {
+                      weight: 2,
+                      color: "#1e40af",
+                      opacity: 0.9,
+                      fillColor: "#1e3a8a",
+                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                     },
-                    maxZoom: 18,
-                    pane: "overlayPane",
-                    attribution: "EU Climate Risk Data",
-                  }
-                );
+                    // Also add a fallback with the converted layer ID
+                    [layer.id]: {
+                      weight: 2,
+                      color: "#1e40af",
+                      opacity: 0.9,
+                      fillColor: "#1e3a8a",
+                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                    },
+                  },
+                  maxZoom: 18,
+                  pane: "overlayPane",
+                  attribution: "EU Climate Risk Data",
+                }
+              );
 
-                vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
-              })
-              .catch((error) => {
-                console.error(
-                  `Failed to get layer name for ${layer.id}:`,
-                  error
-                );
-                // Fallback to basic rendering without dynamic name resolution
-                const vectorTileLayer = L.vectorGrid.protobuf(
-                  `/api/map-data/vector/${layer.id}/{z}/{x}/{y}`,
-                  {
-                    rendererFactory: L.canvas.tile,
-                    vectorTileLayerStyles: {
-                      [layer.id]: {
-                        weight: 2,
-                        color: "#1e40af",
-                        opacity: 0.9,
-                        fillColor: "#1e3a8a",
-                        fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
-                      },
-                    },
-                    maxZoom: 18,
-                    pane: "overlayPane",
-                    attribution: "EU Climate Risk Data",
-                  }
-                );
-                vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
+              vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
+              // Store layer reference
+              loadedLayersRef.current.set(layer.id, {
+                layer: vectorTileLayer,
+                opacity: layer.opacity,
+                visible: true
               });
+            };
+            
+            if (cachedLayerName && cachedLayerName.type === 'vector') {
+              createVectorTileLayer(cachedLayerName.data as string);
+            } else {
+              // Get the actual layer name dynamically
+              getActualLayerName(layer.id)
+                .then((actualLayerName) => {
+                  // Cache the layer name
+                  dataCacheRef.current.set(`${layer.id}_layername`, {
+                    data: actualLayerName,
+                    timestamp: Date.now(),
+                    type: 'vector'
+                  });
+                  createVectorTileLayer(actualLayerName);
+                })
+                .catch((error) => {
+                  console.error(
+                    `Failed to get layer name for ${layer.id}:`,
+                    error
+                  );
+                  // Fallback to basic rendering without dynamic name resolution
+                  createVectorTileLayer(layer.id);
+                });
+            }
           } else {
             console.warn("VectorGrid not available - skipping vector layer");
           }
@@ -546,6 +632,13 @@ export default function LeafletMap({
             }
           );
           layerGroupRef.current?.addLayer(tileLayer);
+          
+          // Store layer reference
+          loadedLayersRef.current.set(layer.id, {
+            layer: tileLayer,
+            opacity: layer.opacity,
+            visible: true
+          });
         } else if (layer.metadata.format === "cog") {
           // COG files using georaster
           loadCogLayer(layer);
