@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME } from "@/lib/r2-config";
 import path from "path";
+
+const s3Client = new S3Client(R2_CONFIG);
 
 export interface MapLayerMetadata {
   id: string;
   name: string;
   dataType: "raster" | "vector";
-  format: "tiff" | "geojson" | "geopackage" | "png";
+  format: "cog" | "mbtiles";
   bounds: [number, number, number, number];
   colorScale: string[];
   valueRange: [number, number];
@@ -19,120 +22,164 @@ export async function GET() {
   try {
     const layers: MapLayerMetadata[] = [];
 
-    // Only get layers from Supabase storage
-    const { data: storageLayers, error: storageError } = await supabase.storage
-      .from("map-layers")
-      .list();
+    // Get layers from R2 storage
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: "map-layers/",
+      MaxKeys: 1000,
+    });
 
-    if (storageError) {
-      console.error("Error loading from Supabase storage:", storageError);
-      return NextResponse.json(
-        { error: "Failed to load layers from storage" },
-        { status: 500 }
-      );
+    const response = await s3Client.send(command);
+
+    if (!response.Contents) {
+      console.error("No contents found in R2 storage");
+      return NextResponse.json({ layers: [] });
     }
 
-    if (storageLayers) {
-      for (const layer of storageLayers) {
-        const layerMetadata = await extractLayerMetadata(layer);
-        if (layerMetadata) {
-          layers.push(layerMetadata);
-        }
+    for (const object of response.Contents) {
+      if (!object.Key) continue;
+
+      const layerMetadata = await extractLayerMetadata({
+        name: path.basename(object.Key),
+        created_at: object.LastModified?.toISOString(),
+        updated_at: object.LastModified?.toISOString(),
+        metadata: { size: object.Size },
+      });
+
+      if (layerMetadata) {
+        layers.push(layerMetadata);
       }
     }
 
     return NextResponse.json({ layers });
   } catch (error) {
-    console.error("Error listing layers:", error);
+    console.error("Error listing layers from R2:", error);
     return NextResponse.json(
-      { error: "Failed to list layers" },
+      { error: "Failed to load layers from R2 storage" },
       { status: 500 }
     );
   }
 }
 
-async function extractLayerMetadata(
-  layer: { name: string; created_at?: string; updated_at?: string; metadata?: { size?: number } }
-): Promise<MapLayerMetadata | null> {
+async function extractLayerMetadata(layer: {
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+  metadata?: { size?: number };
+}): Promise<MapLayerMetadata | null> {
   try {
     const fileName = layer.name;
+
     let layerId = path.basename(fileName, path.extname(fileName));
-    
-    // Handle special naming patterns for clusters
+
+    // Remove timestamp prefix if present
+    const timestampMatch = layerId.match(/^\d+_(.+)$/);
+    if (timestampMatch) {
+      layerId = timestampMatch[1];
+    }
+
+    // Handle special naming patterns for clusters to create more readable IDs
     if (fileName.includes("clusters_SLR")) {
-      // Extract scenario from filename like "clusters_SLR-0-Current_COMBINED_optimized.geojson"
-      const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_COMBINED/);
+      const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_(\w+)/);
       if (match) {
-        const scenario = match[2].toLowerCase(); // "current", "severe", etc.
-        layerId = `clusters-slr-${scenario}`;
-      } else {
-        layerId = "clusters-slr-current"; // fallback
+        const scenario = match[2].toLowerCase();
+        const riskType = match[3].toLowerCase();
+        layerId = `clusters-slr-${scenario}-${riskType}`;
       }
     }
 
-    // Determine layer type from filename
+    // Determine layer type from filename - be more specific with pattern matching
     const layerType = determineLayerType(fileName);
 
-    // Determine data type and format based on file extension
+    // Determine data type and format based on file extension AND content analysis
     let dataType: "raster" | "vector";
-    let format: "tiff" | "geojson" | "geopackage" | "png";
+    let format: "cog" | "mbtiles";
 
-    if (fileName.endsWith(".tif") || fileName.endsWith(".tiff")) {
+    if (fileName.endsWith(".cog") || fileName.endsWith(".tif")) {
       dataType = "raster";
-      format = "tiff";
-    } else if (fileName.endsWith(".png")) {
-      // PNG files are typically optimized raster data from GeoTIFF conversion
-      dataType = "raster";
-      format = "png";
-    } else if (fileName.endsWith(".geojson") || fileName.endsWith(".json")) {
-      dataType = "vector";
-      format = "geojson";
-    } else if (fileName.endsWith(".gpkg")) {
-      dataType = "vector";
-      format = "geopackage";
-    } else {
-      // Default fallback - try to guess from filename
+      format = "cog";
+    } else if (fileName.endsWith(".mbtiles")) {
+      // For MBTiles, determine type based on MORE SPECIFIC filename patterns
+      // Priority order: clusters > specific layer types
       if (
-        layerType === "risk" ||
-        layerType === "hazard" ||
-        layerType === "exposition" ||
-        layerType === "relevance"
+        fileName.startsWith("clusters_") ||
+        fileName.includes("clusters_SLR")
+      ) {
+        dataType = "vector";
+        format = "mbtiles";
+      } else if (
+        fileName.startsWith("risk_") ||
+        fileName.startsWith("hazard_") ||
+        fileName.startsWith("exposition_") ||
+        fileName.startsWith("relevance_")
       ) {
         dataType = "raster";
-        format = "tiff";
+        format = "mbtiles";
       } else {
-        dataType = "vector";
-        format = "geopackage";
+        // For ambiguous cases, check layer type from determineLayerType
+        if (layerType === "clusters") {
+          dataType = "vector";
+          format = "mbtiles";
+        } else {
+          dataType = "raster";
+          format = "mbtiles";
+        }
       }
+    } else {
+      // Skip unsupported file types
+      return null;
     }
 
-    return {
+    const metadata = {
       id: layerId,
-      name: layerId.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+      name: formatDisplayName(layerId),
       dataType,
       format,
-      bounds: [-180, -90, 180, 90],
+      bounds: getDefaultBounds(layerType),
       colorScale: getDefaultColorScale(layerType),
-      valueRange: [0, 100],
+      valueRange: getDefaultValueRange(layerType),
       description: `${layerType} layer: ${layerId}`,
       uploadedAt:
         layer.created_at || layer.updated_at || new Date().toISOString(),
       fileSize: layer.metadata?.size || 0,
     };
+
+    return metadata;
   } catch (error) {
     console.error("Error extracting layer metadata:", error);
     return null;
   }
 }
 
+function formatDisplayName(layerId: string): string {
+  // Create a more readable display name
+  return layerId
+    .replace(/_/g, " ") // Replace underscores with spaces
+    .replace(/-/g, " ") // Replace hyphens with spaces
+    .replace(/\b\w/g, (l) => l.toUpperCase()) // Capitalize first letter of each word
+    .replace(/\bSlr\b/g, "SLR") // Fix SLR capitalization
+    .replace(/\bGdp\b/g, "GDP") // Fix GDP capitalization
+    .replace(/\bHrst\b/g, "HRST") // Fix HRST capitalization
+    .trim();
+}
+
 function determineLayerType(fileName: string): string {
   const name = fileName.toLowerCase();
-  if (name.includes("risk")) return "risk";
-  if (name.includes("hazard")) return "hazard";
-  if (name.includes("exposition")) return "exposition";
-  if (name.includes("relevance")) return "relevance";
-  if (name.includes("cluster")) return "clusters";
+
+  // Priority order: check for clusters first to avoid false matches
+  if (name.includes("cluster") || name.includes("clusters_slr"))
+    return "clusters";
+  if (name.startsWith("risk_") || name.includes("_risk_")) return "risk";
+  if (name.startsWith("hazard_") || name.includes("_hazard_")) return "hazard";
+  if (name.startsWith("exposition_") || name.includes("_exposition_"))
+    return "exposition";
+  if (name.startsWith("relevance_") || name.includes("_relevance_"))
+    return "relevance";
   if (name.includes("slr")) return "sea-level-rise";
+
+  console.log(
+    `Could not determine specific layer type for: ${fileName}, defaulting to unknown`
+  );
   return "unknown";
 }
 
@@ -148,5 +195,38 @@ function getDefaultColorScale(layerType: string): string[] {
   };
   return (
     colorScales[layerType as keyof typeof colorScales] || colorScales.unknown
+  );
+}
+
+function getDefaultBounds(layerType: string): [number, number, number, number] {
+  // Default bounds for EU region
+  const euBounds: [number, number, number, number] = [3.5, 51.2, 7.2, 53.5];
+
+  const bounds = {
+    risk: euBounds,
+    hazard: euBounds,
+    exposition: euBounds,
+    relevance: euBounds,
+    clusters: euBounds,
+    "sea-level-rise": euBounds,
+    unknown: [-180, -90, 180, 90] as [number, number, number, number],
+  };
+
+  return bounds[layerType as keyof typeof bounds] || bounds.unknown;
+}
+
+function getDefaultValueRange(layerType: string): [number, number] {
+  const valueRanges = {
+    risk: [0, 1] as [number, number],
+    hazard: [0, 1] as [number, number],
+    exposition: [0, 100] as [number, number],
+    relevance: [0, 100] as [number, number],
+    clusters: [0, 500] as [number, number],
+    "sea-level-rise": [0, 3] as [number, number],
+    unknown: [0, 100] as [number, number],
+  };
+
+  return (
+    valueRanges[layerType as keyof typeof valueRanges] || valueRanges.unknown
   );
 }

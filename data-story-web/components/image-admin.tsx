@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,49 +15,49 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Upload, RefreshCw, Eye } from "lucide-react";
-import { SupabaseImage } from "@/lib/blob-manager";
+import { CloudflareR2Manager, CloudflareR2Image } from "@/lib/blob-manager";
 import { BLOB_CONFIG, ImageCategory, ImageScenario } from "@/lib/blob-config";
 import ClimateImage from "./climate-image";
+import { toast } from "@/components/ui/use-toast";
 
 export default function ImageAdmin() {
-  const [images, setImages] = useState<SupabaseImage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [images, setImages] = useState<CloudflareR2Image[]>([]);
   const [uploading, setUploading] = useState(false);
   const [selectedCategory, setSelectedCategory] =
-    useState<ImageCategory>("exposition");
+    useState<ImageCategory>("risk");
   const [selectedScenario, setSelectedScenario] = useState<
     ImageScenario | "none"
   >("none");
   const [uploadForm, setUploadForm] = useState({
     id: "",
-    description: "",
     file: null as File | null,
+    description: "",
   });
+
+  const loadImages = useCallback(async () => {
+    try {
+      const allImages = await CloudflareR2Manager.getAllImages();
+      setImages(allImages);
+    } catch (error) {
+      console.error("Failed to load images:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load images",
+        variant: "destructive",
+      });
+    }
+  }, []);
 
   useEffect(() => {
     loadImages();
-  }, []);
-
-  const loadImages = async () => {
-    try {
-      console.log("Loading images from API...");
-      const response = await fetch("/api/images");
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      const data = await response.json();
-      console.log("Loaded images:", data.images?.length || 0);
-      setImages(data.images || []);
-    } catch (error) {
-      console.error("Failed to load images:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [loadImages]);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadForm.file || !uploadForm.id || !uploadForm.description) return;
+    if (!uploadForm.file || !selectedCategory || !uploadForm.id) {
+      alert("Please fill in all required fields");
+      return;
+    }
 
     setUploading(true);
     try {
@@ -77,7 +77,8 @@ export default function ImageAdmin() {
       });
 
       if (response.ok) {
-        setUploadForm({ id: "", description: "", file: null });
+        setUploadForm({ id: "", file: null, description: "" });
+        setSelectedCategory("risk");
         setSelectedScenario("none");
         await loadImages();
       } else {
@@ -113,13 +114,6 @@ export default function ImageAdmin() {
       alert("Delete failed");
     }
   };
-
-  const groupedImages = images.reduce((acc, image) => {
-    const category = image.metadata?.category || "unknown";
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(image);
-    return acc;
-  }, {} as Record<string, SupabaseImage[]>);
 
   return (
     <div className="space-y-6">
@@ -250,74 +244,52 @@ export default function ImageAdmin() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {images.length === 0 ? (
             <div className="text-center py-8">Loading images...</div>
           ) : (
             <div className="space-y-6">
-              {Object.entries(groupedImages).map(
-                ([category, categoryImages]) => (
-                  <div key={category}>
-                    <h3 className="text-lg font-semibold mb-3 capitalize">
-                      {category}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {categoryImages.map((image) => (
-                        <Card key={image.path} className="overflow-hidden">
-                          <div className="aspect-video relative">
-                            <ClimateImage
-                              category={image.metadata?.category || "combined"}
-                              scenario={image.metadata?.scenario}
-                              id={image.metadata?.id}
-                              alt={
-                                image.metadata?.description || "Climate image"
-                              }
-                              className="object-cover"
-                            />
-                          </div>
-                          <CardContent className="p-4">
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <Badge variant="outline">
-                                  {image.metadata?.id}
-                                </Badge>
-                                {image.metadata?.scenario && (
-                                  <Badge variant="secondary">
-                                    {image.metadata.scenario}
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {image.metadata?.description}
-                              </p>
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-muted-foreground">
-                                  {image.metadata?.size
-                                    ? `${Math.round(
-                                        image.metadata.size / 1024
-                                      )} KB`
-                                    : ""}
-                                </span>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleDelete(image.path)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+              {images.map((image) => (
+                <Card key={image.path} className="overflow-hidden">
+                  <div className="aspect-video relative">
+                    <ClimateImage
+                      category={image.metadata?.category || "combined"}
+                      scenario={image.metadata?.scenario}
+                      id={image.metadata?.id}
+                      alt={image.metadata?.description || "Climate image"}
+                      className="object-cover"
+                    />
                   </div>
-                )
-              )}
-              {Object.keys(groupedImages).length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  No images found. Upload some images to get started.
-                </div>
-              )}
+                  <CardContent className="p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline">{image.metadata?.id}</Badge>
+                        {image.metadata?.scenario && (
+                          <Badge variant="secondary">
+                            {image.metadata.scenario}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {image.metadata?.description}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          {image.metadata?.size
+                            ? `${Math.round(image.metadata.size / 1024)} KB`
+                            : ""}
+                        </span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(image.path)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </CardContent>

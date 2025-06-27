@@ -163,9 +163,13 @@ data:
       auto_overviews: true
     mvt_settings:
       min_zoom: 0
-      max_zoom: 14
+      max_zoom: 12
       simplification: "drop-densest-as-needed"
       generate_ids: true
+      buffer_size: 64
+      preserve_input_order: true
+      detect_shared_borders: true
+      extend_zooms_if_still_dropping: true
   building:
     base_floor_height: 3
     max_floors: 30
@@ -183,3 +187,7 @@ data:
     natural_smoothing_iterations: 3
     corner_rounding_radius: 30
     use_contour_method: true
+    web_optimization:
+      max_vertices_per_polygon: 1000
+      simplify_tolerance_meters: 100
+      preserve_topology: true

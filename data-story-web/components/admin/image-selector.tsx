@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import NextImage from "next/image";
-import { supabase } from "@/lib/supabase";
+import { CloudflareR2Manager } from "@/lib/blob-manager";
+import { ImageCategory } from "@/lib/blob-config";
 import {
   Select,
   SelectContent,
@@ -15,13 +16,16 @@ import { Badge } from "@/components/ui/badge";
 import { Image, Loader2 } from "lucide-react";
 
 interface ClimateImage {
-  id: number;
-  filename: string;
-  category: string;
-  scenario: string;
-  description: string | null;
-  publicUrl: string;
-  storageType: string;
+  url: string;
+  path: string;
+  metadata: {
+    id: string;
+    category: string;
+    scenario?: string;
+    description: string;
+    uploadedAt: Date;
+    size: number;
+  };
 }
 
 interface ImageSelectorProps {
@@ -44,33 +48,24 @@ export default function ImageSelector({
 
   const fetchImages = useCallback(async () => {
     try {
-      let query = supabase.from("climate_images").select("*");
+      let imageData: ClimateImage[];
 
-      if (category) {
-        query = query.eq("category", category);
+      if (category && category !== "all") {
+        imageData = await CloudflareR2Manager.getImagesByCategory(
+          category as ImageCategory
+        );
+      } else {
+        imageData = await CloudflareR2Manager.getAllImages();
       }
 
-      if (scenario) {
-        query = query.eq("scenario", scenario);
+      // Filter by scenario if specified
+      if (scenario && scenario !== "all") {
+        imageData = imageData.filter(
+          (img) => img.metadata.scenario === scenario
+        );
       }
 
-      const { data, error } = await query.order("display_order", {
-        ascending: true,
-      });
-
-      if (error) throw error;
-
-      const mappedImages: ClimateImage[] = (data || []).map(item => ({
-        id: item.id,
-        filename: item.filename,
-        category: item.category,
-        scenario: item.scenario,
-        description: item.description,
-        publicUrl: item.public_url,
-        storageType: 'blob'
-      }));
-
-      setImages(mappedImages);
+      setImages(imageData);
     } catch (error) {
       console.error("Error fetching images:", error);
     } finally {
@@ -85,14 +80,14 @@ export default function ImageSelector({
   useEffect(() => {
     if (value && images.length > 0) {
       const found = images.find(
-        (img) => img.id.toString() === value || img.filename === value
+        (img) => img.metadata.id === value || img.url === value
       );
       setSelectedImageData(found || null);
     }
   }, [value, images]);
 
   const handleImageSelect = (imageId: string) => {
-    const imageData = images.find((img) => img.id.toString() === imageId);
+    const imageData = images.find((img) => img.metadata.id === imageId);
     setSelectedImageData(imageData || null);
     onChange(imageId, imageData);
   };
@@ -125,18 +120,18 @@ export default function ImageSelector({
         </SelectTrigger>
         <SelectContent>
           {images.map((image) => (
-            <SelectItem key={image.id} value={image.id.toString()}>
+            <SelectItem key={image.metadata.id} value={image.metadata.id}>
               <div className="flex items-center space-x-2">
                 <Image className="h-4 w-4" aria-label="Image icon" />
-                <span className="truncate max-w-48">{image.filename}</span>
+                <span className="truncate max-w-48">{image.metadata.id}</span>
                 <Badge
-                  className={getCategoryColor(image.category)}
+                  className={getCategoryColor(image.metadata.category)}
                   variant="secondary"
                 >
-                  {image.category}
+                  {image.metadata.category}
                 </Badge>
-                {image.scenario && (
-                  <Badge variant="outline">{image.scenario}</Badge>
+                {image.metadata.scenario && (
+                  <Badge variant="outline">{image.metadata.scenario}</Badge>
                 )}
               </div>
             </SelectItem>
@@ -150,10 +145,8 @@ export default function ImageSelector({
             <div className="space-y-3">
               <div className="aspect-video relative bg-gray-100 rounded-lg overflow-hidden">
                 <NextImage
-                  src={selectedImageData.publicUrl}
-                  alt={
-                    selectedImageData.description || selectedImageData.filename
-                  }
+                  src={selectedImageData.url}
+                  alt={selectedImageData.metadata.description}
                   fill
                   className="object-cover"
                   onError={(e) => {
@@ -165,30 +158,32 @@ export default function ImageSelector({
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Badge
-                    className={getCategoryColor(selectedImageData.category)}
+                    className={getCategoryColor(
+                      selectedImageData.metadata.category
+                    )}
                   >
-                    {selectedImageData.category}
+                    {selectedImageData.metadata.category}
                   </Badge>
-                  {selectedImageData.scenario && (
+                  {selectedImageData.metadata.scenario && (
                     <Badge variant="outline">
-                      {selectedImageData.scenario}
+                      {selectedImageData.metadata.scenario}
                     </Badge>
                   )}
                 </div>
 
                 <div>
                   <p className="font-medium text-sm">
-                    {selectedImageData.filename}
+                    {selectedImageData.metadata.id}
                   </p>
-                  {selectedImageData.description && (
+                  {selectedImageData.metadata.description && (
                     <p className="text-sm text-muted-foreground">
-                      {selectedImageData.description}
+                      {selectedImageData.metadata.description}
                     </p>
                   )}
                 </div>
 
                 <div className="text-xs text-muted-foreground">
-                  Image ID: {selectedImageData.id}
+                  Image ID: {selectedImageData.metadata.id}
                 </div>
               </div>
             </div>
@@ -198,7 +193,10 @@ export default function ImageSelector({
 
       {images.length === 0 && (
         <div className="text-center p-8 text-muted-foreground">
-          <Image className="h-12 w-12 mx-auto mb-4 opacity-50" aria-label="No images found" />
+          <Image
+            className="h-12 w-12 mx-auto mb-4 opacity-50"
+            aria-label="No images found"
+          />
           <p>No images found</p>
           {(category || scenario) && (
             <p className="text-sm">

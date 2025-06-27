@@ -10,7 +10,7 @@ export interface MapLayerMetadata {
   id: string;
   name: string;
   dataType: "raster" | "vector";
-  format: "tiff" | "geojson" | "geopackage";
+  format: "cog" | "mbtiles";
   bounds: [number, number, number, number];
   colorScale: string[];
   valueRange: [number, number];
