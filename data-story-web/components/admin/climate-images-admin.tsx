@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { supabase, type ClimateImage } from "@/lib/supabase";
+import { CloudflareR2Manager, CloudflareR2Image } from "@/lib/blob-manager";
+import { ImageCategory, ImageScenario } from "@/lib/blob-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,31 +42,27 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
 export default function ClimateImagesAdmin() {
-  const [images, setImages] = useState<ClimateImage[]>([]);
+  const [images, setImages] = useState<CloudflareR2Image[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadForm, setUploadForm] = useState({
-    category: "",
-    scenario: "",
-    description: "",
-  });
+  const [selectedCategory, setSelectedCategory] =
+    useState<ImageCategory>("risk");
+  const [selectedScenario, setSelectedScenario] =
+    useState<ImageScenario>("current");
+  const [description, setDescription] = useState("");
   const { toast } = useToast();
 
-  const fetchImages = useCallback(async () => {
+  const loadImages = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("climate_images")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setImages(data || []);
+      setLoading(true);
+      const allImages = await CloudflareR2Manager.getAllImages();
+      setImages(allImages);
     } catch (error) {
-      console.error("Error fetching images:", error);
+      console.error("Failed to load images:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch images",
+        description: "Failed to load images",
         variant: "destructive",
       });
     } finally {
@@ -74,12 +71,12 @@ export default function ClimateImagesAdmin() {
   }, [toast]);
 
   useEffect(() => {
-    fetchImages();
-  }, [fetchImages]);
+    loadImages();
+  }, [loadImages]);
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile || !uploadForm.category || !uploadForm.scenario) {
+    if (!selectedFile || !selectedCategory || !selectedScenario) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -92,9 +89,9 @@ export default function ClimateImagesAdmin() {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("category", uploadForm.category);
-      formData.append("scenario", uploadForm.scenario);
-      formData.append("description", uploadForm.description);
+      formData.append("category", selectedCategory);
+      formData.append("scenario", selectedScenario);
+      formData.append("description", description);
 
       const response = await fetch("/api/storage/upload", {
         method: "POST",
@@ -111,8 +108,8 @@ export default function ClimateImagesAdmin() {
       });
 
       setSelectedFile(null);
-      setUploadForm({ category: "", scenario: "", description: "" });
-      fetchImages();
+      setDescription("");
+      loadImages();
     } catch (error) {
       console.error("Upload error:", error);
       toast({
@@ -125,29 +122,18 @@ export default function ClimateImagesAdmin() {
     }
   };
 
-  const handleDelete = async (image: ClimateImage) => {
-    if (!confirm(`Are you sure you want to delete ${image.filename}?`)) return;
+  const handleDelete = async (image: CloudflareR2Image) => {
+    if (!confirm(`Are you sure you want to delete this image?`)) return;
 
     try {
-      const { error: storageError } = await supabase.storage
-        .from("climate-images")
-        .remove([image.storage_path]);
-
-      if (storageError) throw storageError;
-
-      const { error: dbError } = await supabase
-        .from("climate_images")
-        .delete()
-        .eq("id", image.id);
-
-      if (dbError) throw dbError;
+      await CloudflareR2Manager.deleteImage(image.path);
 
       toast({
         title: "Success",
         description: "Image deleted successfully",
       });
 
-      fetchImages();
+      loadImages();
     } catch (error) {
       console.error("Delete error:", error);
       toast({
@@ -204,9 +190,9 @@ export default function ClimateImagesAdmin() {
             <div>
               <Label htmlFor="category">Category</Label>
               <Select
-                value={uploadForm.category}
+                value={selectedCategory}
                 onValueChange={(value) =>
-                  setUploadForm((prev) => ({ ...prev, category: value }))
+                  setSelectedCategory(value as ImageCategory)
                 }
               >
                 <SelectTrigger>
@@ -223,9 +209,9 @@ export default function ClimateImagesAdmin() {
             <div>
               <Label htmlFor="scenario">Scenario</Label>
               <Select
-                value={uploadForm.scenario}
+                value={selectedScenario}
                 onValueChange={(value) =>
-                  setUploadForm((prev) => ({ ...prev, scenario: value }))
+                  setSelectedScenario(value as ImageScenario)
                 }
               >
                 <SelectTrigger>
@@ -243,13 +229,8 @@ export default function ClimateImagesAdmin() {
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                value={uploadForm.description}
-                onChange={(e) =>
-                  setUploadForm((prev) => ({
-                    ...prev,
-                    description: e.target.value,
-                  }))
-                }
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe the image content"
               />
             </div>
@@ -282,7 +263,7 @@ export default function ClimateImagesAdmin() {
               </TableHeader>
               <TableBody>
                 {images.map((image) => (
-                  <TableRow key={image.id}>
+                  <TableRow key={image.metadata?.id || image.path}>
                     <TableCell>
                       <Dialog>
                         <DialogTrigger asChild>
@@ -292,12 +273,18 @@ export default function ClimateImagesAdmin() {
                         </DialogTrigger>
                         <DialogContent className="max-w-4xl">
                           <DialogHeader>
-                            <DialogTitle>{image.filename}</DialogTitle>
+                            <DialogTitle>
+                              {image.path.split("/").pop() || "Image"}
+                            </DialogTitle>
                           </DialogHeader>
                           <div className="relative aspect-video">
                             <Image
-                              src={image.public_url}
-                              alt={image.description || image.filename}
+                              src={image.url}
+                              alt={
+                                image.metadata?.description ||
+                                image.path.split("/").pop() ||
+                                "Image"
+                              }
                               fill
                               className="object-contain"
                             />
@@ -306,24 +293,34 @@ export default function ClimateImagesAdmin() {
                       </Dialog>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {image.filename}
+                      {image.path.split("/").pop() || "Unknown"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{image.category}</Badge>
+                      <Badge variant="secondary">
+                        {image.metadata?.category || "Unknown"}
+                      </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{image.scenario}</Badge>
+                      <Badge variant="outline">
+                        {image.metadata?.scenario || "Unknown"}
+                      </Badge>
                     </TableCell>
-                    <TableCell>{formatFileSize(image.file_size)}</TableCell>
-                    <TableCell>{formatDate(image.created_at)}</TableCell>
+                    <TableCell>
+                      {formatFileSize(image.metadata?.size || null)}
+                    </TableCell>
+                    <TableCell>
+                      {formatDate(
+                        image.metadata?.uploadedAt
+                          ? image.metadata.uploadedAt.toString()
+                          : null
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            window.open(image.public_url, "_blank")
-                          }
+                          onClick={() => window.open(image.url, "_blank")}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>

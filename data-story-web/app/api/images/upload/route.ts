@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SupabaseImageManager } from "@/lib/blob-manager";
+import { CloudflareR2Manager } from "@/lib/blob-manager";
 import { BLOB_CONFIG, ImageCategory, ImageScenario } from "@/lib/blob-config";
 
 export async function POST(request: NextRequest) {
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
 
-    const result = await SupabaseImageManager.uploadImage(file, {
+    const result = await CloudflareR2Manager.uploadImage(file, {
       id,
       category: category as ImageCategory,
       scenario: scenario === "" ? undefined : (scenario as ImageScenario),

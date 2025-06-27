@@ -173,7 +173,6 @@ data-story-web/
 ```json
 {
   "leaflet": "^1.9.4", // Map library
-  "canvas": "^2.11.2", // Server-side rendering
   "sharp": "^0.33.2", // Image processing
   "@types/leaflet": "^1.9.8" // TypeScript definitions
 }
@@ -181,9 +180,8 @@ data-story-web/
 
 ### System Requirements
 
-- **GDAL**: Required for .gpkg → GeoJSON conversion
-- **Node.js Canvas**: For server-side tile rendering
-- **Sharp**: For efficient image processing
+- **Sharp**: For basic image processing
+- **Modern Web Formats**: COG and MBTiles files pre-optimized by Python pipeline
 
 ## Best Practices
 

@@ -122,6 +122,10 @@ class WebExportMixin:
         output_path = Path(output_path)
         results = {}
         
+        # Apply cluster-specific optimizations if this is cluster data
+        if 'cluster' in layer_name.lower() and hasattr(self, 'cluster_config'):
+            gdf = self._optimize_clusters_for_web(gdf)
+        
         # Save legacy format (existing functionality)
         try:
             # Ensure output directory exists
@@ -149,7 +153,7 @@ class WebExportMixin:
                 else:
                     base_output_dir = output_path.parent
                 
-                # Create MVT version
+                # Create MVT version with cluster-specific optimization
                 web_results = self.web_exporter.create_web_exports(
                     data_type='vector',
                     input_path=output_path,
@@ -167,6 +171,109 @@ class WebExportMixin:
                 results['mvt'] = False
         
         return results
+    
+    def _optimize_clusters_for_web(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """
+        Apply cluster-specific optimizations for web delivery.
+        
+        Args:
+            gdf: Original cluster GeoDataFrame
+            
+        Returns:
+            Optimized GeoDataFrame
+        """
+        try:
+            from shapely.geometry import Polygon
+            from shapely.ops import transform
+            import numpy as np
+            
+            logger.info(f"Applying web optimizations to {len(gdf)} cluster polygons")
+            
+            # Get optimization settings
+            web_opt = getattr(self.cluster_config, 'web_optimization', {})
+            max_vertices = web_opt.get('max_vertices_per_polygon', 1000)
+            simplify_tolerance = web_opt.get('simplify_tolerance_meters', 100)
+            preserve_topology = web_opt.get('preserve_topology', True)
+            
+            optimized_geometries = []
+            
+            for idx, row in gdf.iterrows():
+                geom = row.geometry
+                
+                if geom is None or geom.is_empty:
+                    optimized_geometries.append(geom)
+                    continue
+                
+                try:
+                    # Convert to WGS84 for web optimization if not already
+                    if gdf.crs != 'EPSG:4326':
+                        # Transform to WGS84 for web-appropriate simplification
+                        geom_wgs84 = gpd.GeoSeries([geom], crs=gdf.crs).to_crs('EPSG:4326').iloc[0]
+                        
+                        # Apply simplification in degrees (approximately 100m at European latitudes)
+                        # 1 degree ≈ 111km, so 100m ≈ 0.0009 degrees
+                        simplify_tolerance_deg = simplify_tolerance / 111000
+                        
+                        # Simplify geometry
+                        if preserve_topology:
+                            simplified = geom_wgs84.simplify(simplify_tolerance_deg, preserve_topology=True)
+                        else:
+                            simplified = geom_wgs84.simplify(simplify_tolerance_deg)
+                        
+                        # Transform back to original CRS
+                        optimized_geom = gpd.GeoSeries([simplified], crs='EPSG:4326').to_crs(gdf.crs).iloc[0]
+                    else:
+                        # Already in WGS84, simplify directly
+                        simplify_tolerance_deg = simplify_tolerance / 111000
+                        if preserve_topology:
+                            optimized_geom = geom.simplify(simplify_tolerance_deg, preserve_topology=True)
+                        else:
+                            optimized_geom = geom.simplify(simplify_tolerance_deg)
+                    
+                    # Check vertex count and apply additional simplification if needed
+                    if hasattr(optimized_geom, 'exterior') and optimized_geom.exterior is not None:
+                        vertex_count = len(optimized_geom.exterior.coords)
+                        
+                        if vertex_count > max_vertices:
+                            # Calculate required tolerance to reach target vertex count
+                            current_tolerance = simplify_tolerance_deg
+                            while vertex_count > max_vertices and current_tolerance < 0.01:  # Max 0.01 degrees
+                                current_tolerance *= 1.5
+                                if preserve_topology:
+                                    test_geom = geom.simplify(current_tolerance, preserve_topology=True)
+                                else:
+                                    test_geom = geom.simplify(current_tolerance)
+                                
+                                if hasattr(test_geom, 'exterior') and test_geom.exterior is not None:
+                                    vertex_count = len(test_geom.exterior.coords)
+                                    if vertex_count <= max_vertices:
+                                        optimized_geom = test_geom
+                                        break
+                                else:
+                                    break
+                            
+                            logger.debug(f"Reduced polygon vertices from {len(geom.exterior.coords)} to {vertex_count}")
+                    
+                    optimized_geometries.append(optimized_geom)
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to optimize geometry for cluster {idx}: {e}")
+                    optimized_geometries.append(geom)  # Keep original if optimization fails
+            
+            # Create optimized GeoDataFrame
+            optimized_gdf = gdf.copy()
+            optimized_gdf.geometry = optimized_geometries
+            
+            # Remove any invalid geometries that might have been created
+            optimized_gdf = optimized_gdf[optimized_gdf.geometry.is_valid]
+            
+            logger.info(f"Web optimization complete: {len(optimized_gdf)} valid polygons")
+            
+            return optimized_gdf
+            
+        except Exception as e:
+            logger.error(f"Cluster web optimization failed: {e}")
+            return gdf  # Return original if optimization fails
     
     def get_web_export_paths(self, base_output_dir: Path, layer_name: str) -> Dict[str, Path]:
         """
