@@ -198,22 +198,11 @@ async function analyzeMBTilesCoverage(
     }
 
     // Check what tables exist
-    const tablesStmt = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table'"
-    );
-    const tables = tablesStmt.all() as Array<{ name: string }>;
+    // const tablesStmt = db.prepare(
+    //   "SELECT name FROM sqlite_master WHERE type='table'"
+    // );
+    // const tables = tablesStmt.all() as Array<{ name: string }>;
 
-    // Check tiles table structure if it exists
-    if (tables.some((t) => t.name === "tiles")) {
-      const schemaStmt = db.prepare("PRAGMA table_info(tiles)");
-      const schema = schemaStmt.all();
-
-      // Count total tiles
-      const countStmt = db.prepare("SELECT COUNT(*) as count FROM tiles");
-      const count = countStmt.get() as { count: number };
-    }
-
-    // Function to analyze MBTiles coverage with fallback query patterns
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function analyzeCoverageFromDB(db: any) {
       const patterns = [
