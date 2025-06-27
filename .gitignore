@@ -13,3 +13,11 @@
 /**/output
 /**/.output
 /**/temp_download
+**.aux
+**.fdb_latexmk
+**.fls
+**.out
+**.synctex.gz
+**.synctex.gz(busy)
+**.synctex.gz(busy)
+**.toc
