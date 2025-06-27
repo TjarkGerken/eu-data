@@ -33,15 +33,6 @@ function validateR2Config() {
       `Missing required R2 environment variables: ${missing.join(", ")}`
     );
   }
-
-  // Log which URL base is being used
-  if (process.env.R2_PUBLIC_URL_BASE) {
-    console.log(
-      `Using custom R2 public URL: ${process.env.R2_PUBLIC_URL_BASE}`
-    );
-  } else {
-    console.log(`Using fallback R2 public URL: ${FALLBACK_PUBLIC_URL}`);
-  }
 }
 
 // Validate on import

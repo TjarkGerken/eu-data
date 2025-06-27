@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { SupabaseImage } from "@/lib/blob-manager";
+import { CloudflareR2Image } from "@/lib/blob-manager";
 import { ImageCategory, ImageScenario } from "@/lib/blob-config";
 import { SupabaseAnalytics } from "@/lib/blob-analytics";
 
@@ -36,7 +36,7 @@ export default function ClimateImage({
   useEffect(() => {
     async function loadImage() {
       try {
-        let targetImage: SupabaseImage | null = null;
+        let targetImage: CloudflareR2Image | null = null;
 
         // Use API routes instead of direct blob manager calls
         const response = await fetch(`/api/images/${category}`);
@@ -45,7 +45,7 @@ export default function ClimateImage({
         }
 
         const data = await response.json();
-        const images = data.images as SupabaseImage[];
+        const images = data.images as CloudflareR2Image[];
 
         if (id) {
           targetImage =
@@ -126,5 +126,12 @@ export default function ClimateImage({
     return <Image {...imageProps} alt={alt} fill />;
   }
 
-  return <Image {...imageProps} alt={alt} width={width || 800} height={height || 450} />;
+  return (
+    <Image
+      {...imageProps}
+      alt={alt}
+      width={width || 800}
+      height={height || 450}
+    />
+  );
 }

@@ -11,7 +11,7 @@ import { Layers, Download, Settings } from "lucide-react";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
 import dynamic from "next/dynamic";
 
-const LeafletMap = dynamic(() => import("./map/leaflet-map-clean"), {
+const LeafletMap = dynamic(() => import("./map/leaflet-map"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-96 bg-gray-100 rounded-lg animate-pulse" />
@@ -82,7 +82,20 @@ export function InteractiveMap({
 
   const loadAvailableLayers = async () => {
     try {
+      console.log("=== LOADING AVAILABLE LAYERS ===");
       const layers = await mapTileService.getAvailableLayers();
+      console.log("Loaded layers from API:", layers);
+
+      layers.forEach((layer) => {
+        console.log(`API Layer ${layer.id}:`, {
+          name: layer.name,
+          dataType: layer.dataType,
+          format: layer.format,
+          fileSize: layer.fileSize,
+          description: layer.description,
+        });
+      });
+
       setAvailableLayers(layers);
     } catch (error) {
       console.error("Failed to load map layers:", error);
@@ -91,12 +104,24 @@ export function InteractiveMap({
     }
   };
 
-  const toggleLayerVisibility = (layerId: string) => {
-    setLayerStates((prev) =>
-      prev.map((layer) =>
-        layer.id === layerId ? { ...layer, visible: !layer.visible } : layer
-      )
-    );
+  const toggleLayer = (layerId: string) => {
+    setLayerStates((prev) => {
+      return prev.map((layer) => {
+        if (layer.id === layerId) {
+          const newVisible = !layer.visible;
+
+          // Show a notice for COG layers
+          if (layer.metadata.format === "cog" && newVisible) {
+            console.warn(
+              `COG layer "${layer.metadata.name}" is enabled but may not display properly. COG format requires special rendering implementation.`
+            );
+          }
+
+          return { ...layer, visible: newVisible };
+        }
+        return layer;
+      });
+    });
   };
 
   const updateLayerOpacity = (layerId: string, opacity: number) => {
@@ -174,11 +199,11 @@ export function InteractiveMap({
               className="relative rounded-lg overflow-hidden border interactive-map-container"
               style={{ height }}
             >
-              <LeafletMap 
-                layers={layerStates} 
-                centerLat={centerLat} 
-                centerLng={centerLng} 
-                zoom={zoom} 
+              <LeafletMap
+                layers={layerStates}
+                centerLat={centerLat}
+                centerLng={centerLng}
+                zoom={zoom}
                 autoFitBounds={autoFitBounds}
               />
 
@@ -223,9 +248,7 @@ export function InteractiveMap({
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={layer.visible}
-                            onCheckedChange={() =>
-                              toggleLayerVisibility(layer.id)
-                            }
+                            onCheckedChange={() => toggleLayer(layer.id)}
                           />
                           <Label className="text-sm font-medium">
                             {layer.metadata.name}

@@ -69,66 +69,82 @@ async function extractLayerMetadata(layer: {
 }): Promise<MapLayerMetadata | null> {
   try {
     const fileName = layer.name;
-    // Start with the full filename without extension
+
     let layerId = path.basename(fileName, path.extname(fileName));
+
+    // Remove timestamp prefix if present
+    const timestampMatch = layerId.match(/^\d+_(.+)$/);
+    if (timestampMatch) {
+      layerId = timestampMatch[1];
+    }
 
     // Handle special naming patterns for clusters to create more readable IDs
     if (fileName.includes("clusters_SLR")) {
-      // Extract scenario and risk type from filename like "clusters_SLR-0-Current_GDP.mbtiles"
       const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_(\w+)/);
       if (match) {
-        const scenario = match[2].toLowerCase(); // "current", "severe", etc.
-        const riskType = match[3].toLowerCase(); // "gdp", "population", "freight", etc.
+        const scenario = match[2].toLowerCase();
+        const riskType = match[3].toLowerCase();
         layerId = `clusters-slr-${scenario}-${riskType}`;
       }
-      // If no match, keep the original layerId (full filename without extension)
     }
 
-    // For all other files, preserve the original filename
-    // This ensures files like "risk_SLR-3-Severe_COMBINED.cog" become "risk_SLR-3-Severe_COMBINED"
-
-    // Determine layer type from filename
+    // Determine layer type from filename - be more specific with pattern matching
     const layerType = determineLayerType(fileName);
 
-    // Determine data type and format based on file extension
+    // Determine data type and format based on file extension AND content analysis
     let dataType: "raster" | "vector";
     let format: "cog" | "mbtiles";
 
-    if (fileName.endsWith(".cog")) {
+    if (fileName.endsWith(".cog") || fileName.endsWith(".tif")) {
       dataType = "raster";
       format = "cog";
     } else if (fileName.endsWith(".mbtiles")) {
-      dataType = "vector";
-      format = "mbtiles";
-    } else {
-      // Default fallback - try to guess from filename
+      // For MBTiles, determine type based on MORE SPECIFIC filename patterns
+      // Priority order: clusters > specific layer types
       if (
-        layerType === "risk" ||
-        layerType === "hazard" ||
-        layerType === "exposition" ||
-        layerType === "relevance"
+        fileName.startsWith("clusters_") ||
+        fileName.includes("clusters_SLR")
       ) {
-        dataType = "raster";
-        format = "cog";
-      } else {
         dataType = "vector";
         format = "mbtiles";
+      } else if (
+        fileName.startsWith("risk_") ||
+        fileName.startsWith("hazard_") ||
+        fileName.startsWith("exposition_") ||
+        fileName.startsWith("relevance_")
+      ) {
+        dataType = "raster";
+        format = "mbtiles";
+      } else {
+        // For ambiguous cases, check layer type from determineLayerType
+        if (layerType === "clusters") {
+          dataType = "vector";
+          format = "mbtiles";
+        } else {
+          dataType = "raster";
+          format = "mbtiles";
+        }
       }
+    } else {
+      // Skip unsupported file types
+      return null;
     }
 
-    return {
+    const metadata = {
       id: layerId,
       name: formatDisplayName(layerId),
       dataType,
       format,
-      bounds: [-180, -90, 180, 90],
+      bounds: getDefaultBounds(layerType),
       colorScale: getDefaultColorScale(layerType),
-      valueRange: [0, 100],
+      valueRange: getDefaultValueRange(layerType),
       description: `${layerType} layer: ${layerId}`,
       uploadedAt:
         layer.created_at || layer.updated_at || new Date().toISOString(),
       fileSize: layer.metadata?.size || 0,
     };
+
+    return metadata;
   } catch (error) {
     console.error("Error extracting layer metadata:", error);
     return null;
@@ -149,12 +165,21 @@ function formatDisplayName(layerId: string): string {
 
 function determineLayerType(fileName: string): string {
   const name = fileName.toLowerCase();
-  if (name.includes("risk")) return "risk";
-  if (name.includes("hazard")) return "hazard";
-  if (name.includes("exposition")) return "exposition";
-  if (name.includes("relevance")) return "relevance";
-  if (name.includes("cluster")) return "clusters";
+
+  // Priority order: check for clusters first to avoid false matches
+  if (name.includes("cluster") || name.includes("clusters_slr"))
+    return "clusters";
+  if (name.startsWith("risk_") || name.includes("_risk_")) return "risk";
+  if (name.startsWith("hazard_") || name.includes("_hazard_")) return "hazard";
+  if (name.startsWith("exposition_") || name.includes("_exposition_"))
+    return "exposition";
+  if (name.startsWith("relevance_") || name.includes("_relevance_"))
+    return "relevance";
   if (name.includes("slr")) return "sea-level-rise";
+
+  console.log(
+    `Could not determine specific layer type for: ${fileName}, defaulting to unknown`
+  );
   return "unknown";
 }
 
@@ -170,5 +195,38 @@ function getDefaultColorScale(layerType: string): string[] {
   };
   return (
     colorScales[layerType as keyof typeof colorScales] || colorScales.unknown
+  );
+}
+
+function getDefaultBounds(layerType: string): [number, number, number, number] {
+  // Default bounds for EU region
+  const euBounds: [number, number, number, number] = [3.5, 51.2, 7.2, 53.5];
+
+  const bounds = {
+    risk: euBounds,
+    hazard: euBounds,
+    exposition: euBounds,
+    relevance: euBounds,
+    clusters: euBounds,
+    "sea-level-rise": euBounds,
+    unknown: [-180, -90, 180, 90] as [number, number, number, number],
+  };
+
+  return bounds[layerType as keyof typeof bounds] || bounds.unknown;
+}
+
+function getDefaultValueRange(layerType: string): [number, number] {
+  const valueRanges = {
+    risk: [0, 1] as [number, number],
+    hazard: [0, 1] as [number, number],
+    exposition: [0, 100] as [number, number],
+    relevance: [0, 100] as [number, number],
+    clusters: [0, 500] as [number, number],
+    "sea-level-rise": [0, 3] as [number, number],
+    unknown: [0, 100] as [number, number],
+  };
+
+  return (
+    valueRanges[layerType as keyof typeof valueRanges] || valueRanges.unknown
   );
 }
