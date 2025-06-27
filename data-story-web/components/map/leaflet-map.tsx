@@ -49,6 +49,36 @@ export default function LeafletMap({
   const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const cogLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
+  // Add custom CSS for popup styling
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const existingStyle = document.getElementById(
+        "leaflet-custom-popup-style"
+      );
+      if (!existingStyle) {
+        const style = document.createElement("style");
+        style.id = "leaflet-custom-popup-style";
+        style.textContent = `
+          .custom-popup .leaflet-popup-content-wrapper {
+            padding: 8px 12px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: none;
+            background: white;
+          }
+          .custom-popup .leaflet-popup-content {
+            margin: 0;
+            line-height: 1.4;
+          }
+          .custom-popup .leaflet-popup-tip {
+            background: white;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof window !== "undefined" && L && !mapRef.current) {
       const map = L.map("leaflet-map", {
@@ -57,10 +87,9 @@ export default function LeafletMap({
         zoomControl: true,
       });
 
-      // Add base tile layer
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
       }).addTo(map);
 
       // Create layer groups for different data types
@@ -124,6 +153,208 @@ export default function LeafletMap({
     },
     []
   );
+
+  // Load vector layers with popups for GeoJSON data
+  const loadVectorLayer = useCallback(async (layer: LayerState) => {
+    if (!vectorLayerGroupRef.current || !L) return;
+
+    try {
+      console.log("Loading vector layer:", layer.id, layer.metadata);
+      const response = await fetch(`/api/map-data/vector/${layer.id}`);
+
+      if (response.ok) {
+        const vectorData = await response.json();
+        console.log("Vector data loaded:", {
+          layerId: layer.id,
+          featureCount: vectorData?.features?.length || 0,
+          type: vectorData?.type,
+        });
+        
+        if (vectorData && vectorData.features && vectorData.features.length > 0) {
+          const geoJSONLayer = L.geoJSON(vectorData, {
+            style: () => {
+              const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
+              return {
+                fillColor: fillColor,
+                weight: 2,
+                color: "#ffffff",
+                opacity: layer.opacity,
+                fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+              };
+            },
+            onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
+              if (feature.properties) {
+                const formatNumber = (value: number): string => {
+                  if (typeof value !== "number" || isNaN(value))
+                    return value?.toString() || "";
+                  return new Intl.NumberFormat("de-DE", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 3,
+                  }).format(value);
+                };
+                
+                const formatPropertyValue = (key: string, value: unknown): string => {
+                  if (typeof value === "number") {
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
+                      const squareKm = value / 1000000;
+                      return formatNumber(squareKm) + " km²";
+                    }
+                    return formatNumber(value);
+                  }
+                  if (typeof value === "string" && !isNaN(Number(value))) {
+                    const numValue = Number(value);
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
+                      const squareKm = numValue / 1000000;
+                      return formatNumber(squareKm) + " km²";
+                    }
+                    return formatNumber(numValue);
+                  }
+                  return value?.toString() || "";
+                };
+                
+                const formatPropertyName = (key: string): string => {
+                  let formattedName = key
+                    .replace(/_/g, " ")
+                    .replace(/([A-Z])/g, " $1")
+                    .split(" ")
+                    .map(
+                      (word) =>
+                        word.charAt(0).toUpperCase() +
+                        word.slice(1).toLowerCase()
+                    )
+                    .join(" ");
+
+                  if (formattedName.toLowerCase().includes("square meters")) {
+                    formattedName = formattedName.replace(
+                      /Square Meters/gi,
+                      "Square Kilometers"
+                    );
+                  }
+
+                  return formattedName;
+                };
+                
+                const propertyEntries = Object.entries(feature.properties)
+                  .filter(
+                    ([, value]) =>
+                      value !== null && value !== undefined && value !== ""
+                  )
+                  .filter(
+                    ([key]) =>
+                      !key.toLowerCase().includes("pixel_count") &&
+                      !key.toLowerCase().includes("risk_density") &&
+                      !key.toLowerCase().includes("cluster_id")
+                  )
+                  .map(([key, value]) => {
+                    const formattedKey = formatPropertyName(key);
+                    const formattedValue = formatPropertyValue(key, value);
+                    return { key: formattedKey, value: formattedValue };
+                  });
+
+                const popupContent = `
+                  <div style="
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    max-width: 300px;
+                    line-height: 1.4;
+                  ">
+                    <div style="
+                      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+                      color: white;
+                      padding: 12px 16px;
+                      margin: -8px -12px 12px -12px;
+                      border-radius: 8px 8px 0 0;
+                      font-weight: 600;
+                      font-size: 16px;
+                      text-align: center;
+                      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                      ${feature.properties.name || feature.properties.cluster_id
+                          ? `Cluster ID: ${feature.properties.cluster_id || feature.properties.name}`
+                          : "Feature Details"
+                      }
+                    </div>
+                    <div style="padding: 4px 0;">
+                      ${propertyEntries
+                        .map(
+                          ({ key, value }) => `
+                        <div style="
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: center;
+                          padding: 8px 12px;
+                          margin: 2px 0;
+                          background: ${key.toLowerCase().includes("risk")
+                              ? "#fef2f2"
+                              : key.toLowerCase().includes("area")
+                              ? "#f0fdf4"
+                              : key.toLowerCase().includes("density")
+                              ? "#f7fee7"
+                              : "#f9fafb"
+                          };
+                          border-left: 3px solid ${key.toLowerCase().includes("risk")
+                              ? "#ef4444"
+                              : key.toLowerCase().includes("area")
+                              ? "#22c55e"
+                              : key.toLowerCase().includes("density")
+                              ? "#84cc16"
+                              : "#6b7280"
+                          };
+                          border-radius: 4px;
+                          font-size: 13px;
+                        ">
+                          <span style="
+                            font-weight: 500;
+                            color: #374151;
+                            margin-right: 12px;
+                            flex: 1;
+                          ">${key}:</span>
+                          <span style="
+                            font-weight: 600;
+                            color: #111827;
+                            font-family: 'Courier New', monospace;
+                            background: white;
+                            padding: 2px 6px;
+                            border-radius: 3px;
+                            border: 1px solid #e5e7eb;
+                          ">${value}</span>
+                        </div>
+                      `
+                        )
+                        .join("")}
+                    </div>
+                  </div>
+                `;
+
+                geoLayer.bindPopup(popupContent, {
+                  maxWidth: 350,
+                  className: "custom-popup",
+                });
+              }
+            },
+          });
+          vectorLayerGroupRef.current.addLayer(geoJSONLayer);
+        } else {
+          console.warn("No valid features found in vector data");
+        }
+      } else {
+        console.error(
+          "Failed to load vector layer:",
+          response.status,
+          response.statusText
+        );
+      }
+    } catch (error) {
+      console.error("Failed to load vector layer:", error);
+    }
+  }, []);
 
   // Load COG layers using georaster
   const loadCogLayer = useCallback(async (layer: LayerState) => {
@@ -252,7 +483,7 @@ export default function LeafletMap({
                         color: "#1e40af",
                         opacity: 0.9,
                         fillColor: "#1e3a8a",
-                        fillOpacity: 0.6,
+                        fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                       },
                       // Also add a fallback with the converted layer ID
                       [layer.id]: {
@@ -260,7 +491,7 @@ export default function LeafletMap({
                         color: "#1e40af",
                         opacity: 0.9,
                         fillColor: "#1e3a8a",
-                        fillOpacity: 0.6,
+                        fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                       },
                     },
                     maxZoom: 18,
@@ -287,7 +518,7 @@ export default function LeafletMap({
                         color: "#1e40af",
                         opacity: 0.9,
                         fillColor: "#1e3a8a",
-                        fillOpacity: 0.6,
+                        fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                       },
                     },
                     maxZoom: 18,
@@ -300,6 +531,9 @@ export default function LeafletMap({
           } else {
             console.warn("VectorGrid not available - skipping vector layer");
           }
+        } else {
+          // Try loading as GeoJSON vector data
+          loadVectorLayer(layer);
         }
       } else if (layer.metadata.dataType === "raster") {
         if (layer.metadata.format === "mbtiles") {
@@ -338,7 +572,7 @@ export default function LeafletMap({
         [maxLat, maxLng],
       ]);
     }
-  }, [layers, autoFitBounds, loadCogLayer, getActualLayerName]);
+  }, [layers, autoFitBounds, loadCogLayer, getActualLayerName, loadVectorLayer]);
 
   useEffect(() => {
     updateMapLayers();
