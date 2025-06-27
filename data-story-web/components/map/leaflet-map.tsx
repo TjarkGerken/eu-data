@@ -10,6 +10,12 @@ import parseGeoraster from "georaster";
 import GeoRasterLayer from "georaster-layer-for-leaflet";
 import { MapLayerMetadata } from "@/lib/map-tile-service";
 
+// Minimal interface for georaster object (library doesn't provide types)
+interface GeorasterObject {
+  noDataValue: number | null;
+  [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
 interface LayerState {
   id: string;
   visible: boolean;
@@ -48,6 +54,39 @@ export default function LeafletMap({
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const cogLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const loadedLayersRef = useRef<Map<string, { layer: L.Layer; opacity: number; visible: boolean; isCogLayer?: boolean }>>(new Map());
+  const dataCacheRef = useRef<Map<string, { data: ArrayBuffer | GeoJSON.FeatureCollection | string; timestamp: number; type: 'cog' | 'vector' | 'raster' }>>(new Map());
+  const georasterCacheRef = useRef<Map<string, GeorasterObject>>(new Map());
+
+  // Add custom CSS for popup styling
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const existingStyle = document.getElementById(
+        "leaflet-custom-popup-style"
+      );
+      if (!existingStyle) {
+        const style = document.createElement("style");
+        style.id = "leaflet-custom-popup-style";
+        style.textContent = `
+          .custom-popup .leaflet-popup-content-wrapper {
+            padding: 8px 12px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: none;
+            background: white;
+          }
+          .custom-popup .leaflet-popup-content {
+            margin: 0;
+            line-height: 1.4;
+          }
+          .custom-popup .leaflet-popup-tip {
+            background: white;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined" && L && !mapRef.current) {
@@ -57,10 +96,9 @@ export default function LeafletMap({
         zoomControl: true,
       });
 
-      // Add base tile layer
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
       }).addTo(map);
 
       // Create layer groups for different data types
@@ -125,19 +163,252 @@ export default function LeafletMap({
     []
   );
 
+  // Load vector layers with popups for GeoJSON data
+  const loadVectorLayer = useCallback(async (layer: LayerState, storeReference: boolean = true) => {
+    if (!vectorLayerGroupRef.current || !L) return;
+
+    try {
+      // Check cache first
+      const cached = dataCacheRef.current.get(layer.id);
+      let vectorData;
+      
+      if (cached && cached.type === 'vector') {
+        vectorData = cached.data as GeoJSON.FeatureCollection;
+      } else {
+        const response = await fetch(`/api/map-data/vector/${layer.id}`);
+        
+        if (response.ok) {
+          vectorData = await response.json();
+          // Cache the data
+          dataCacheRef.current.set(layer.id, {
+            data: vectorData,
+            timestamp: Date.now(),
+            type: 'vector'
+          });
+        } else {
+          console.error("Failed to load vector layer:", response.status, response.statusText);
+          return;
+        }
+      }
+
+      if (vectorData) {
+        if (vectorData && vectorData.features && vectorData.features.length > 0) {
+          const geoJSONLayer = L.geoJSON(vectorData, {
+            style: () => {
+              const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
+              return {
+                fillColor: fillColor,
+                weight: 2,
+                color: "#ffffff",
+                opacity: layer.opacity,
+                fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
+              };
+            },
+            onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
+              if (feature.properties) {
+                const formatNumber = (value: number): string => {
+                  if (typeof value !== "number" || isNaN(value))
+                    return value?.toString() || "";
+                  return new Intl.NumberFormat("de-DE", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 3,
+                  }).format(value);
+                };
+                
+                const formatPropertyValue = (key: string, value: unknown): string => {
+                  if (typeof value === "number") {
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
+                      const squareKm = value / 1000000;
+                      return formatNumber(squareKm) + " km²";
+                    }
+                    return formatNumber(value);
+                  }
+                  if (typeof value === "string" && !isNaN(Number(value))) {
+                    const numValue = Number(value);
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
+                      const squareKm = numValue / 1000000;
+                      return formatNumber(squareKm) + " km²";
+                    }
+                    return formatNumber(numValue);
+                  }
+                  return value?.toString() || "";
+                };
+                
+                const formatPropertyName = (key: string): string => {
+                  let formattedName = key
+                    .replace(/_/g, " ")
+                    .replace(/([A-Z])/g, " $1")
+                    .split(" ")
+                    .map(
+                      (word) =>
+                        word.charAt(0).toUpperCase() +
+                        word.slice(1).toLowerCase()
+                    )
+                    .join(" ");
+
+                  if (formattedName.toLowerCase().includes("square meters")) {
+                    formattedName = formattedName.replace(
+                      /Square Meters/gi,
+                      "Square Kilometers"
+                    );
+                  }
+
+                  return formattedName;
+                };
+                
+                const propertyEntries = Object.entries(feature.properties)
+                  .filter(
+                    ([, value]) =>
+                      value !== null && value !== undefined && value !== ""
+                  )
+                  .filter(
+                    ([key]) =>
+                      !key.toLowerCase().includes("pixel_count") &&
+                      !key.toLowerCase().includes("risk_density") &&
+                      !key.toLowerCase().includes("cluster_id")
+                  )
+                  .map(([key, value]) => {
+                    const formattedKey = formatPropertyName(key);
+                    const formattedValue = formatPropertyValue(key, value);
+                    return { key: formattedKey, value: formattedValue };
+                  });
+
+                const popupContent = `
+                  <div style="
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    max-width: 300px;
+                    line-height: 1.4;
+                  ">
+                    <div style="
+                      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+                      color: white;
+                      padding: 12px 16px;
+                      margin: -8px -12px 12px -12px;
+                      border-radius: 8px 8px 0 0;
+                      font-weight: 600;
+                      font-size: 16px;
+                      text-align: center;
+                      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                      ${feature.properties.name || feature.properties.cluster_id
+                          ? `Cluster ID: ${feature.properties.cluster_id || feature.properties.name}`
+                          : "Feature Details"
+                      }
+                    </div>
+                    <div style="padding: 4px 0;">
+                      ${propertyEntries
+                        .map(
+                          ({ key, value }) => `
+                        <div style="
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: center;
+                          padding: 8px 12px;
+                          margin: 2px 0;
+                          background: ${key.toLowerCase().includes("risk")
+                              ? "#fef2f2"
+                              : key.toLowerCase().includes("area")
+                              ? "#f0fdf4"
+                              : key.toLowerCase().includes("density")
+                              ? "#f7fee7"
+                              : "#f9fafb"
+                          };
+                          border-left: 3px solid ${key.toLowerCase().includes("risk")
+                              ? "#ef4444"
+                              : key.toLowerCase().includes("area")
+                              ? "#22c55e"
+                              : key.toLowerCase().includes("density")
+                              ? "#84cc16"
+                              : "#6b7280"
+                          };
+                          border-radius: 4px;
+                          font-size: 13px;
+                        ">
+                          <span style="
+                            font-weight: 500;
+                            color: #374151;
+                            margin-right: 12px;
+                            flex: 1;
+                          ">${key}:</span>
+                          <span style="
+                            font-weight: 600;
+                            color: #111827;
+                            font-family: 'Courier New', monospace;
+                            background: white;
+                            padding: 2px 6px;
+                            border-radius: 3px;
+                            border: 1px solid #e5e7eb;
+                          ">${value}</span>
+                        </div>
+                      `
+                        )
+                        .join("")}
+                    </div>
+                  </div>
+                `;
+
+                geoLayer.bindPopup(popupContent, {
+                  maxWidth: 350,
+                  className: "custom-popup",
+                });
+              }
+            },
+          });
+          vectorLayerGroupRef.current.addLayer(geoJSONLayer);
+          
+          // Store layer reference if requested
+          if (storeReference) {
+            loadedLayersRef.current.set(layer.id, {
+              layer: geoJSONLayer,
+              opacity: layer.opacity,
+              visible: true
+            });
+          }
+        } else {
+          console.warn("No valid features found in vector data");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load vector layer:", error);
+    }
+  }, []);
+
   // Load COG layers using georaster
   const loadCogLayer = useCallback(async (layer: LayerState) => {
     if (!cogLayerGroupRef.current) return;
 
     try {
-      // Fetch the COG file from our API
-      const response = await fetch(`/api/map-data/cog/${layer.id}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch COG: ${response.statusText}`);
+      // Check georaster cache first
+      let georaster = georasterCacheRef.current.get(layer.id);
+      
+      if (georaster) {
+        // Using cached georaster
+      } else {
+        // Fetch the COG file from our API
+        const response = await fetch(`/api/map-data/cog/${layer.id}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch COG: ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        georaster = await parseGeoraster(arrayBuffer) as GeorasterObject;
+        
+        // Cache the parsed georaster object
+        georasterCacheRef.current.set(layer.id, georaster);
       }
 
-      const arrayBuffer = await response.arrayBuffer();
-      const georaster = await parseGeoraster(arrayBuffer);
+      // Ensure georaster is defined before proceeding
+      if (!georaster) {
+        throw new Error("Failed to load or parse georaster data");
+      }
 
       // Create a custom color scale based on layer metadata
       const colorScale = layer.metadata.colorScale;
@@ -212,6 +483,16 @@ export default function LeafletMap({
       });
 
       cogLayerGroupRef.current.addLayer(cogLayer);
+      
+      // Store layer reference
+      if (cogLayerGroupRef.current) {
+        loadedLayersRef.current.set(layer.id, {
+          layer: cogLayer,
+          opacity: layer.opacity,
+          visible: true,
+          isCogLayer: true
+        });
+      }
     } catch (error) {
       console.error(`Failed to load COG layer ${layer.id}:`, error);
     }
@@ -226,80 +507,119 @@ export default function LeafletMap({
     )
       return;
 
-    // Clear all layer groups
-    layerGroupRef.current.clearLayers();
-    vectorLayerGroupRef.current.clearLayers();
-    cogLayerGroupRef.current.clearLayers();
+    const currentLayerStates = new Map(layers.map(layer => [layer.id, { visible: layer.visible, opacity: layer.opacity }]));
+    const loadedLayers = loadedLayersRef.current;
 
+    // Remove layers that are no longer visible or no longer exist
+    for (const [layerId, loadedLayer] of loadedLayers.entries()) {
+      const currentState = currentLayerStates.get(layerId);
+      if (!currentState || !currentState.visible) {
+        // Remove from the correct layer group based on layer type
+        if (loadedLayer.isCogLayer && cogLayerGroupRef.current) {
+          cogLayerGroupRef.current.removeLayer(loadedLayer.layer);
+        } else if (vectorLayerGroupRef.current && vectorLayerGroupRef.current.hasLayer(loadedLayer.layer)) {
+          vectorLayerGroupRef.current.removeLayer(loadedLayer.layer);
+        } else if (layerGroupRef.current && layerGroupRef.current.hasLayer(loadedLayer.layer)) {
+          layerGroupRef.current.removeLayer(loadedLayer.layer);
+        } else {
+          // Fallback to map removal
+          mapRef.current.removeLayer(loadedLayer.layer);
+        }
+        loadedLayers.delete(layerId);
+      } else if (currentState.opacity !== loadedLayer.opacity) {
+        // Update opacity if changed
+        if ('setOpacity' in loadedLayer.layer && typeof (loadedLayer.layer as { setOpacity?: (opacity: number) => void }).setOpacity === 'function') {
+          (loadedLayer.layer as { setOpacity: (opacity: number) => void }).setOpacity(currentState.opacity);
+        }
+        loadedLayer.opacity = currentState.opacity;
+      }
+    }
+
+    // Add new visible layers or layers that need to be reloaded
     const visibleLayers = layers.filter((layer) => layer.visible);
-
+    
     visibleLayers.forEach((layer) => {
+      const loadedLayer = loadedLayers.get(layer.id);
+      
+      // Skip if layer is already loaded and hasn't changed
+      if (loadedLayer && loadedLayer.opacity === layer.opacity) {
+        return;
+      }
+      
       if (layer.metadata.dataType === "vector") {
         // Vector tiles from MBTiles
         if (layer.metadata.format === "mbtiles") {
           if (L && VectorGrid) {
-            // Get the actual layer name dynamically
-            getActualLayerName(layer.id)
-              .then((actualLayerName) => {
-                const vectorTileLayer = L.vectorGrid.protobuf(
-                  `/api/map-data/vector/${layer.id}/{z}/{x}/{y}`,
-                  {
-                    rendererFactory: L.canvas.tile,
-                    vectorTileLayerStyles: {
-                      // Use the actual layer name from the MBTiles file
-                      [actualLayerName]: {
-                        weight: 2,
-                        color: "#1e40af",
-                        opacity: 0.9,
-                        fillColor: "#1e3a8a",
-                        fillOpacity: 0.6,
-                      },
-                      // Also add a fallback with the converted layer ID
-                      [layer.id]: {
-                        weight: 2,
-                        color: "#1e40af",
-                        opacity: 0.9,
-                        fillColor: "#1e3a8a",
-                        fillOpacity: 0.6,
-                      },
+            // Check if we already have a cached layer name
+            const cachedLayerName = dataCacheRef.current.get(`${layer.id}_layername`);
+            
+            const createVectorTileLayer = (actualLayerName: string) => {
+              const vectorTileLayer = L.vectorGrid.protobuf(
+                `/api/map-data/vector/${layer.id}/{z}/{x}/{y}`,
+                {
+                  rendererFactory: L.canvas.tile,
+                  vectorTileLayerStyles: {
+                    // Use the actual layer name from the MBTiles file
+                    [actualLayerName]: {
+                      weight: 2,
+                      color: "#1e40af",
+                      opacity: 0.9,
+                      fillColor: "#1e3a8a",
+                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                     },
-                    maxZoom: 18,
-                    pane: "overlayPane",
-                    attribution: "EU Climate Risk Data",
-                  }
-                );
+                    // Also add a fallback with the converted layer ID
+                    [layer.id]: {
+                      weight: 2,
+                      color: "#1e40af",
+                      opacity: 0.9,
+                      fillColor: "#1e3a8a",
+                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                    },
+                  },
+                  maxZoom: 18,
+                  pane: "overlayPane",
+                  attribution: "EU Climate Risk Data",
+                }
+              );
 
-                vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
-              })
-              .catch((error) => {
-                console.error(
-                  `Failed to get layer name for ${layer.id}:`,
-                  error
-                );
-                // Fallback to basic rendering without dynamic name resolution
-                const vectorTileLayer = L.vectorGrid.protobuf(
-                  `/api/map-data/vector/${layer.id}/{z}/{x}/{y}`,
-                  {
-                    rendererFactory: L.canvas.tile,
-                    vectorTileLayerStyles: {
-                      [layer.id]: {
-                        weight: 2,
-                        color: "#1e40af",
-                        opacity: 0.9,
-                        fillColor: "#1e3a8a",
-                        fillOpacity: 0.6,
-                      },
-                    },
-                    maxZoom: 18,
-                    pane: "overlayPane",
-                    attribution: "EU Climate Risk Data",
-                  }
-                );
-                vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
+              vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
+              // Store layer reference
+              loadedLayersRef.current.set(layer.id, {
+                layer: vectorTileLayer,
+                opacity: layer.opacity,
+                visible: true
               });
+            };
+            
+            if (cachedLayerName && cachedLayerName.type === 'vector') {
+              createVectorTileLayer(cachedLayerName.data as string);
+            } else {
+              // Get the actual layer name dynamically
+              getActualLayerName(layer.id)
+                .then((actualLayerName) => {
+                  // Cache the layer name
+                  dataCacheRef.current.set(`${layer.id}_layername`, {
+                    data: actualLayerName,
+                    timestamp: Date.now(),
+                    type: 'vector'
+                  });
+                  createVectorTileLayer(actualLayerName);
+                })
+                .catch((error) => {
+                  console.error(
+                    `Failed to get layer name for ${layer.id}:`,
+                    error
+                  );
+                  // Fallback to basic rendering without dynamic name resolution
+                  createVectorTileLayer(layer.id);
+                });
+            }
           } else {
             console.warn("VectorGrid not available - skipping vector layer");
           }
+        } else {
+          // Try loading as GeoJSON vector data
+          loadVectorLayer(layer);
         }
       } else if (layer.metadata.dataType === "raster") {
         if (layer.metadata.format === "mbtiles") {
@@ -312,6 +632,13 @@ export default function LeafletMap({
             }
           );
           layerGroupRef.current?.addLayer(tileLayer);
+          
+          // Store layer reference
+          loadedLayersRef.current.set(layer.id, {
+            layer: tileLayer,
+            opacity: layer.opacity,
+            visible: true
+          });
         } else if (layer.metadata.format === "cog") {
           // COG files using georaster
           loadCogLayer(layer);
@@ -338,7 +665,7 @@ export default function LeafletMap({
         [maxLat, maxLng],
       ]);
     }
-  }, [layers, autoFitBounds, loadCogLayer, getActualLayerName]);
+  }, [layers, autoFitBounds, loadCogLayer, getActualLayerName, loadVectorLayer]);
 
   useEffect(() => {
     updateMapLayers();
