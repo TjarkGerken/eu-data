@@ -132,9 +132,11 @@ export default function BaseLeafletMap({
       }
 
       // Clean up any existing map instance on this container
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((mapContainer as any)._leaflet_id) {
         try {
           // Remove existing leaflet instance
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           delete (mapContainer as any)._leaflet_id;
         } catch (error) {
           console.warn('Error cleaning up existing map container:', error);
@@ -179,6 +181,8 @@ export default function BaseLeafletMap({
 
     // Cleanup function
     return () => {
+      const loadedLayers = loadedLayersRef.current;
+      
       if (mapRef.current) {
         try {
           mapRef.current.remove();
@@ -190,7 +194,7 @@ export default function BaseLeafletMap({
         vectorLayerGroupRef.current = null;
         cogLayerGroupRef.current = null;
         overlayLayerGroupRef.current = null;
-        loadedLayersRef.current.clear();
+        loadedLayers.clear();
       }
     };
   }, [mapId, centerLat, centerLng, zoom, baseTileLayer, overlayTileLayers]);

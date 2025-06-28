@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -156,7 +156,7 @@ export function ShipMap({
 
   const tileConfig = getTileConfiguration();
 
-  const updateControl = (key: keyof typeof mapControls, value: any) => {
+  const updateControl = (key: keyof typeof mapControls, value: string | number | boolean) => {
     setMapControls(prev => ({ ...prev, [key]: value }));
   };
 
