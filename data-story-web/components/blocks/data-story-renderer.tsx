@@ -6,6 +6,7 @@ import { CalloutBlock } from "./callout-block";
 
 import { VisualizationCard } from "@/components/visualization-card";
 import { InteractiveMap } from "@/components/interactive-map";
+import { ShipMap } from "@/components/ship-map";
 import { AnimatedQuoteBlock } from "./animated-quote-block";
 import { AnimatedStatisticsBlock } from "./animated-statistics-block";
 import { ClimateTimelineBlock } from "./climate-timeline-block";
@@ -151,6 +152,38 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             centerLng={block.centerLng || 5.2913}
             zoom={block.zoom || 8}
             autoFitBounds={block.autoFitBounds || false}
+            showLayerToggles={block.showLayerToggles !== false}
+            showOpacityControls={block.showOpacityControls !== false}
+            showDownloadButtons={block.showDownloadButtons !== false}
+            predefinedOpacities={block.predefinedOpacities || {}}
+          />
+        );
+
+      case "ship-map":
+        return (
+          <ShipMap
+            key={index}
+            title={block.title}
+            description={block.description}
+            height={block.height || "600px"}
+            centerLat={block.centerLat}
+            centerLng={block.centerLng}
+            zoom={block.zoom}
+            seamarkOpacity={block.seamarkOpacity || 80}
+            enableSeamarkLayer={block.enableSeamarkLayer !== false}
+            tileServerOption={block.tileServerOption || "openseamap"}
+            portFocus={block.portFocus || "rotterdam"}
+            showControls={block.showControls !== false}
+            enableRailwayLayer={block.enableRailwayLayer || false}
+            railwayOpacity={block.railwayOpacity || 70}
+            railwayStyle={block.railwayStyle || "standard"}
+            showPortFocusControl={block.showPortFocusControl !== false}
+            showMapStyleControl={block.showMapStyleControl !== false}
+            showSeamarkLayerControl={block.showSeamarkLayerControl !== false}
+            showSeamarkOpacityControl={block.showSeamarkOpacityControl !== false}
+            showRailwayLayerControl={block.showRailwayLayerControl !== false}
+            showRailwayStyleControl={block.showRailwayStyleControl !== false}
+            showRailwayOpacityControl={block.showRailwayOpacityControl !== false}
           />
         );
 

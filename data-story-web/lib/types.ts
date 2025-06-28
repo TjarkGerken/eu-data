@@ -252,6 +252,39 @@ export interface InteractiveMapBlock {
   centerLng?: number;
   zoom?: number;
   autoFitBounds?: boolean;
+  // Admin control over user-facing controls
+  showLayerToggles?: boolean;
+  showOpacityControls?: boolean;
+  showDownloadButtons?: boolean;
+  // Pre-defined layer opacities
+  predefinedOpacities?: Record<string, number>;
+}
+
+export interface ShipMapBlock {
+  type: "ship-map";
+  title: string;
+  description: string;
+  height?: string;
+  centerLat?: number;
+  centerLng?: number;
+  zoom?: number;
+  seamarkOpacity?: number;
+  enableSeamarkLayer?: boolean;
+  tileServerOption?: "openseamap" | "hybrid";
+  portFocus?: "rotterdam" | "groningen" | "amsterdam" | "full" | "custom";
+  showControls?: boolean;
+  // Railway overlay options
+  enableRailwayLayer?: boolean;
+  railwayOpacity?: number;
+  railwayStyle?: "standard" | "signals" | "maxspeed";
+  // Admin control over user-facing controls
+  showPortFocusControl?: boolean;
+  showMapStyleControl?: boolean;
+  showSeamarkLayerControl?: boolean;
+  showSeamarkOpacityControl?: boolean;
+  showRailwayLayerControl?: boolean;
+  showRailwayStyleControl?: boolean;
+  showRailwayOpacityControl?: boolean;
 }
 
 export interface Story {
@@ -283,7 +316,8 @@ export type DataStoryBlock =
   | DataStormBlock
   | CarbonMoleculeDanceBlock
   | ClimateInfographicBlock
-  | InteractiveMapBlock;
+  | InteractiveMapBlock
+  | ShipMapBlock;
 
 export interface LanguageContent {
   heroTitle: string;

@@ -44,6 +44,36 @@ interface MapLayerData {
   zoom?: string | number;
   autoFitBounds?: boolean;
   enableLayerControls?: boolean;
+  // Admin control over user-facing controls
+  showLayerToggles?: boolean;
+  showOpacityControls?: boolean;
+  showDownloadButtons?: boolean;
+  // Pre-defined layer opacities
+  predefinedOpacities?: Record<string, number>;
+}
+
+interface ShipMapData {
+  height?: string;
+  centerLat?: string | number;
+  centerLng?: string | number;
+  zoom?: string | number;
+  seamarkOpacity?: number;
+  enableSeamarkLayer?: boolean;
+  tileServerOption?: "openseamap" | "hybrid";
+  portFocus?: "rotterdam" | "groningen" | "amsterdam" | "full" | "custom";
+  showControls?: boolean;
+  // Railway overlay options
+  enableRailwayLayer?: boolean;
+  railwayOpacity?: number;
+  railwayStyle?: "standard" | "signals" | "maxspeed";
+  // Admin control over user-facing controls
+  showPortFocusControl?: boolean;
+  showMapStyleControl?: boolean;
+  showSeamarkLayerControl?: boolean;
+  showSeamarkOpacityControl?: boolean;
+  showRailwayLayerControl?: boolean;
+  showRailwayStyleControl?: boolean;
+  showRailwayOpacityControl?: boolean;
 }
 
 interface MapLayerSelectorProps {
@@ -74,7 +104,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
     }
   };
 
-  const updateDataField = (field: keyof MapLayerData, value: string | boolean | string[] | number) => {
+  const updateDataField = (field: keyof MapLayerData, value: string | boolean | string[] | number | Record<string, number>) => {
     onDataChange({ ...data, [field]: value });
   };
 
@@ -256,6 +286,309 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
           </div>
         </div>
       )}
+
+      <div className="border-t pt-4 mt-4">
+        <h4 className="text-sm font-medium mb-3">User Control Visibility</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-layer-toggles"
+              checked={data?.showLayerToggles !== false}
+              onCheckedChange={(checked) => updateDataField("showLayerToggles", checked)}
+            />
+            <Label htmlFor="show-layer-toggles" className="text-sm">Layer Toggle Controls</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-opacity-controls"
+              checked={data?.showOpacityControls !== false}
+              onCheckedChange={(checked) => updateDataField("showOpacityControls", checked)}
+            />
+            <Label htmlFor="show-opacity-controls" className="text-sm">Opacity Controls</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-download-buttons"
+              checked={data?.showDownloadButtons !== false}
+              onCheckedChange={(checked) => updateDataField("showDownloadButtons", checked)}
+            />
+            <Label htmlFor="show-download-buttons" className="text-sm">Download Buttons</Label>
+          </div>
+        </div>
+
+        {data?.selectedLayers && data.selectedLayers.length > 0 && (
+          <div className="mt-4">
+            <h5 className="text-sm font-medium mb-2">Pre-defined Layer Opacities</h5>
+            <div className="space-y-2">
+              {data.selectedLayers.map((layerId: string) => {
+                const layer = availableLayers.find(l => l.id === layerId);
+                const currentOpacity = data?.predefinedOpacities?.[layerId] || 80;
+                return (
+                  <div key={layerId} className="flex items-center space-x-2">
+                    <Label className="text-xs w-32 truncate">{layer?.name || layerId}</Label>
+                    <Input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={currentOpacity}
+                      onChange={(e) => {
+                        const newOpacities = { ...(data?.predefinedOpacities || {}) };
+                        newOpacities[layerId] = parseInt(e.target.value);
+                        updateDataField("predefinedOpacities", newOpacities);
+                      }}
+                      className="flex-1"
+                    />
+                    <span className="text-xs w-12">{currentOpacity}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface ShipMapSelectorProps {
+  data: ShipMapData;
+  onDataChange: (newData: ShipMapData) => void;
+}
+
+function ShipMapSelector({ data, onDataChange }: ShipMapSelectorProps) {
+  const updateDataField = (field: keyof ShipMapData, value: string | boolean | number) => {
+    onDataChange({ ...data, [field]: value });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Label>Map Height</Label>
+        <Input
+          value={data?.height || "600px"}
+          onChange={(e) => updateDataField("height", e.target.value)}
+          placeholder="e.g., 600px"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label>Port Focus</Label>
+        <Select
+          value={data?.portFocus || "rotterdam"}
+          onValueChange={(value) => updateDataField("portFocus", value)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="rotterdam">Rotterdam (NL)</SelectItem>
+            <SelectItem value="groningen">Groningen (NL)</SelectItem>
+            <SelectItem value="amsterdam">Amsterdam (NL)</SelectItem>
+            <SelectItem value="full">Full View (NL)</SelectItem>
+            <SelectItem value="custom">Custom Location</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {data?.portFocus === "custom" && (
+        <div className="space-y-1">
+          <Label>Custom Coordinates (Latitude, Longitude)</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              value={data?.centerLat || "52.1326"}
+              onChange={(e) => updateDataField("centerLat", parseFloat(e.target.value) || 52.1326)}
+              placeholder="52.1326"
+              type="number"
+              step="0.0001"
+            />
+            <Input
+              value={data?.centerLng || "5.2913"}
+              onChange={(e) => updateDataField("centerLng", parseFloat(e.target.value) || 5.2913)}
+              placeholder="5.2913"
+              type="number"
+              step="0.0001"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <Label>Initial Zoom Level</Label>
+        <Input
+          value={data?.zoom || "12"}
+          onChange={(e) => updateDataField("zoom", parseInt(e.target.value) || 12)}
+          placeholder="12"
+          type="number"
+          min="1"
+          max="18"
+        />
+        <p className="text-xs text-muted-foreground">
+          Zoom level: 1 (world) to 18 (street level)
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <Label>Map Style</Label>
+        <Select
+          value={data?.tileServerOption || "openseamap"}
+          onValueChange={(value) => updateDataField("tileServerOption", value)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="openseamap">OpenSeaMap Standard</SelectItem>
+            <SelectItem value="hybrid">Satellite + Sea Marks</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="enable-seamark-layer"
+          checked={data?.enableSeamarkLayer !== false}
+          onCheckedChange={(checked) => updateDataField("enableSeamarkLayer", checked)}
+        />
+        <Label htmlFor="enable-seamark-layer">Enable Sea Marks Layer</Label>
+      </div>
+
+      {data?.enableSeamarkLayer !== false && (
+        <div className="space-y-1">
+          <Label>Sea Marks Opacity: {data?.seamarkOpacity || 80}%</Label>
+          <Input
+            type="range"
+            min="10"
+            max="100"
+            step="10"
+            value={data?.seamarkOpacity || 80}
+            onChange={(e) => updateDataField("seamarkOpacity", parseInt(e.target.value))}
+            className="w-full"
+          />
+        </div>
+      )}
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="show-controls"
+          checked={data?.showControls !== false}
+          onCheckedChange={(checked) => updateDataField("showControls", checked)}
+        />
+        <Label htmlFor="show-controls">Show Control Panel</Label>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="enable-railway-layer"
+          checked={data?.enableRailwayLayer || false}
+          onCheckedChange={(checked) => updateDataField("enableRailwayLayer", checked)}
+        />
+        <Label htmlFor="enable-railway-layer">Enable Railway Layer</Label>
+      </div>
+
+      {data?.enableRailwayLayer && (
+        <>
+          <div className="space-y-1">
+            <Label>Railway Style</Label>
+            <Select
+              value={data?.railwayStyle || "standard"}
+              onValueChange={(value) => updateDataField("railwayStyle", value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard">Infrastructure & Tracks</SelectItem>
+                <SelectItem value="signals">Railway Signals</SelectItem>
+                <SelectItem value="maxspeed">Speed Limits</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Railway Opacity: {data?.railwayOpacity || 70}%</Label>
+            <Input
+              type="range"
+              min="10"
+              max="100"
+              step="10"
+              value={data?.railwayOpacity || 70}
+              onChange={(e) => updateDataField("railwayOpacity", parseInt(e.target.value))}
+              className="w-full"
+            />
+          </div>
+        </>
+      )}
+
+      <div className="border-t pt-4 mt-4">
+        <h4 className="text-sm font-medium mb-3">User Control Visibility</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-port-focus-control"
+              checked={data?.showPortFocusControl !== false}
+              onCheckedChange={(checked) => updateDataField("showPortFocusControl", checked)}
+            />
+            <Label htmlFor="show-port-focus-control" className="text-sm">Port Focus Control</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-map-style-control"
+              checked={data?.showMapStyleControl !== false}
+              onCheckedChange={(checked) => updateDataField("showMapStyleControl", checked)}
+            />
+            <Label htmlFor="show-map-style-control" className="text-sm">Map Style Control</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-seamark-layer-control"
+              checked={data?.showSeamarkLayerControl !== false}
+              onCheckedChange={(checked) => updateDataField("showSeamarkLayerControl", checked)}
+            />
+            <Label htmlFor="show-seamark-layer-control" className="text-sm">Seamark Layer Control</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-seamark-opacity-control"
+              checked={data?.showSeamarkOpacityControl !== false}
+              onCheckedChange={(checked) => updateDataField("showSeamarkOpacityControl", checked)}
+            />
+            <Label htmlFor="show-seamark-opacity-control" className="text-sm">Seamark Opacity Control</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-railway-layer-control"
+              checked={data?.showRailwayLayerControl !== false}
+              onCheckedChange={(checked) => updateDataField("showRailwayLayerControl", checked)}
+            />
+            <Label htmlFor="show-railway-layer-control" className="text-sm">Railway Layer Control</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-railway-style-control"
+              checked={data?.showRailwayStyleControl !== false}
+              onCheckedChange={(checked) => updateDataField("showRailwayStyleControl", checked)}
+            />
+            <Label htmlFor="show-railway-style-control" className="text-sm">Railway Style Control</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-railway-opacity-control"
+              checked={data?.showRailwayOpacityControl !== false}
+              onCheckedChange={(checked) => updateDataField("showRailwayOpacityControl", checked)}
+            />
+            <Label htmlFor="show-railway-opacity-control" className="text-sm">Railway Opacity Control</Label>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -330,6 +663,7 @@ export function BlockTypeFields({
     "climate-dashboard",
     "temperature-spiral",
     "interactive-map",
+    "ship-map",
     "impact-comparison",
     "kpi-showcase",
     "climate-timeline-minimal",
@@ -391,6 +725,9 @@ export function BlockTypeFields({
 
       case "interactive-map":
         return <MapLayerSelector data={data} onDataChange={onDataChange} />;
+
+      case "ship-map":
+        return <ShipMapSelector data={data} onDataChange={onDataChange} />;
 
       case "animated-statistics":
         return (
@@ -561,6 +898,9 @@ export function BlockTypeFields({
         );
 
       case "interactive-map":
+        return renderLanguageSpecificFields();
+
+      case "ship-map":
         return renderLanguageSpecificFields();
 
       case "animated-statistics":

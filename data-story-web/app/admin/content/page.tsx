@@ -394,6 +394,20 @@ export default function ContentAdminPage() {
             : "Interactive climate risk map",
           selectedLayers: [],
         };
+      case "ship-map":
+        return {
+          type: "ship-map",
+          title: isGerman ? "Schifffahrts-Karte" : "Ship Map",
+          description: isGerman
+            ? "Interaktive Seekarte mit Navigationsmarkierungen"
+            : "Interactive maritime map with navigation marks",
+          height: "600px",
+          seamarkOpacity: 80,
+          enableSeamarkLayer: true,
+          tileServerOption: "openseamap",
+          portFocus: "rotterdam",
+          showControls: true,
+        };
       case "animated-quote":
         return {
           type: "animated-quote",
@@ -624,6 +638,20 @@ export default function ContentAdminPage() {
             ? "Interaktive Klimarisiko-Karte"
             : "Interactive climate risk map",
           selectedLayers: [],
+        };
+      case "ship-map":
+        return {
+          type: "ship-map",
+          title: isGerman ? "Schifffahrts-Karte" : "Ship Map",
+          description: isGerman
+            ? "Interaktive Seekarte mit Navigationsmarkierungen"
+            : "Interactive maritime map with navigation marks",
+          height: "600px",
+          seamarkOpacity: 80,
+          enableSeamarkLayer: true,
+          tileServerOption: "openseamap",
+          portFocus: "rotterdam",
+          showControls: true,
         };
       default:
         return {
@@ -2099,6 +2127,13 @@ export default function ContentAdminPage() {
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Interactive Map
+                      </Button>
+                      <Button
+                        onClick={() => addBlock("ship-map")}
+                        variant="outline"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Ship Map
                       </Button>
                     </div>
                   </CardContent>

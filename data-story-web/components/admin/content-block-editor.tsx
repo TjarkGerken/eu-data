@@ -71,6 +71,7 @@ const AVAILABLE_BLOCK_TYPES = [
   "animated-quote",
   "animated-statistics",
   "interactive-map",
+  "ship-map",
   "climate-timeline",
   "climate-dashboard",
   "temperature-spiral",
