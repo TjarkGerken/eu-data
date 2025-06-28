@@ -28,6 +28,12 @@ interface InteractiveMapProps {
   centerLng?: number;
   zoom?: number;
   autoFitBounds?: boolean;
+  // Admin control over user-facing controls
+  showLayerToggles?: boolean;
+  showOpacityControls?: boolean;
+  showDownloadButtons?: boolean;
+  // Pre-defined layer opacities
+  predefinedOpacities?: Record<string, number>;
 }
 
 interface LayerState {
@@ -47,6 +53,11 @@ export function InteractiveMap({
   centerLng = 5.2913,
   zoom = 8,
   autoFitBounds = false,
+  // Admin control defaults (all enabled by default for backward compatibility)
+  showLayerToggles = true,
+  showOpacityControls = true,
+  showDownloadButtons = true,
+  predefinedOpacities = {},
 }: InteractiveMapProps) {
   const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
     []
@@ -64,11 +75,11 @@ export function InteractiveMap({
     const states = availableLayers.map((layer) => ({
       id: layer.id,
       visible: selectedLayers.includes(layer.id),
-      opacity: 0.8,
+      opacity: predefinedOpacities[layer.id] ? predefinedOpacities[layer.id] / 100 : 0.8,
       metadata: layer,
     }));
     setLayerStates(states);
-  }, [availableLayers, selectedLayers]);
+  }, [availableLayers, selectedLayers, predefinedOpacities]);
 
   useEffect(() => {
     loadAvailableLayers();
@@ -82,20 +93,7 @@ export function InteractiveMap({
 
   const loadAvailableLayers = async () => {
     try {
-      console.log("=== LOADING AVAILABLE LAYERS ===");
       const layers = await mapTileService.getAvailableLayers();
-      console.log("Loaded layers from API:", layers);
-
-      layers.forEach((layer) => {
-        console.log(`API Layer ${layer.id}:`, {
-          name: layer.name,
-          dataType: layer.dataType,
-          format: layer.format,
-          fileSize: layer.fileSize,
-          description: layer.description,
-        });
-      });
-
       setAvailableLayers(layers);
     } catch (error) {
       console.error("Failed to load map layers:", error);
@@ -104,24 +102,12 @@ export function InteractiveMap({
     }
   };
 
-  const toggleLayer = (layerId: string) => {
-    setLayerStates((prev) => {
-      return prev.map((layer) => {
-        if (layer.id === layerId) {
-          const newVisible = !layer.visible;
-
-          // Show a notice for COG layers
-          if (layer.metadata.format === "cog" && newVisible) {
-            console.warn(
-              `COG layer "${layer.metadata.name}" is enabled but may not display properly. COG format requires special rendering implementation.`
-            );
-          }
-
-          return { ...layer, visible: newVisible };
-        }
-        return layer;
-      });
-    });
+  const toggleLayerVisibility = (layerId: string) => {
+    setLayerStates((prev) =>
+      prev.map((layer) =>
+        layer.id === layerId ? { ...layer, visible: !layer.visible } : layer
+      )
+    );
   };
 
   const updateLayerOpacity = (layerId: string, opacity: number) => {
@@ -180,30 +166,32 @@ export function InteractiveMap({
               <p className="text-muted-foreground mt-2">{description}</p>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowControls(!showControls)}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
+          {enableLayerControls && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowControls(!showControls)}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="flex gap-4">
-          <div className="flex-1">
+        <div className="space-y-4">
+          <div className="w-full">
             <div
               className="relative rounded-lg overflow-hidden border interactive-map-container"
               style={{ height }}
             >
-              <LeafletMap
-                layers={layerStates}
-                centerLat={centerLat}
-                centerLng={centerLng}
-                zoom={zoom}
+              <LeafletMap 
+                layers={layerStates} 
+                centerLat={centerLat} 
+                centerLng={centerLng} 
+                zoom={zoom} 
                 autoFitBounds={autoFitBounds}
               />
 
@@ -233,39 +221,46 @@ export function InteractiveMap({
           </div>
 
           {enableLayerControls && showControls && (
-            <div className="w-80 space-y-4">
+            <div className="w-full">
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">Layer Controls</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {layerStates.map((layer) => (
-                    <div
-                      key={layer.id}
-                      className="space-y-3 p-3 bg-gray-50 rounded-lg"
-                    >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {layerStates.map((layer) => (
+                      <div
+                        key={layer.id}
+                        className="space-y-3 p-3 bg-gray-50 rounded-lg"
+                      >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Switch
-                            checked={layer.visible}
-                            onCheckedChange={() => toggleLayer(layer.id)}
-                          />
+                          {showLayerToggles && (
+                            <Switch
+                              checked={layer.visible}
+                              onCheckedChange={() =>
+                                toggleLayerVisibility(layer.id)
+                              }
+                            />
+                          )}
                           <Label className="text-sm font-medium">
                             {layer.metadata.name}
                           </Label>
                         </div>
                         <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => downloadLayerData(layer.id)}
-                          >
-                            <Download className="h-3 w-3" />
-                          </Button>
+                          {showDownloadButtons && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => downloadLayerData(layer.id)}
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className="text-xs">
                           {layer.metadata.dataType}
                         </Badge>
@@ -278,7 +273,7 @@ export function InteractiveMap({
                         </span>
                       </div>
 
-                      {layer.visible && (
+                      {layer.visible && showOpacityControls && (
                         <div className="space-y-2">
                           <Label className="text-xs">
                             Opacity: {Math.round(layer.opacity * 100)}%
@@ -296,6 +291,7 @@ export function InteractiveMap({
                       )}
                     </div>
                   ))}
+                  </div>
                 </CardContent>
               </Card>
             </div>
