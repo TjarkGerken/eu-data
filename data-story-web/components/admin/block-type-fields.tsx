@@ -34,6 +34,7 @@ interface BlockTypeFieldsProps {
   content?: string;
   onTitleChange?: (title: string) => void;
   onContentChange?: (content: string) => void;
+  language?: "en" | "de";
   mode?: "shared" | "language-specific" | "all";
 }
 
@@ -689,6 +690,7 @@ export function BlockTypeFields({
   content,
   onTitleChange,
   onContentChange,
+  language,
   mode = "all",
 }: BlockTypeFieldsProps) {
   const markdownTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1665,6 +1667,7 @@ export function BlockTypeFields({
   const renderLanguageSpecificFieldsForType = () => {
     switch (blockType) {
       case "markdown":
+        console.log(content);
         return (
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -1691,15 +1694,7 @@ export function BlockTypeFields({
         );
 
       case "interactive-map":
-        console.log(data);
-        return (
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>Caption</Label>
-              <Textarea readOnly value={data.captionEn || ""} rows={3} />
-            </div>
-          </div>
-        );
+        return renderLanguageSpecificFields();
 
       case "ship-map":
         return renderLanguageSpecificFields();
@@ -1870,12 +1865,16 @@ export function BlockTypeFields({
         );
 
       case "visualization":
-        console.log(data);
+        console.log(data, content, blockType, language);
         return (
           <div className="space-y-4">
             <div className="space-y-1">
               <Label>Caption</Label>
-              <Textarea readOnly value={data?.captionEn || ""} rows={3} />
+              {language === "en" ? (
+                <Textarea readOnly value={data?.captionEn || ""} rows={3} />
+              ) : (
+                <Textarea readOnly value={data?.captionDe || ""} rows={3} />
+              )}
             </div>
           </div>
         );
@@ -1906,7 +1905,7 @@ export function BlockTypeFields({
       <div className="space-y-4">{renderLanguageSpecificFieldsForType()}</div>
     );
   }
-
+  console.log("Rendering all fields for block type:", blockType);
   return (
     <div className="space-y-4">
       {renderLanguageSpecificFieldsForType()}

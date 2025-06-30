@@ -784,7 +784,8 @@ export default function ContentBlockEditor() {
 
   const renderLanguageSpecificFields = (
     block: ContentBlock | null,
-    updateBlock: (updatedBlock: ContentBlock) => void
+    updateBlock: (updatedBlock: ContentBlock) => void,
+    language: "en" | "de"
   ) => {
     if (!block) return null;
 
@@ -798,6 +799,7 @@ export default function ContentBlockEditor() {
         content={block.content}
         onTitleChange={(title) => updateBlock({ ...block, title })}
         onContentChange={(content) => updateBlock({ ...block, content })}
+        language={language}
         mode="language-specific"
       />
     );
@@ -1063,7 +1065,8 @@ export default function ContentBlockEditor() {
                           setSelectedPair({
                             ...selectedPair,
                             english: updatedBlock,
-                          })
+                          }),
+                        "en"
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">
@@ -1106,7 +1109,8 @@ export default function ContentBlockEditor() {
                           setSelectedPair({
                             ...selectedPair,
                             german: updatedBlock,
-                          })
+                          }),
+                        "de"
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">
