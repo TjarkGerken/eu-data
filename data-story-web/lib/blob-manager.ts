@@ -12,7 +12,15 @@ export interface ImageMetadata {
   id: string;
   category: ImageCategory;
   scenario?: ImageScenario;
-  description: string;
+  indicators?: string[];
+  alt?: {
+    en: string;
+    de: string;
+  };
+  caption?: {
+    en: string;
+    de: string;
+  };
   uploadedAt: Date;
   size: number;
 }
@@ -67,6 +75,38 @@ export class CloudflareR2Manager {
   static async getAllImages(): Promise<
     Array<{ url: string; path: string; metadata: ImageMetadata }>
   > {
+    // In the browser we call the public API route instead of using the
+    // AWS SDK (which would expose credentials). On the server we keep the
+    // original direct R2 request for efficiency.
+    if (typeof window !== "undefined") {
+      try {
+        const res = await fetch("/api/storage/upload", {
+          method: "GET",
+        });
+        if (!res.ok) throw new Error("Failed to fetch images");
+        // Response shape: { files: [{ url, path, category, scenario, size, created_at }] }
+        const { files } = await res.json();
+        return (files as any[]).map((f) => ({
+          url: f.url,
+          path: f.path || f.url, // ensure path exists
+          metadata: {
+            id: f.id || f.name,
+            category: f.category as ImageCategory,
+            scenario: f.scenario as ImageScenario,
+            indicators: (f.indicators || []) as string[],
+            alt: f.alt || { en: "", de: "" },
+            caption: f.caption || { en: "", de: "" },
+            uploadedAt: f.created_at ? new Date(f.created_at) : new Date(),
+            size: f.size ?? 0,
+          },
+        }));
+      } catch (err) {
+        console.error("Failed to fetch images via API:", err);
+        return [];
+      }
+    }
+
+    // -------- Server-side path (unchanged) --------
     try {
       const command = new ListObjectsV2Command({
         Bucket: R2_BUCKET_NAME,
@@ -80,30 +120,51 @@ export class CloudflareR2Manager {
         return [];
       }
 
-      return response.Contents.filter(
-        (object) => object.Key && !object.Key.endsWith(".json")
-      ).map((object) => {
-        const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
-        const pathParts = object.Key!.split("/");
-        const fileName = pathParts[pathParts.length - 1];
-        const fileNameWithoutExt = fileName.split(".")[0];
+      return await Promise.all(
+        response.Contents.filter(
+          (object) => object.Key && !object.Key.endsWith(".json")
+        ).map(async (object) => {
+          const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
+          const pathParts = object.Key!.split("/");
+          const fileName = pathParts[pathParts.length - 1];
+          const fileNameWithoutExt = fileName.split(".")[0];
 
-        return {
-          url: publicUrl,
-          path: object.Key!,
-          metadata: {
-            id: fileNameWithoutExt,
-            category: pathParts[1] as ImageCategory,
-            scenario:
-              pathParts[2] && pathParts[2] !== "default"
-                ? (pathParts[2] as ImageScenario)
-                : undefined,
-            description: `Climate visualization: ${fileNameWithoutExt}`,
-            uploadedAt: object.LastModified || new Date(),
-            size: object.Size || 0,
-          },
-        };
-      });
+          // Attempt to fetch metadata JSON for richer information
+          let meta: ImageMetadata | undefined;
+          try {
+            meta = await this.getMetadata(fileNameWithoutExt);
+          } catch {
+            /* ignore */
+          }
+
+          return {
+            url: publicUrl,
+            path: object.Key!,
+            metadata: {
+              id: fileNameWithoutExt,
+              category:
+                (meta?.category as ImageCategory) ||
+                (pathParts[1] as ImageCategory),
+              scenario:
+                (meta?.scenario as ImageScenario) ||
+                (pathParts[2] && pathParts[2] !== "default"
+                  ? (pathParts[2] as ImageScenario)
+                  : undefined),
+              indicators: meta?.indicators || [],
+              alt: (meta?.alt as { en: string; de: string }) || {
+                en: "",
+                de: "",
+              },
+              caption: (meta?.caption as { en: string; de: string }) || {
+                en: `Climate visualization: ${fileNameWithoutExt}`,
+                de: "",
+              },
+              uploadedAt: object.LastModified || new Date(),
+              size: object.Size || 0,
+            },
+          };
+        })
+      );
     } catch (error) {
       console.error("Failed to get all images:", error);
       return [];
@@ -144,7 +205,11 @@ export class CloudflareR2Manager {
               pathParts[2] && pathParts[2] !== "default"
                 ? (pathParts[2] as ImageScenario)
                 : undefined,
-            description: `Climate visualization: ${fileNameWithoutExt}`,
+            alt: { en: "", de: "" },
+            caption: {
+              en: `Climate visualization: ${fileNameWithoutExt}`,
+              de: "",
+            },
             uploadedAt: object.LastModified || new Date(),
             size: object.Size || 0,
           },
@@ -157,6 +222,20 @@ export class CloudflareR2Manager {
   }
 
   static async deleteImage(imagePath: string): Promise<void> {
+    // When running in the browser, call the API route to perform deletion.
+    if (typeof window !== "undefined") {
+      const res = await fetch("/api/storage/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: imagePath }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to delete image via API");
+      }
+      return;
+    }
+
+    // Server-side direct deletion (unchanged)
     try {
       const command = new DeleteObjectCommand({
         Bucket: R2_BUCKET_NAME,
@@ -165,7 +244,7 @@ export class CloudflareR2Manager {
 
       await this.s3Client.send(command);
 
-      // Also try to delete metadata file if it exists
+      // Also delete metadata file if present
       const metadataPath = imagePath.replace(/\.[^/.]+$/, ".json");
       try {
         const metadataCommand = new DeleteObjectCommand({
@@ -173,12 +252,8 @@ export class CloudflareR2Manager {
           Key: metadataPath,
         });
         await this.s3Client.send(metadataCommand);
-      } catch (metadataError) {
-        // Metadata file might not exist, that's ok
-        console.warn(
-          `Metadata file ${metadataPath} not found or could not be deleted:`,
-          metadataError
-        );
+      } catch {
+        /* ignore */
       }
     } catch (error) {
       throw new Error(`Failed to delete image: ${error}`);

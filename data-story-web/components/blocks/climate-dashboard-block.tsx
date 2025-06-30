@@ -15,7 +15,6 @@ import {
 
 interface ClimateDashboardBlockProps {
   title?: string;
-  description?: string;
   metrics: Array<{
     title: string;
     value: string;
@@ -36,7 +35,6 @@ interface ClimateDashboardBlockProps {
 
 export function ClimateDashboardBlock({
   title,
-  description,
   metrics,
   references,
 }: ClimateDashboardBlockProps) {
@@ -90,7 +88,7 @@ export function ClimateDashboardBlock({
           {title || defaultTitle}
         </h3>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          {description || defaultDescription}
+          {defaultDescription}
         </p>
       </div>
 

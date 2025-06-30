@@ -5,10 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { CitationAwareMarkdown } from "./citation-aware-markdown";
+import { useLanguage } from "@/contexts/language-context";
 
 interface InteractiveCalloutBlockProps {
   title: string;
   content: string;
+  expandedContent?: string;
   variant: "success" | "warning" | "info" | "error";
   interactive?: boolean;
   references?: Array<{
@@ -22,10 +24,12 @@ interface InteractiveCalloutBlockProps {
 export function InteractiveCalloutBlock({
   title,
   content,
+  expandedContent,
   variant,
   interactive = true,
   references,
 }: InteractiveCalloutBlockProps) {
+  const { language } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -139,7 +143,9 @@ export function InteractiveCalloutBlock({
                   className="text-sm text-muted-foreground leading-relaxed"
                 >
                   <CitationAwareMarkdown
-                    content={content}
+                    content={
+                      isExpanded && expandedContent ? expandedContent : content
+                    }
                     references={references}
                   />
                 </motion.div>
@@ -151,7 +157,13 @@ export function InteractiveCalloutBlock({
                     transition={{ duration: 0.2 }}
                     className="mt-3 text-xs text-muted-foreground"
                   >
-                    {isExpanded ? "Click to collapse" : "Click to expand"}
+                    {isExpanded
+                      ? language === "de"
+                        ? "Klicken zum Einklappen"
+                        : "Click to collapse"
+                      : language === "de"
+                      ? "Klicken zum Ausklappen"
+                      : "Click to expand"}
                   </motion.div>
                 )}
               </div>
@@ -197,7 +209,7 @@ export function InteractiveCalloutBlock({
       {references && references.length > 0 && (
         <div className="mt-4 pt-4 border-t border-muted">
           <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-            References
+            {language === "de" ? "Referenzen" : "References"}
           </h4>
           <div className="space-y-2">
             {references.map((ref) => (
