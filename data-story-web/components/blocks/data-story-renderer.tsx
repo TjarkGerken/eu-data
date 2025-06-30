@@ -53,6 +53,7 @@ export function DataStoryRenderer({
         );
 
       case "visualization":
+        console.log(block.data.captionEn, block.data.captionDe);
         return (
           <VisualizationCard
             key={index}

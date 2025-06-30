@@ -66,7 +66,9 @@ export default function GalleryPage() {
             url: img.url,
             category: img.metadata?.category || "unknown",
             scenario: img.metadata?.scenario,
-            caption: img.metadata?.description ? { en: img.metadata.description, de: "" } : undefined,
+            caption: img.metadata?.description
+              ? { en: img.metadata.description, de: "" }
+              : undefined,
           };
         })
         .filter((img: ImageOption) => img.url && img.name !== "unknown");
@@ -109,7 +111,11 @@ export default function GalleryPage() {
 
   const categories = Array.from(new Set(images.map((img) => img.category)));
   const scenarios = Array.from(
-    new Set(images.map((img) => img.scenario).filter((scenario): scenario is string => Boolean(scenario)))
+    new Set(
+      images
+        .map((img) => img.scenario)
+        .filter((scenario): scenario is string => Boolean(scenario))
+    )
   );
 
   if (loading) {

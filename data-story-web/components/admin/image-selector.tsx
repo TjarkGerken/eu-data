@@ -154,7 +154,11 @@ export default function ImageSelector({
               <div className="aspect-video relative bg-gray-100 rounded-lg overflow-hidden">
                 <NextImage
                   src={selectedImageData.url}
-                  alt={selectedImageData.metadata.caption?.en || selectedImageData.metadata.alt?.en || selectedImageData.metadata.id}
+                  alt={
+                    selectedImageData.metadata.caption?.en ||
+                    selectedImageData.metadata.alt?.en ||
+                    selectedImageData.metadata.id
+                  }
                   fill
                   className="object-cover"
                   onError={(e) => {
