@@ -435,26 +435,7 @@ export default function ContentAdminPage() {
             },
           ],
         };
-      case "climate-timeline":
-        return {
-          type: "climate-timeline",
-          title: isGerman ? "Klima-Zeitachse" : "Climate Timeline",
-          description: isGerman
-            ? "Wichtige Klimaereignisse"
-            : "Key climate events",
-          events: [
-            {
-              year: 2024,
-              title: isGerman ? "Beispielereignis" : "Sample Event",
-              description: isGerman
-                ? "Ereignisbeschreibung"
-                : "Event description",
-              type: "policy",
-              icon: "calendar",
-              color: "#3b82f6",
-            },
-          ],
-        };
+
       case "climate-dashboard":
         return {
           type: "climate-dashboard",
@@ -477,17 +458,7 @@ export default function ContentAdminPage() {
             },
           ],
         };
-      case "temperature-spiral":
-        return {
-          type: "temperature-spiral",
-          title: isGerman ? "Temperaturspirale" : "Temperature Spiral",
-          description: isGerman
-            ? "Visualisierung von Temperaturveränderungen über die Zeit"
-            : "Visualization of temperature changes over time",
-          startYear: 1880,
-          endYear: 2030,
-          rotations: 8,
-        };
+
       case "interactive-callout":
         return {
           type: "interactive-callout",
@@ -498,28 +469,7 @@ export default function ContentAdminPage() {
           variant: "info",
           interactive: true,
         };
-      case "neural-climate-network":
-        return {
-          type: "neural-climate-network",
-          title: isGerman
-            ? "Neurales Klima-Netzwerk"
-            : "Neural Climate Network",
-          description: isGerman
-            ? "Interaktive neurale Netzwerk-Visualisierung"
-            : "Interactive neural network visualization",
-          intensity: 1.0,
-          speed: 1.0,
-        };
-      case "earth-pulse":
-        return {
-          type: "earth-pulse",
-          title: isGerman ? "Erdpuls" : "Earth Pulse",
-          description: isGerman
-            ? "Erdschlag-Visualisierung"
-            : "Earth heartbeat visualization",
-          intensity: 1.0,
-          speed: 1.0,
-        };
+
       case "impact-comparison":
         return {
           type: "impact-comparison",
@@ -559,77 +509,10 @@ export default function ContentAdminPage() {
           ],
         };
 
-      case "climate-metamorphosis":
-        return {
-          type: "climate-metamorphosis",
-          title: isGerman ? "Klima-Metamorphose" : "Climate Metamorphosis",
-          description: isGerman
-            ? "Evolution des Klimas über die Zeit"
-            : "Evolution of climate over time",
-          stages: [
-            {
-              year: 2020,
-              title: isGerman ? "Aktueller Zustand" : "Current State",
-              description: isGerman
-                ? "Aktuelle Klimabedingungen"
-                : "Current climate conditions",
-              data: 100,
-            },
-          ],
-        };
-      case "climate-timeline-minimal":
-        return {
-          type: "climate-timeline-minimal",
-          title: isGerman ? "Klima-Zeitachse" : "Climate Timeline",
-          description: isGerman
-            ? "Minimale Zeitachsenansicht"
-            : "Minimal timeline view",
-          events: [
-            {
-              year: 2024,
-              title: isGerman ? "Ereignis" : "Event",
-              description: isGerman ? "Beschreibung" : "Description",
-            },
-          ],
-        };
-      case "data-storm":
-        return {
-          type: "data-storm",
-          title: isGerman ? "Datensturm" : "Data Storm",
-          description: isGerman
-            ? "Dynamische Datenvisualisierung"
-            : "Dynamic data visualization",
-          intensity: 1,
-          particles: 100,
-        };
-      case "carbon-molecule-dance":
-        return {
-          type: "carbon-molecule-dance",
-          title: isGerman ? "Kohlenstoffmolekül-Tanz" : "Carbon Molecule Dance",
-          description: isGerman
-            ? "Kohlenstoffmolekül-Animation"
-            : "Carbon molecule animation",
-          molecules: 50,
-          speed: 1,
-        };
-      case "climate-infographic":
-        return {
-          type: "climate-infographic",
-          title: isGerman ? "Klima-Infografik" : "Climate Infographic",
-          description: isGerman
-            ? "Visuelle Klimainformationen"
-            : "Visual climate information",
-          sections: [
-            {
-              title: isGerman ? "Temperatur" : "Temperature",
-              value: "+1.2°C",
-              description: isGerman
-                ? "Globaler Durchschnittsanstieg"
-                : "Global average increase",
-              icon: "thermometer",
-            },
-          ],
-        };
+
+
+
+
       case "interactive-map":
         return {
           type: "interactive-map",
@@ -1191,55 +1074,80 @@ export default function ContentAdminPage() {
               />
             </div>
             <div>
-              <Label>Statistics (JSON format)</Label>
-              <Textarea
-                value={JSON.stringify(blockData.stats || [], null, 2)}
-                onChange={(e) => {
-                  try {
-                    const stats = JSON.parse(e.target.value);
-                    updateField("stats", stats);
-                  } catch {}
+              <Label>Statistics</Label>
+              {(blockData.stats || []).map((stat: any, index: number) => (
+                <Card key={index} className="p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium">Statistic {index + 1}</h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newStats = [...(blockData.stats || [])];
+                        newStats.splice(index, 1);
+                        updateField("stats", newStats);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Icon"
+                      value={stat.icon || ""}
+                      onChange={(e) => {
+                        const newStats = [...(blockData.stats || [])];
+                        newStats[index] = { ...newStats[index], icon: e.target.value };
+                        updateField("stats", newStats);
+                      }}
+                    />
+                    <Input
+                      placeholder="Value"
+                      value={stat.value || ""}
+                      onChange={(e) => {
+                        const newStats = [...(blockData.stats || [])];
+                        newStats[index] = { ...newStats[index], value: e.target.value };
+                        updateField("stats", newStats);
+                      }}
+                    />
+                    <Input
+                      placeholder="Label"
+                      value={stat.label || ""}
+                      onChange={(e) => {
+                        const newStats = [...(blockData.stats || [])];
+                        newStats[index] = { ...newStats[index], label: e.target.value };
+                        updateField("stats", newStats);
+                      }}
+                    />
+                    <Input
+                      placeholder="Color"
+                      value={stat.color || ""}
+                      onChange={(e) => {
+                        const newStats = [...(blockData.stats || [])];
+                        newStats[index] = { ...newStats[index], color: e.target.value };
+                        updateField("stats", newStats);
+                      }}
+                    />
+                  </div>
+                </Card>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const newStats = [
+                    ...(blockData.stats || []),
+                    { icon: "", value: "", label: "", color: "text-red-500" }
+                  ];
+                  updateField("stats", newStats);
                 }}
-                rows={8}
-                placeholder="[{icon: 'thermometer', value: '+1.2°C', label: 'Temperature', color: 'text-red-500'}]"
-              />
+              >
+                Add Statistic
+              </Button>
             </div>
           </div>
         );
 
-      case "climate-timeline":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Events (JSON format)</Label>
-              <Textarea
-                value={JSON.stringify(blockData.events || [], null, 2)}
-                onChange={(e) => {
-                  try {
-                    const events = JSON.parse(e.target.value);
-                    updateField("events", events);
-                  } catch {}
-                }}
-                rows={8}
-                placeholder="[{year: 2024, title: 'Event', description: 'Description', type: 'policy', icon: 'calendar', color: '#3b82f6'}]"
-              />
-            </div>
-          </div>
-        );
+
 
       case "climate-dashboard":
         return (
@@ -1259,71 +1167,62 @@ export default function ContentAdminPage() {
               />
             </div>
             <div>
-              <Label>Metrics (JSON format)</Label>
-              <Textarea
-                value={JSON.stringify(blockData.metrics || [], null, 2)}
-                onChange={(e) => {
-                  try {
-                    const metrics = JSON.parse(e.target.value);
-                    updateField("metrics", metrics);
-                  } catch {}
+              <Label>Metrics</Label>
+              {(blockData.metrics || []).map((metric: any, index: number) => (
+                <Card key={index} className="p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium">Metric {index + 1}</h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newMetrics = [...(blockData.metrics || [])];
+                        newMetrics.splice(index, 1);
+                        updateField("metrics", newMetrics);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Title"
+                      value={metric.title || ""}
+                      onChange={(e) => {
+                        const newMetrics = [...(blockData.metrics || [])];
+                        newMetrics[index] = { ...newMetrics[index], title: e.target.value };
+                        updateField("metrics", newMetrics);
+                      }}
+                    />
+                    <Input
+                      placeholder="Value"
+                      value={metric.value || ""}
+                      onChange={(e) => {
+                        const newMetrics = [...(blockData.metrics || [])];
+                        newMetrics[index] = { ...newMetrics[index], value: e.target.value };
+                        updateField("metrics", newMetrics);
+                      }}
+                    />
+                  </div>
+                </Card>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const newMetrics = [
+                    ...(blockData.metrics || []),
+                    { title: "", value: "", change: "", trend: "up", status: "success" }
+                  ];
+                  updateField("metrics", newMetrics);
                 }}
-                rows={8}
-                placeholder="[{title: 'Global Temperature', value: '+1.2°C', change: '+0.1°C', trend: 'up', status: 'warning', progress: 80, target: '1.5°C', description: 'above pre-industrial level'}]"
-              />
+              >
+                Add Metric
+              </Button>
             </div>
           </div>
         );
 
-      case "temperature-spiral":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Start Year</Label>
-              <Input
-                type="number"
-                value={blockData.startYear || 1880}
-                onChange={(e) =>
-                  updateField("startYear", parseInt(e.target.value))
-                }
-              />
-            </div>
-            <div>
-              <Label>End Year</Label>
-              <Input
-                type="number"
-                value={blockData.endYear || 2030}
-                onChange={(e) =>
-                  updateField("endYear", parseInt(e.target.value))
-                }
-              />
-            </div>
-            <div>
-              <Label>Rotations</Label>
-              <Input
-                type="number"
-                value={blockData.rotations || 8}
-                onChange={(e) =>
-                  updateField("rotations", parseInt(e.target.value))
-                }
-              />
-            </div>
-          </div>
-        );
+
 
       case "interactive-callout":
         return (
@@ -1371,89 +1270,7 @@ export default function ContentAdminPage() {
           </div>
         );
 
-      case "neural-climate-network":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Intensity</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={blockData.intensity || 1.0}
-                onChange={(e) =>
-                  updateField("intensity", parseFloat(e.target.value))
-                }
-              />
-            </div>
-            <div>
-              <Label>Speed</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={blockData.speed || 1.0}
-                onChange={(e) =>
-                  updateField("speed", parseFloat(e.target.value))
-                }
-              />
-            </div>
-          </div>
-        );
 
-      case "earth-pulse":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Intensity</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={blockData.intensity || 1.0}
-                onChange={(e) =>
-                  updateField("intensity", parseFloat(e.target.value))
-                }
-              />
-            </div>
-            <div>
-              <Label>Speed</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={blockData.speed || 1.0}
-                onChange={(e) =>
-                  updateField("speed", parseFloat(e.target.value))
-                }
-              />
-            </div>
-          </div>
-        );
 
       case "impact-comparison":
         return (
@@ -1473,18 +1290,77 @@ export default function ContentAdminPage() {
               />
             </div>
             <div>
-              <Label>Scenarios (JSON format)</Label>
-              <Textarea
-                value={JSON.stringify(blockData.scenarios || [], null, 2)}
-                onChange={(e) => {
-                  try {
-                    const scenarios = JSON.parse(e.target.value);
-                    updateField("scenarios", scenarios);
-                  } catch {}
+              <Label>Comparisons</Label>
+              {(blockData.comparisons || []).map((comparison: any, index: number) => (
+                <Card key={index} className="p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium">Comparison {index + 1}</h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newComparisons = [...(blockData.comparisons || [])];
+                        newComparisons.splice(index, 1);
+                        updateField("comparisons", newComparisons);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Category"
+                      value={comparison.category || ""}
+                      onChange={(e) => {
+                        const newComparisons = [...(blockData.comparisons || [])];
+                        newComparisons[index] = { ...newComparisons[index], category: e.target.value };
+                        updateField("comparisons", newComparisons);
+                      }}
+                    />
+                    <Input
+                      placeholder="Unit"
+                      value={comparison.unit || ""}
+                      onChange={(e) => {
+                        const newComparisons = [...(blockData.comparisons || [])];
+                        newComparisons[index] = { ...newComparisons[index], unit: e.target.value };
+                        updateField("comparisons", newComparisons);
+                      }}
+                    />
+                    <Input
+                      placeholder="Current Value"
+                      type="number"
+                      value={comparison.currentValue || ""}
+                      onChange={(e) => {
+                        const newComparisons = [...(blockData.comparisons || [])];
+                        newComparisons[index] = { ...newComparisons[index], currentValue: parseFloat(e.target.value) };
+                        updateField("comparisons", newComparisons);
+                      }}
+                    />
+                    <Input
+                      placeholder="Projected Value"
+                      type="number"
+                      value={comparison.projectedValue || ""}
+                      onChange={(e) => {
+                        const newComparisons = [...(blockData.comparisons || [])];
+                        newComparisons[index] = { ...newComparisons[index], projectedValue: parseFloat(e.target.value) };
+                        updateField("comparisons", newComparisons);
+                      }}
+                    />
+                  </div>
+                </Card>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const newComparisons = [
+                    ...(blockData.comparisons || []),
+                    { category: "", currentValue: 0, projectedValue: 0, unit: "", severity: "medium" }
+                  ];
+                  updateField("comparisons", newComparisons);
                 }}
-                rows={8}
-                placeholder="[{name: 'Current', temperature: 1.2, seaLevel: 0.1, precipitation: 5, extremeEvents: 10}]"
-              />
+              >
+                Add Comparison
+              </Button>
             </div>
           </div>
         );
@@ -1507,18 +1383,75 @@ export default function ContentAdminPage() {
               />
             </div>
             <div>
-              <Label>KPIs (JSON format)</Label>
-              <Textarea
-                value={JSON.stringify(blockData.kpis || [], null, 2)}
-                onChange={(e) => {
-                  try {
-                    const kpis = JSON.parse(e.target.value);
-                    updateField("kpis", kpis);
-                  } catch {}
+              <Label>KPIs</Label>
+              {(blockData.kpis || []).map((kpi: any, index: number) => (
+                <Card key={index} className="p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium">KPI {index + 1}</h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newKpis = [...(blockData.kpis || [])];
+                        newKpis.splice(index, 1);
+                        updateField("kpis", newKpis);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Title"
+                      value={kpi.title || ""}
+                      onChange={(e) => {
+                        const newKpis = [...(blockData.kpis || [])];
+                        newKpis[index] = { ...newKpis[index], title: e.target.value };
+                        updateField("kpis", newKpis);
+                      }}
+                    />
+                    <Input
+                      placeholder="Value"
+                      value={kpi.value || ""}
+                      onChange={(e) => {
+                        const newKpis = [...(blockData.kpis || [])];
+                        newKpis[index] = { ...newKpis[index], value: e.target.value };
+                        updateField("kpis", newKpis);
+                      }}
+                    />
+                    <Input
+                      placeholder="Unit"
+                      value={kpi.unit || ""}
+                      onChange={(e) => {
+                        const newKpis = [...(blockData.kpis || [])];
+                        newKpis[index] = { ...newKpis[index], unit: e.target.value };
+                        updateField("kpis", newKpis);
+                      }}
+                    />
+                    <Input
+                      placeholder="Change Value"
+                      value={kpi.changeValue || ""}
+                      onChange={(e) => {
+                        const newKpis = [...(blockData.kpis || [])];
+                        newKpis[index] = { ...newKpis[index], changeValue: e.target.value };
+                        updateField("kpis", newKpis);
+                      }}
+                    />
+                  </div>
+                </Card>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const newKpis = [
+                    ...(blockData.kpis || []),
+                    { title: "", value: "", unit: "", trend: "stable", color: "text-[#2d5a3d]" }
+                  ];
+                  updateField("kpis", newKpis);
                 }}
-                rows={8}
-                placeholder="[{label: 'Temperature', value: '+1.2°C', change: '+0.1°C', trend: 'up', icon: 'thermometer'}]"
-              />
+              >
+                Add KPI
+              </Button>
             </div>
           </div>
         );
@@ -1557,155 +1490,9 @@ export default function ContentAdminPage() {
           </div>
         );
 
-      case "climate-timeline-minimal":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Events (JSON format)</Label>
-              <Textarea
-                value={JSON.stringify(blockData.events || [], null, 2)}
-                onChange={(e) => {
-                  try {
-                    const events = JSON.parse(e.target.value);
-                    updateField("events", events);
-                  } catch {}
-                }}
-                rows={8}
-                placeholder="[{year: 2024, title: 'Event', description: 'Description'}]"
-              />
-            </div>
-          </div>
-        );
 
-      case "data-storm":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Intensity</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={blockData.intensity || 1.0}
-                onChange={(e) =>
-                  updateField("intensity", parseFloat(e.target.value))
-                }
-              />
-            </div>
-            <div>
-              <Label>Particles</Label>
-              <Input
-                type="number"
-                value={blockData.particles || 100}
-                onChange={(e) =>
-                  updateField("particles", parseInt(e.target.value))
-                }
-              />
-            </div>
-          </div>
-        );
 
-      case "carbon-molecule-dance":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Molecules</Label>
-              <Input
-                type="number"
-                value={blockData.molecules || 50}
-                onChange={(e) =>
-                  updateField("molecules", parseInt(e.target.value))
-                }
-              />
-            </div>
-            <div>
-              <Label>Speed</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={blockData.speed || 1.0}
-                onChange={(e) =>
-                  updateField("speed", parseFloat(e.target.value))
-                }
-              />
-            </div>
-          </div>
-        );
 
-      case "climate-infographic":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={blockData.title || ""}
-                onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Sections (JSON format)</Label>
-              <Textarea
-                value={JSON.stringify(blockData.sections || [], null, 2)}
-                onChange={(e) => {
-                  try {
-                    const sections = JSON.parse(e.target.value);
-                    updateField("sections", sections);
-                  } catch {}
-                }}
-                rows={8}
-                placeholder="[{title: 'Temperature', value: '+1.2°C', description: 'Global average increase', icon: 'thermometer'}]"
-              />
-            </div>
-          </div>
-        );
 
       default:
         return null;
@@ -2029,13 +1816,7 @@ export default function ContentAdminPage() {
                         <Plus className="h-4 w-4 mr-2" />
                         Animated Statistics
                       </Button>
-                      <Button
-                        onClick={() => addBlock("climate-timeline")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Climate Timeline
-                      </Button>
+
                       <Button
                         onClick={() => addBlock("climate-dashboard")}
                         variant="outline"
@@ -2043,13 +1824,7 @@ export default function ContentAdminPage() {
                         <Plus className="h-4 w-4 mr-2" />
                         Climate Dashboard
                       </Button>
-                      <Button
-                        onClick={() => addBlock("temperature-spiral")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Temperature Spiral
-                      </Button>
+
                       <Button
                         onClick={() => addBlock("interactive-callout")}
                         variant="outline"
@@ -2057,20 +1832,7 @@ export default function ContentAdminPage() {
                         <Plus className="h-4 w-4 mr-2" />
                         Interactive Callout
                       </Button>
-                      <Button
-                        onClick={() => addBlock("neural-climate-network")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Neural Climate Network
-                      </Button>
-                      <Button
-                        onClick={() => addBlock("earth-pulse")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Earth Pulse
-                      </Button>
+
                       <Button
                         onClick={() => addBlock("impact-comparison")}
                         variant="outline"
@@ -2086,41 +1848,7 @@ export default function ContentAdminPage() {
                         KPI Showcase
                       </Button>
 
-                      <Button
-                        onClick={() => addBlock("climate-metamorphosis")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Climate Metamorphosis
-                      </Button>
-                      <Button
-                        onClick={() => addBlock("climate-timeline-minimal")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Climate Timeline Minimal
-                      </Button>
-                      <Button
-                        onClick={() => addBlock("data-storm")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Data Storm
-                      </Button>
-                      <Button
-                        onClick={() => addBlock("carbon-molecule-dance")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Carbon Molecule Dance
-                      </Button>
-                      <Button
-                        onClick={() => addBlock("climate-infographic")}
-                        variant="outline"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Climate Infographic
-                      </Button>
+
                       <Button
                         onClick={() => addBlock("interactive-map")}
                         variant="outline"

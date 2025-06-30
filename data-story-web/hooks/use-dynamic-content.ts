@@ -11,6 +11,40 @@ export function useDynamicContent() {
   const [error, setError] = useState<string | null>(null);
 
   const transformContentData = (data: any): DynamicContent => {
+    // Helper function to resolve reference IDs to full reference objects
+    const resolveReferences = (block: any) => {
+      // References can come from multiple sources:
+      // 1. block.references (direct from database) - already full objects
+      // 2. block.data.references (from admin interface) - array of IDs that need resolution
+      // 3. block.references (from content) - array of string IDs that need resolution
+      
+      let referenceIds: string[] = [];
+      
+      if (block.references && Array.isArray(block.references) && block.references.length > 0) {
+        // Check if we have full reference objects
+        if (typeof block.references[0] === 'object' && block.references[0].id) {
+          return block.references;
+        }
+        // Otherwise, they're string IDs
+        referenceIds = block.references;
+      }
+      
+      // Also check data.references for IDs
+      if (block.data?.references && Array.isArray(block.data.references)) {
+        referenceIds = [...referenceIds, ...block.data.references];
+      }
+      
+      // Resolve all collected IDs to full reference objects
+      if (referenceIds.length > 0) {
+        return referenceIds.map((id: string) => {
+          const fullRef = data.references?.find((ref: any) => ref.id === id);
+          return fullRef || null;
+        }).filter(Boolean); // Remove any null values
+      }
+      
+      return [];
+    };
+
     const transformBlock = (block: any) => {
       // Handle specific block type transformations
       switch (block.blockType) {
@@ -34,6 +68,7 @@ export function useDynamicContent() {
           const markdownBlock = {
             type: "markdown",
             content: block.content || block.data.content || "",
+            references: resolveReferences(block),
           };
           console.log("Transformed markdown block:", markdownBlock);
           return markdownBlock;
@@ -44,6 +79,7 @@ export function useDynamicContent() {
             title: block.title || block.data.title || "",
             content: block.content || block.data.content || "",
             variant: block.data.variant || "default",
+            references: resolveReferences(block),
           };
 
         case "quote":
@@ -52,18 +88,21 @@ export function useDynamicContent() {
             content: block.data.content,
             author: block.data.author,
             role: block.data.role,
+            references: resolveReferences(block),
           };
 
         case "statistics":
           return {
             type: "statistics",
             stats: block.data.stats,
+            references: resolveReferences(block),
           };
 
         case "timeline":
           return {
             type: "timeline",
             events: block.data.events,
+            references: resolveReferences(block),
           };
 
         case "animated-quote":
@@ -74,6 +113,7 @@ export function useDynamicContent() {
             text: block.data.text || "",
             author: block.data.author || "",
             role: block.data.role || "",
+            references: resolveReferences(block),
           };
 
         default:
@@ -81,6 +121,7 @@ export function useDynamicContent() {
             type: block.blockType,
             title: block.title || block.data.title,
             content: block.content || block.data.content,
+            references: resolveReferences(block),
             ...block.data,
           };
       }

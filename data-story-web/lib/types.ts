@@ -22,6 +22,7 @@ export interface Visualization {
 export interface MarkdownBlock {
   type: "markdown";
   content: string;
+  references?: Reference[];
 }
 
 export interface CalloutBlock {
@@ -29,6 +30,7 @@ export interface CalloutBlock {
   title: string;
   content: string;
   variant: "success" | "warning" | "info" | "error";
+  references?: Reference[];
 }
 
 export interface QuoteBlock {
@@ -79,6 +81,7 @@ export interface AnimatedQuoteBlock {
   text: string;
   author: string;
   role?: string;
+  references?: Reference[];
 }
 
 export interface AnimatedStatisticsBlock {
@@ -93,6 +96,7 @@ export interface AnimatedStatisticsBlock {
     trend?: "up" | "down";
     color: string;
   }>;
+  references?: Reference[];
 }
 
 export interface ClimateTimelineBlock {
@@ -123,6 +127,7 @@ export interface ClimateDashboardBlock {
     target: string;
     description: string;
   }>;
+  references?: Reference[];
 }
 
 export interface TemperatureSpiralBlock {
@@ -140,6 +145,7 @@ export interface InteractiveCalloutBlock {
   content: string;
   variant: "success" | "warning" | "info" | "error";
   interactive?: boolean;
+  references?: Reference[];
 }
 
 export interface NeuralClimateNetworkBlock {
@@ -162,13 +168,15 @@ export interface ImpactComparisonBlock {
   type: "impact-comparison";
   title?: string;
   description?: string;
-  scenarios: Array<{
-    name: string;
-    temperature: number;
-    seaLevel: number;
-    precipitation: number;
-    extremeEvents: number;
+  comparisons: Array<{
+    category: string;
+    currentValue: number;
+    projectedValue: number;
+    unit: string;
+    severity: "low" | "medium" | "high";
+    description?: string;
   }>;
+  references?: Reference[];
 }
 
 export interface KpiShowcaseBlock {
@@ -176,12 +184,14 @@ export interface KpiShowcaseBlock {
   title?: string;
   description?: string;
   kpis: Array<{
-    label: string;
+    title: string;
     value: string;
-    change: string;
-    trend: "up" | "down";
-    icon: string;
+    unit?: string;
+    trend?: "up" | "down" | "stable";
+    changeValue?: string;
+    color?: string;
   }>;
+  references?: Reference[];
 }
 
 export interface ClimateMetamorphosisBlock {

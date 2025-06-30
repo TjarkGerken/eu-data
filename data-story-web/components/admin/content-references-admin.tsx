@@ -72,6 +72,24 @@ export default function ContentReferencesAdmin() {
   };
 
   const handleSave = async () => {
+    if (!formData.title.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Title is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.authors.length === 0 || formData.authors.every(author => !author.trim())) {
+      toast({
+        title: "Validation Error", 
+        description: "At least one author is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       if (editingId) {
         const { error } = await supabase
@@ -82,7 +100,10 @@ export default function ContentReferencesAdmin() {
         if (error) throw error;
         toast({ title: "Reference updated successfully" });
       } else {
-        const insertData = formData as ContentReferenceInsert;
+        const insertData: ContentReferenceInsert = {
+          ...formData,
+          id: crypto.randomUUID()
+        };
         const { error } = await supabase
           .from("content_references")
           .insert([insertData]);

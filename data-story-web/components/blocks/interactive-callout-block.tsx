@@ -10,6 +10,12 @@ interface InteractiveCalloutBlockProps {
   content: string;
   variant: "success" | "warning" | "info" | "error";
   interactive?: boolean;
+  references?: Array<{
+    id: string;
+    title: string;
+    authors: string[];
+    type: string;
+  }>;
 }
 
 export function InteractiveCalloutBlock({
@@ -17,6 +23,7 @@ export function InteractiveCalloutBlock({
   content,
   variant,
   interactive = true,
+  references,
 }: InteractiveCalloutBlockProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -190,6 +197,29 @@ export function InteractiveCalloutBlock({
           )}
         </Card>
       </motion.div>
+
+      {references && references.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-muted">
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
+          <div className="space-y-2">
+            {references.map((ref) => (
+              <div 
+                key={ref.id} 
+                className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => {
+                  const event = new CustomEvent('highlightReference', { detail: ref.id });
+                  window.dispatchEvent(event);
+                }}
+              >
+                <span className="font-medium">{ref.title}</span>
+                {ref.authors && ref.authors.length > 0 && (
+                  <span className="ml-2">- {ref.authors.join(", ")}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
