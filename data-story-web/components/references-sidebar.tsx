@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -25,8 +26,59 @@ interface ReferencesSidebarProps {
   references: Reference[];
 }
 
+function generateReadableId(ref: Reference, index: number): string {
+  // Extract first author's last name
+  const firstAuthor = ref.authors[0]?.split(' ').pop() || 'Unknown';
+  // Get year
+  const year = ref.year || new Date().getFullYear();
+  // Create a readable ID based on author and year
+  return `${firstAuthor}${year}${index > 0 ? `-${index + 1}` : ''}`;
+}
+
 export function ReferencesSidebar({ references }: ReferencesSidebarProps) {
   const { t } = useLanguage();
+  const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
+  const refRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  useEffect(() => {
+    const handleHighlightReference = (event: CustomEvent) => {
+      const refId = event.detail;
+      setHighlightedRef(refId);
+      
+      // Scroll to the highlighted reference
+      const refElement = refRefs.current[refId];
+      if (refElement) {
+        refElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }
+      
+      // Clear highlight after 3 seconds
+      setTimeout(() => {
+        setHighlightedRef(null);
+      }, 3000);
+    };
+
+    window.addEventListener('highlightReference', handleHighlightReference as EventListener);
+    
+    return () => {
+      window.removeEventListener('highlightReference', handleHighlightReference as EventListener);
+    };
+  }, []);
+
+  // Generate readable IDs for references
+  const referencesWithReadableIds = references.map((ref, index) => {
+    // Check for duplicate readable IDs and adjust accordingly
+    const baseId = generateReadableId(ref, 0);
+    const existingIds = references.slice(0, index).map((r, i) => generateReadableId(r, 0));
+    const duplicateCount = existingIds.filter(id => id === baseId).length;
+    
+    return {
+      ...ref,
+      displayId: duplicateCount > 0 ? generateReadableId(ref, duplicateCount) : baseId
+    };
+  });
 
   return (
     <Card className="sticky top-20 h-fit">
@@ -37,13 +89,21 @@ export function ReferencesSidebar({ references }: ReferencesSidebarProps) {
         </div>
         <CardDescription>{t.referencesDesc}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-visible">
         <ScrollArea className="h-[600px] pr-4">
-          <div className="space-y-4">
-            {references.map((ref) => (
+          <div className="space-y-4 p-2" style={{ overflow: 'visible' }}>
+            {referencesWithReadableIds.map((ref) => (
               <div
                 key={ref.id}
-                className="border-l-2 border-[#2d5a3d]/20 pl-4 pb-4"
+                ref={(el) => { refRefs.current[ref.id] = el; }}
+                className={`border-l-2 pl-4 pb-4 mx-2 transition-all duration-300 transform-gpu ${
+                  highlightedRef === ref.id 
+                    ? 'border-[#2d5a3d] bg-[#2d5a3d]/5 shadow-lg scale-105 z-10' 
+                    : 'border-[#2d5a3d]/20'
+                }`}
+                style={{
+                  transformOrigin: 'center center',
+                }}
               >
                 <div className="flex items-start justify-between mb-2">
                   <Badge
@@ -52,12 +112,18 @@ export function ReferencesSidebar({ references }: ReferencesSidebarProps) {
                   >
                     {ref.type}
                   </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    [{ref.id}]
+                  <span className={`text-xs font-mono transition-colors ${
+                    highlightedRef === ref.id 
+                      ? 'text-[#2d5a3d] font-semibold' 
+                      : 'text-muted-foreground'
+                  }`}>
+                    [{ref.displayId}]
                   </span>
                 </div>
 
-                <h4 className="text-sm font-medium leading-tight mb-1">
+                <h4 className={`text-sm font-medium leading-tight mb-1 transition-colors ${
+                  highlightedRef === ref.id ? 'text-[#2d5a3d]' : ''
+                }`}>
                   {ref.title}
                 </h4>
 

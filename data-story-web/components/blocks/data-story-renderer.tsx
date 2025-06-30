@@ -9,14 +9,10 @@ import { InteractiveMap } from "@/components/interactive-map";
 import { ShipMap } from "@/components/ship-map";
 import { AnimatedQuoteBlock } from "./animated-quote-block";
 import { AnimatedStatisticsBlock } from "./animated-statistics-block";
-import { ClimateTimelineBlock } from "./climate-timeline-block";
 import { ClimateDashboardBlock } from "./climate-dashboard-block";
-import { TemperatureSpiralBlock } from "./temperature-spiral-block";
 import { InteractiveCalloutBlock } from "./interactive-callout-block";
 import ImpactComparisonBlockComponent from "./impact-comparison-block";
 import KpiShowcaseBlockComponent from "./kpi-showcase-block";
-import ClimateTimelineMinimalBlockComponent from "./climate-timeline-minimal-block";
-import ClimateInfographicBlockComponent from "./climate-infographic-block";
 
 interface DataStoryRendererProps {
   blocks: DataStoryBlock[];
@@ -26,7 +22,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
   const renderBlock = (block: DataStoryBlock, index: number) => {
     switch (block.type) {
       case "markdown":
-        return <MarkdownBlock key={index} content={block.content} />;
+        return <MarkdownBlock key={index} content={block.content} references={block.references} />;
 
       case "callout":
         return (
@@ -35,6 +31,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             title={block.title}
             content={block.content}
             variant={block.variant}
+            references={block.references}
           />
         );
 
@@ -69,6 +66,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             text={block.text}
             author={block.author}
             role={block.role}
+            references={block.references}
           />
         );
 
@@ -79,16 +77,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             title={block.title}
             description={block.description}
             stats={block.stats}
-          />
-        );
-
-      case "climate-timeline":
-        return (
-          <ClimateTimelineBlock
-            key={index}
-            title={block.title}
-            description={block.description}
-            events={block.events}
+            references={block.references}
           />
         );
 
@@ -99,18 +88,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             title={block.title}
             description={block.description}
             metrics={block.metrics}
-          />
-        );
-
-      case "temperature-spiral":
-        return (
-          <TemperatureSpiralBlock
-            key={index}
-            title={block.title}
-            description={block.description}
-            startYear={block.startYear}
-            endYear={block.endYear}
-            rotations={block.rotations}
+            references={block.references}
           />
         );
 
@@ -122,6 +100,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             content={block.content}
             variant={block.variant}
             interactive={block.interactive}
+            references={block.references}
           />
         );
 
@@ -131,13 +110,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
       case "kpi-showcase":
         return <KpiShowcaseBlockComponent key={index} block={block} />;
 
-      case "climate-timeline-minimal":
-        return (
-          <ClimateTimelineMinimalBlockComponent key={index} block={block} />
-        );
 
-      case "climate-infographic":
-        return <ClimateInfographicBlockComponent key={index} block={block} />;
 
       case "interactive-map":
         return (

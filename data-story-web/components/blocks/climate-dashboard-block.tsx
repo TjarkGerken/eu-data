@@ -26,12 +26,19 @@ interface ClimateDashboardBlockProps {
     target: string;
     description: string;
   }>;
+  references?: Array<{
+    id: string;
+    title: string;
+    authors: string[];
+    type: string;
+  }>;
 }
 
 export function ClimateDashboardBlock({
   title,
   description,
   metrics,
+  references,
 }: ClimateDashboardBlockProps) {
   const { language } = useLanguage();
 
@@ -191,6 +198,29 @@ export function ClimateDashboardBlock({
           </CardContent>
         </Card>
       </div>
+
+      {references && references.length > 0 && (
+        <div className="mt-8 pt-6 border-t border-muted">
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
+          <div className="space-y-2">
+            {references.map((ref) => (
+              <div 
+                key={ref.id} 
+                className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => {
+                  const event = new CustomEvent('highlightReference', { detail: ref.id });
+                  window.dispatchEvent(event);
+                }}
+              >
+                <span className="font-medium">{ref.title}</span>
+                {ref.authors && ref.authors.length > 0 && (
+                  <span className="ml-2">- {ref.authors.join(", ")}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageDropdown } from "@/components/image-dropdown";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
-import { Trash2, Layers, Settings } from "lucide-react";
+import { Trash2, Layers, Settings, Plus } from "lucide-react";
 import { getFieldError, type ValidationError } from "@/lib/validation";
 import { Switch } from "@/components/ui/switch";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
@@ -659,15 +659,11 @@ export function BlockTypeFields({
     "callout",
     "interactive-callout", 
     "animated-statistics",
-    "climate-timeline",
     "climate-dashboard",
-    "temperature-spiral",
     "interactive-map",
     "ship-map",
     "impact-comparison",
-    "kpi-showcase",
-    "climate-timeline-minimal",
-    "climate-infographic"
+    "kpi-showcase"
   ];
 
   const renderLanguageSpecificFields = () => (
@@ -754,6 +750,60 @@ export function BlockTypeFields({
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
+                      <Label>Icon *</Label>
+                      <Select
+                        value={(stat?.icon as string) || "thermometer"}
+                        onValueChange={(value) =>
+                          updateArrayItem("stats", index, "icon", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="thermometer">Thermometer</SelectItem>
+                          <SelectItem value="droplets">Droplets</SelectItem>
+                          <SelectItem value="wind">Wind</SelectItem>
+                          <SelectItem value="zap">Zap</SelectItem>
+                          <SelectItem value="barchart">Bar Chart</SelectItem>
+                          <SelectItem value="globe">Globe</SelectItem>
+                          <SelectItem value="trending">Trending</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Value *</Label>
+                      <Input
+                        value={(stat?.value as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("stats", index, "value", e.target.value)
+                        }
+                        placeholder="e.g., +1.2°C"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Label *</Label>
+                    <Input
+                      value={(stat?.label as string) || ""}
+                      onChange={(e) =>
+                        updateArrayItem("stats", index, "label", e.target.value)
+                      }
+                      placeholder="e.g., Temperature Rise"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Change (optional)</Label>
+                      <Input
+                        value={(stat?.change as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("stats", index, "change", e.target.value)
+                        }
+                        placeholder="e.g., since 1990"
+                      />
+                    </div>
+                    <div>
                       <Label>Trend</Label>
                       <Select
                         value={(stat?.trend as string) || "up"}
@@ -770,21 +820,27 @@ export function BlockTypeFields({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div>
-                      <Label>Color</Label>
-                      <Input
-                        type="color"
-                        value={(stat?.color as string) || "#000000"}
-                        onChange={(e) =>
-                          updateArrayItem(
-                            "stats",
-                            index,
-                            "color",
-                            e.target.value
-                          )
-                        }
-                      />
-                    </div>
+                  </div>
+                  <div>
+                    <Label>Color</Label>
+                    <Select
+                      value={(stat?.color as string) || "text-red-500"}
+                      onValueChange={(value) =>
+                        updateArrayItem("stats", index, "color", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text-red-500">Red</SelectItem>
+                        <SelectItem value="text-blue-500">Blue</SelectItem>
+                        <SelectItem value="text-green-500">Green</SelectItem>
+                        <SelectItem value="text-orange-500">Orange</SelectItem>
+                        <SelectItem value="text-purple-500">Purple</SelectItem>
+                        <SelectItem value="text-[#2d5a3d]">Theme Green</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </CardContent>
               </Card>
@@ -794,12 +850,422 @@ export function BlockTypeFields({
               size="sm"
               onClick={() =>
                 addArrayItem("stats", {
+                  icon: "thermometer",
+                  value: "",
+                  label: "",
+                  change: "",
                   trend: "up",
-                  color: "#000000",
+                  color: "text-red-500",
                 })
               }
             >
+              <Plus className="w-4 h-4 mr-2" />
               Add Statistic
+            </Button>
+          </div>
+        );
+
+      case "climate-dashboard":
+        return (
+          <div className="space-y-4">
+            <Label>Dashboard Metrics *</Label>
+            {renderFieldError("data.metrics")}
+            {((data?.metrics as Record<string, unknown>[]) || []).map((metric: Record<string, unknown>, index: number) => (
+              <Card key={index}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">
+                      Metric {index + 1}
+                    </CardTitle>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeArrayItem("metrics", index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Title *</Label>
+                      <Input
+                        value={(metric?.title as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("metrics", index, "title", e.target.value)
+                        }
+                        placeholder="e.g., Global Temperature"
+                      />
+                    </div>
+                    <div>
+                      <Label>Value *</Label>
+                      <Input
+                        value={(metric?.value as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("metrics", index, "value", e.target.value)
+                        }
+                        placeholder="e.g., +1.2°C"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label>Change</Label>
+                      <Input
+                        value={(metric?.change as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("metrics", index, "change", e.target.value)
+                        }
+                        placeholder="e.g., +0.1°C"
+                      />
+                    </div>
+                    <div>
+                      <Label>Trend</Label>
+                      <Select
+                        value={(metric?.trend as string) || "up"}
+                        onValueChange={(value) =>
+                          updateArrayItem("metrics", index, "trend", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="up">Up</SelectItem>
+                          <SelectItem value="down">Down</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Status</Label>
+                      <Select
+                        value={(metric?.status as string) || "success"}
+                        onValueChange={(value) =>
+                          updateArrayItem("metrics", index, "status", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="success">Success</SelectItem>
+                          <SelectItem value="warning">Warning</SelectItem>
+                          <SelectItem value="danger">Danger</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Progress (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={(metric?.progress as number) || 0}
+                        onChange={(e) =>
+                          updateArrayItem("metrics", index, "progress", parseInt(e.target.value))
+                        }
+                        placeholder="0-100"
+                      />
+                    </div>
+                    <div>
+                      <Label>Target</Label>
+                      <Input
+                        value={(metric?.target as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("metrics", index, "target", e.target.value)
+                        }
+                        placeholder="e.g., 1.5°C"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Textarea
+                      value={(metric?.description as string) || ""}
+                      onChange={(e) =>
+                        updateArrayItem("metrics", index, "description", e.target.value)
+                      }
+                      placeholder="Metric description"
+                      rows={2}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() =>
+                addArrayItem("metrics", {
+                  title: "",
+                  value: "",
+                  change: "",
+                  trend: "up",
+                  status: "success",
+                  progress: 50,
+                  target: "",
+                  description: "",
+                })
+              }
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Metric
+            </Button>
+          </div>
+        );
+
+      case "impact-comparison":
+        return (
+          <div className="space-y-4">
+            <Label>Impact Comparisons *</Label>
+            {renderFieldError("data.comparisons")}
+            {((data?.comparisons as Record<string, unknown>[]) || []).map((comparison: Record<string, unknown>, index: number) => (
+              <Card key={index}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">
+                      Comparison {index + 1}
+                    </CardTitle>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeArrayItem("comparisons", index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label>Category *</Label>
+                    <Input
+                      value={(comparison?.category as string) || ""}
+                      onChange={(e) =>
+                        updateArrayItem("comparisons", index, "category", e.target.value)
+                      }
+                      placeholder="e.g., Temperature"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label>Current Value *</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={(comparison?.currentValue as number) || 0}
+                        onChange={(e) =>
+                          updateArrayItem("comparisons", index, "currentValue", parseFloat(e.target.value))
+                        }
+                        placeholder="1.2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Projected Value *</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={(comparison?.projectedValue as number) || 0}
+                        onChange={(e) =>
+                          updateArrayItem("comparisons", index, "projectedValue", parseFloat(e.target.value))
+                        }
+                        placeholder="2.0"
+                      />
+                    </div>
+                    <div>
+                      <Label>Unit *</Label>
+                      <Input
+                        value={(comparison?.unit as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("comparisons", index, "unit", e.target.value)
+                        }
+                        placeholder="°C"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Severity</Label>
+                    <Select
+                      value={(comparison?.severity as string) || "medium"}
+                      onValueChange={(value) =>
+                        updateArrayItem("comparisons", index, "severity", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Textarea
+                      value={(comparison?.description as string) || ""}
+                      onChange={(e) =>
+                        updateArrayItem("comparisons", index, "description", e.target.value)
+                      }
+                      placeholder="Comparison description"
+                      rows={2}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() =>
+                addArrayItem("comparisons", {
+                  category: "",
+                  currentValue: 0,
+                  projectedValue: 0,
+                  unit: "",
+                  severity: "medium",
+                  description: "",
+                })
+              }
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Comparison
+            </Button>
+          </div>
+        );
+
+      case "kpi-showcase":
+        return (
+          <div className="space-y-4">
+            <Label>KPI Configuration *</Label>
+            {renderFieldError("data.kpis")}
+            {((data?.kpis as Record<string, unknown>[]) || []).map((kpi: Record<string, unknown>, index: number) => (
+              <Card key={index}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">
+                      KPI {index + 1}
+                    </CardTitle>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeArrayItem("kpis", index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Title *</Label>
+                      <Input
+                        value={(kpi?.title as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("kpis", index, "title", e.target.value)
+                        }
+                        placeholder="e.g., Global Temperature"
+                      />
+                    </div>
+                    <div>
+                      <Label>Value *</Label>
+                      <Input
+                        value={(kpi?.value as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("kpis", index, "value", e.target.value)
+                        }
+                        placeholder="e.g., +1.2"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Unit</Label>
+                      <Input
+                        value={(kpi?.unit as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("kpis", index, "unit", e.target.value)
+                        }
+                        placeholder="e.g., °C"
+                      />
+                    </div>
+                    <div>
+                      <Label>Trend</Label>
+                      <Select
+                        value={(kpi?.trend as string) || "stable"}
+                        onValueChange={(value) =>
+                          updateArrayItem("kpis", index, "trend", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="up">Up</SelectItem>
+                          <SelectItem value="down">Down</SelectItem>
+                          <SelectItem value="stable">Stable</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Change Value</Label>
+                      <Input
+                        value={(kpi?.changeValue as string) || ""}
+                        onChange={(e) =>
+                          updateArrayItem("kpis", index, "changeValue", e.target.value)
+                        }
+                        placeholder="e.g., +0.1°C since last year"
+                      />
+                    </div>
+                    <div>
+                      <Label>Color</Label>
+                      <Select
+                        value={(kpi?.color as string) || "text-[#2d5a3d]"}
+                        onValueChange={(value) =>
+                          updateArrayItem("kpis", index, "color", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text-red-600">Red</SelectItem>
+                          <SelectItem value="text-blue-600">Blue</SelectItem>
+                          <SelectItem value="text-green-600">Green</SelectItem>
+                          <SelectItem value="text-orange-600">Orange</SelectItem>
+                          <SelectItem value="text-purple-600">Purple</SelectItem>
+                          <SelectItem value="text-[#2d5a3d]">Theme Green</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() =>
+                addArrayItem("kpis", {
+                  title: "",
+                  value: "",
+                  unit: "",
+                  trend: "stable",
+                  changeValue: "",
+                  color: "text-[#2d5a3d]",
+                })
+              }
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add KPI
             </Button>
           </div>
         );
@@ -986,11 +1452,84 @@ export function BlockTypeFields({
           </div>
         );
 
+      case "climate-dashboard":
+        return (
+          <div className="space-y-4">
+            {renderLanguageSpecificFields()}
+            <div className="space-y-1">
+              <Label>References</Label>
+              <MultiSelectReferences
+                selectedReferenceIds={data?.references || []}
+                onSelectionChange={(ids) => updateDataField("references", ids)}
+                placeholder="Select references..."
+              />
+            </div>
+          </div>
+        );
+
+      case "impact-comparison":
+        return (
+          <div className="space-y-4">
+            {renderLanguageSpecificFields()}
+            <div className="space-y-1">
+              <Label>References</Label>
+              <MultiSelectReferences
+                selectedReferenceIds={data?.references || []}
+                onSelectionChange={(ids) => updateDataField("references", ids)}
+                placeholder="Select references..."
+              />
+            </div>
+          </div>
+        );
+
+      case "kpi-showcase":
+        return (
+          <div className="space-y-4">
+            {renderLanguageSpecificFields()}
+            <div className="space-y-1">
+              <Label>References</Label>
+              <MultiSelectReferences
+                selectedReferenceIds={data?.references || []}
+                onSelectionChange={(ids) => updateDataField("references", ids)}
+                placeholder="Select references..."
+              />
+            </div>
+          </div>
+        );
+
+      case "callout":
+      case "interactive-callout":
+        return (
+          <div className="space-y-4">
+            {renderLanguageSpecificFields()}
+            <div className="space-y-1">
+              <Label>References</Label>
+              <MultiSelectReferences
+                selectedReferenceIds={data?.references || []}
+                onSelectionChange={(ids) => updateDataField("references", ids)}
+                placeholder="Select references..."
+              />
+            </div>
+          </div>
+        );
+
       case "visualization":
         return renderLanguageSpecificFields();
 
       default:
-        return renderLanguageSpecificFields();
+        return (
+          <div className="space-y-4">
+            {renderLanguageSpecificFields()}
+            <div className="space-y-1">
+              <Label>References</Label>
+              <MultiSelectReferences
+                selectedReferenceIds={data?.references || []}
+                onSelectionChange={(ids) => updateDataField("references", ids)}
+                placeholder="Select references..."
+              />
+            </div>
+          </div>
+        );
     }
   };
 

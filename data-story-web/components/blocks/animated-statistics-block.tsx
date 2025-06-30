@@ -25,6 +25,12 @@ interface AnimatedStatisticsBlockProps {
     trend?: "up" | "down";
     color: string;
   }>;
+  references?: Array<{
+    id: string;
+    title: string;
+    authors: string[];
+    type: string;
+  }>;
 }
 
 const iconMap = {
@@ -41,6 +47,7 @@ export function AnimatedStatisticsBlock({
   title,
   description,
   stats,
+  references,
 }: AnimatedStatisticsBlockProps) {
   // const { language } = useLanguage();
 
@@ -158,6 +165,36 @@ export function AnimatedStatisticsBlock({
           );
         })}
       </motion.div>
+
+      {references && references.length > 0 && (
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+          variants={containerVariants}
+          className="mt-8 pt-6 border-t border-muted"
+        >
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
+          <div className="space-y-2">
+            {references.map((ref, index) => (
+              <motion.div
+                key={ref.id}
+                variants={itemVariants}
+                className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => {
+                  const event = new CustomEvent('highlightReference', { detail: ref.id });
+                  window.dispatchEvent(event);
+                }}
+              >
+                <span className="font-medium">{ref.title}</span>
+                {ref.authors && ref.authors.length > 0 && (
+                  <span className="ml-2">- {ref.authors.join(", ")}</span>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

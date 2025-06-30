@@ -72,14 +72,10 @@ const AVAILABLE_BLOCK_TYPES = [
   "animated-statistics",
   "interactive-map",
   "ship-map",
-  "climate-timeline",
   "climate-dashboard",
-  "temperature-spiral",
   "interactive-callout",
   "impact-comparison",
   "kpi-showcase",
-  "climate-timeline-minimal",
-  "climate-infographic",
 ];
 
 export default function ContentBlockEditor() {
