@@ -45,13 +45,13 @@ export function ClimateDashboardBlock({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "success":
-        return "text-green-600 bg-green-50 dark:bg-green-900/20";
+        return "text-green-600 bg-green-50";
       case "warning":
-        return "text-orange-600 bg-orange-50 dark:bg-orange-900/20";
+        return "text-orange-600 bg-orange-50";
       case "danger":
-        return "text-red-600 bg-red-50 dark:bg-red-900/20";
+        return "text-red-600 bg-red-50";
       default:
-        return "text-gray-600 bg-gray-50 dark:bg-gray-900/20";
+        return "text-gray-600 bg-gray-50";
     }
   };
 
@@ -84,7 +84,7 @@ export function ClimateDashboardBlock({
   const dangerCount = metrics.filter((m) => m.status === "danger").length;
 
   return (
-    <div className="my-16 p-8 bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-slate-900 rounded-lg">
+    <div className="my-16 p-8 bg-gradient-to-br from-gray-50 to-slate-100 rounded-lg">
       <div className="text-center mb-8">
         <h3 className="text-3xl font-bold text-[#2d5a3d] mb-4">
           {title || defaultTitle}
@@ -164,35 +164,35 @@ export function ClimateDashboardBlock({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+        <Card className="bg-green-50 border-green-200">
           <CardContent className="p-6 text-center">
             <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
             <div className="text-2xl font-bold text-green-600">
               {successCount}
             </div>
-            <div className="text-sm text-green-700 dark:text-green-300">
+            <div className="text-sm text-green-700">
               {language === "de" ? "Ziele erreicht" : "Targets met"}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
+        <Card className="bg-orange-50 border-orange-200">
           <CardContent className="p-6 text-center">
             <Clock className="h-8 w-8 text-orange-600 mx-auto mb-2" />
             <div className="text-2xl font-bold text-orange-600">
               {warningCount}
             </div>
-            <div className="text-sm text-orange-700 dark:text-orange-300">
+            <div className="text-sm text-orange-700">
               {language === "de" ? "Aufmerksamkeit nötig" : "Needs attention"}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+        <Card className="bg-red-50 border-red-200">
           <CardContent className="p-6 text-center">
             <AlertTriangle className="h-8 w-8 text-red-600 mx-auto mb-2" />
             <div className="text-2xl font-bold text-red-600">{dangerCount}</div>
-            <div className="text-sm text-red-700 dark:text-red-300">
+            <div className="text-sm text-red-700">
               {language === "de" ? "Kritische Bereiche" : "Critical areas"}
             </div>
           </CardContent>
@@ -201,14 +201,18 @@ export function ClimateDashboardBlock({
 
       {references && references.length > 0 && (
         <div className="mt-8 pt-6 border-t border-muted">
-          <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">
+            References
+          </h4>
           <div className="space-y-2">
             {references.map((ref) => (
-              <div 
-                key={ref.id} 
+              <div
+                key={ref.id}
                 className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => {
-                  const event = new CustomEvent('highlightReference', { detail: ref.id });
+                  const event = new CustomEvent("highlightReference", {
+                    detail: ref.id,
+                  });
                   window.dispatchEvent(event);
                 }}
               >
