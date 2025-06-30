@@ -2,7 +2,6 @@
 
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import Image from "next/image";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLanguage } from "@/contexts/language-context";
@@ -107,7 +106,6 @@ export function Header() {
 
           <div className="flex items-center space-x-2">
             <LanguageSwitcher />
-            <ThemeToggle />
             <Button
               variant={isScrolled ? "outline" : "ghost"}
               size="icon"
