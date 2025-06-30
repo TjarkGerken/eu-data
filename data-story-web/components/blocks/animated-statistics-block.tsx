@@ -176,7 +176,7 @@ export function AnimatedStatisticsBlock({
         >
           <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
           <div className="space-y-2">
-            {references.map((ref, index) => (
+            {references.map((ref) => (
               <motion.div
                 key={ref.id}
                 variants={itemVariants}

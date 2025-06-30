@@ -197,6 +197,7 @@ export default function BaseLeafletMap({
         loadedLayers.clear();
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapId, centerLat, centerLng, zoom, baseTileLayer, overlayTileLayers]);
 
   // Separate effect for updating map view when coordinates/zoom change

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { DataStoryBlock } from "@/lib/types";
+import { DataStoryBlock, Reference } from "@/lib/types";
 import { MarkdownBlock } from "./markdown-block";
 import { CalloutBlock } from "./callout-block";
 
@@ -19,13 +19,14 @@ import { processGlobalCitations } from "@/lib/global-citation-processor";
 
 interface DataStoryRendererProps {
   blocks: DataStoryBlock[];
+  globalReferences: Reference[];
 }
 
-export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
-  // Process global citations once for all blocks
+export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendererProps) {
+  // Process global citations once for all blocks, using the global references list
   const globalCitationData = useMemo(() => {
-    return processGlobalCitations(blocks || []);
-  }, [blocks]);
+    return processGlobalCitations(blocks || [], globalReferences || []);
+  }, [blocks, globalReferences]);
   const renderBlock = (block: DataStoryBlock, index: number) => {
     switch (block.type) {
       case "markdown":
