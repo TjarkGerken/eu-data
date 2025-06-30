@@ -96,6 +96,8 @@ export interface AnimatedStatisticsBlock {
     trend?: "up" | "down";
     color: string;
   }>;
+  gridColumns?: number;
+  colorScheme?: "default" | "green" | "blue" | "purple" | "orange";
   references?: Reference[];
 }
 
@@ -116,7 +118,6 @@ export interface ClimateTimelineBlock {
 export interface ClimateDashboardBlock {
   type: "climate-dashboard";
   title?: string;
-  description?: string;
   metrics: Array<{
     title: string;
     value: string;
@@ -143,6 +144,7 @@ export interface InteractiveCalloutBlock {
   type: "interactive-callout";
   title: string;
   content: string;
+  expandedContent?: string;
   variant: "success" | "warning" | "info" | "error";
   interactive?: boolean;
   references?: Reference[];
@@ -167,14 +169,12 @@ export interface EarthPulseBlock {
 export interface ImpactComparisonBlock {
   type: "impact-comparison";
   title?: string;
-  description?: string;
   comparisons: Array<{
     category: string;
     currentValue: number;
     projectedValue: number;
     unit: string;
     severity: "low" | "medium" | "high";
-    description?: string;
   }>;
   references?: Reference[];
 }
@@ -182,7 +182,6 @@ export interface ImpactComparisonBlock {
 export interface KpiShowcaseBlock {
   type: "kpi-showcase";
   title?: string;
-  description?: string;
   kpis: Array<{
     title: string;
     value: string;
@@ -191,6 +190,8 @@ export interface KpiShowcaseBlock {
     changeValue?: string;
     color?: string;
   }>;
+  gridColumns?: number;
+  displayFormat?: "card" | "inline" | "badge";
   references?: Reference[];
 }
 
@@ -355,5 +356,5 @@ export interface ImageOption {
   url: string;
   category: string;
   scenario?: string;
-  description?: string;
+  caption?: { en: string; de: string };
 }

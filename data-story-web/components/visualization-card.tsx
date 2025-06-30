@@ -15,7 +15,8 @@ import { ImageCategory, ImageScenario } from "@/lib/blob-config";
 
 interface VisualizationCardProps {
   title: string;
-  description: string;
+  captionEn?: string;
+  captionDe?: string;
   content: string;
   type: "chart" | "map" | "trend" | "gauge";
   references: string[];
@@ -34,7 +35,8 @@ const iconMap = {
 
 export function VisualizationCard({
   title,
-  description,
+  captionEn,
+  captionDe,
   content,
   type,
   references,
@@ -44,7 +46,7 @@ export function VisualizationCard({
   imageId,
 }: VisualizationCardProps) {
   const Icon = iconMap[type];
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   return (
     <Card className="w-full mb-8">
@@ -53,7 +55,11 @@ export function VisualizationCard({
           <Icon className="h-6 w-6 text-[#2d5a3d]" />
           <CardTitle className="text-2xl">{title}</CardTitle>
         </div>
-        <CardDescription className="text-base">{description}</CardDescription>
+        {captionEn && (
+          <CardDescription className="text-base">
+            {language === "de" ? captionDe || captionEn : captionEn}
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Visualization Area */}

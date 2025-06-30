@@ -3,6 +3,9 @@ import {
   S3Client,
   PutObjectCommand,
   ListObjectsV2Command,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  CopyObjectCommand,
 } from "@aws-sdk/client-s3";
 import { R2_CONFIG, R2_BUCKET_NAME, R2_PUBLIC_URL_BASE } from "@/lib/r2-config";
 
@@ -14,6 +17,19 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const category = formData.get("category") as string;
     const scenario = formData.get("scenario") as string;
+    const altEn = formData.get("alt_en") as string | null;
+    const altDe = formData.get("alt_de") as string | null;
+    const captionEn = formData.get("caption_en") as string | null;
+    const captionDe = formData.get("caption_de") as string | null;
+    const indicatorsRaw = formData.get("indicators") as string | null;
+    let indicators: string[] | undefined;
+    if (indicatorsRaw) {
+      try {
+        indicators = JSON.parse(indicatorsRaw);
+      } catch {
+        indicators = undefined;
+      }
+    }
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -46,11 +62,54 @@ export async function POST(request: NextRequest) {
 
     const publicUrl = `${R2_PUBLIC_URL_BASE}/${fileName}`;
 
+    // Save metadata file alongside upload
+    const id =
+      fileName.split("/").pop()?.split(".")[0] || Date.now().toString();
+    const metadata = {
+      id,
+      category,
+      scenario: scenario || "default",
+      indicators,
+      alt: {
+        en: altEn || "",
+        de: altDe || "",
+      },
+      caption: {
+        en: captionEn || "",
+        de: captionDe || "",
+      },
+      uploadedAt: new Date().toISOString(),
+      size: file.size,
+    };
+
+    try {
+      const metaKey = `metadata/${id}.json`;
+      const putMeta = new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: metaKey,
+        Body: JSON.stringify(metadata),
+        ContentType: "application/json",
+        CacheControl: "public, max-age=3600",
+      });
+      await s3Client.send(putMeta);
+    } catch (err) {
+      console.error("Failed to save metadata:", err);
+    }
+
     return NextResponse.json({
       url: publicUrl,
       path: fileName,
       category,
       scenario: scenario || "default",
+      indicators: indicators || [],
+      alt: {
+        en: altEn || "",
+        de: altDe || "",
+      },
+      caption: {
+        en: captionEn || "",
+        de: captionDe || "",
+      },
     });
   } catch (error) {
     console.error("Upload error:", error);
@@ -86,27 +145,179 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ files: [] });
     }
 
-    const files = response.Contents.map((object) => {
-      const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
-      const pathParts = object.Key!.split("/");
-      const fileName = pathParts[pathParts.length - 1];
+    const files = await Promise.all(
+      response.Contents.map(async (object) => {
+        const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
+        const pathParts = object.Key!.split("/");
+        const fileName = pathParts[pathParts.length - 1];
 
-      return {
-        id: fileName,
-        name: fileName,
-        url: publicUrl,
-        category: category || "default",
-        scenario: scenario || "default",
-        size: object.Size || 0,
-        created_at: object.LastModified?.toISOString(),
-      };
-    });
+        let meta: Record<string, unknown> | undefined;
+        try {
+          const metaKey = `metadata/${fileName.split(".")[0]}.json`;
+          const metaResp = await s3Client.send(
+            new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: metaKey })
+          );
+          if (metaResp.Body) {
+            const text = await metaResp.Body.transformToString();
+            meta = JSON.parse(text);
+          }
+        } catch {
+          /* ignore metadata fetch errors */
+        }
+
+        return {
+          id: fileName,
+          name: fileName,
+          url: publicUrl,
+          category: meta?.category || pathParts[1] || "default",
+          scenario: meta?.scenario || pathParts[2] || "default",
+          indicators: (meta?.indicators as string[]) || [],
+          alt: meta?.alt || { en: "", de: "" },
+          caption: meta?.caption || { en: "", de: "" },
+          size: object.Size || 0,
+          created_at: object.LastModified?.toISOString(),
+        };
+      })
+    );
 
     return NextResponse.json({ files });
   } catch (error) {
     console.error("List error:", error);
     return NextResponse.json(
       { error: "Failed to list files" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { path } = (await request.json()) as { path?: string };
+    if (!path) {
+      return NextResponse.json({ error: "No path provided" }, { status: 400 });
+    }
+
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: path,
+    });
+
+    await s3Client.send(deleteCommand);
+
+    // Attempt to delete metadata file as well (if exists)
+    const metadataKey = path.replace(/\.[^/.]+$/, ".json");
+    try {
+      const metaDelete = new DeleteObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: metadataKey,
+      });
+      await s3Client.send(metaDelete);
+    } catch {
+      /* ignore */
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Delete error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete file" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { path, category, scenario, indicators, description, alt, caption } =
+      (await request.json()) as {
+        path: string;
+        category?: string;
+        scenario?: string;
+        indicators?: string[];
+        description?: string;
+        alt?: { en: string; de: string };
+        caption?: { en: string; de: string };
+      };
+
+    if (!path) {
+      return NextResponse.json({ error: "No path provided" }, { status: 400 });
+    }
+
+    const pathParts = path.split("/");
+    const hasPrefix = pathParts[0] === "climate-images";
+    const currentCategory = hasPrefix ? pathParts[1] : pathParts[0];
+    const currentScenario = hasPrefix
+      ? pathParts[2]
+      : pathParts[1] || "default";
+    const fileName = pathParts.slice(-1)[0];
+
+    const basePrefix = hasPrefix ? "climate-images/" : "";
+
+    let newPath = path;
+
+    // If category or scenario changed, move the object
+    if (
+      (category && category !== currentCategory) ||
+      (scenario && scenario !== currentScenario)
+    ) {
+      newPath = `${basePrefix}${category || currentCategory}/${
+        scenario || currentScenario
+      }/${fileName}`;
+
+      // Copy object to new path
+      const copyCmd = new CopyObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        CopySource: `${R2_BUCKET_NAME}/${path}`,
+        Key: newPath,
+        CacheControl: "public, max-age=3600",
+      });
+      try {
+        await s3Client.send(copyCmd);
+      } catch (e) {
+        console.warn("Copy failed", e);
+      }
+
+      // Delete old object
+      try {
+        const delCmd = new DeleteObjectCommand({
+          Bucket: R2_BUCKET_NAME,
+          Key: path,
+        });
+        await s3Client.send(delCmd);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const id = fileName.split(".")[0];
+    const metaKey = `metadata/${id}.json`;
+
+    const newMetadata = {
+      id,
+      category: category || currentCategory,
+      scenario: scenario || currentScenario,
+      indicators: indicators || [],
+      description: description || "",
+      alt: alt || { en: "", de: "" },
+      caption: caption || { en: "", de: "" },
+      updatedAt: new Date().toISOString(),
+    };
+
+    const putMeta = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: metaKey,
+      Body: JSON.stringify(newMetadata),
+      ContentType: "application/json",
+      CacheControl: "public, max-age=3600",
+    });
+
+    await s3Client.send(putMeta);
+
+    return NextResponse.json({ success: true, path: newPath });
+  } catch (error) {
+    console.error("Update error:", error);
+    return NextResponse.json(
+      { error: "Failed to update metadata" },
       { status: 500 }
     );
   }

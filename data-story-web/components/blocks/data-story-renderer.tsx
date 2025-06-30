@@ -22,7 +22,10 @@ interface DataStoryRendererProps {
   globalReferences: Reference[];
 }
 
-export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendererProps) {
+export function DataStoryRenderer({
+  blocks,
+  globalReferences,
+}: DataStoryRendererProps) {
   // Process global citations once for all blocks, using the global references list
   const globalCitationData = useMemo(() => {
     return processGlobalCitations(blocks || [], globalReferences || []);
@@ -30,7 +33,13 @@ export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendere
   const renderBlock = (block: DataStoryBlock, index: number) => {
     switch (block.type) {
       case "markdown":
-        return <MarkdownBlock key={index} content={block.content} references={block.references} />;
+        return (
+          <MarkdownBlock
+            key={index}
+            content={block.content}
+            references={block.references}
+          />
+        );
 
       case "callout":
         return (
@@ -48,7 +57,8 @@ export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendere
           <VisualizationCard
             key={index}
             title={block.data.title as string}
-            description={block.data.description as string}
+            captionEn={block.data.captionEn as string}
+            captionDe={block.data.captionDe as string}
             imageCategory={
               block.data.imageCategory as
                 | "risk"
@@ -85,6 +95,8 @@ export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendere
             title={block.title}
             description={block.description}
             stats={block.stats}
+            gridColumns={block.gridColumns}
+            colorScheme={block.colorScheme}
             references={block.references}
           />
         );
@@ -94,7 +106,6 @@ export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendere
           <ClimateDashboardBlock
             key={index}
             title={block.title}
-            description={block.description}
             metrics={block.metrics}
             references={block.references}
           />
@@ -106,6 +117,7 @@ export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendere
             key={index}
             title={block.title}
             content={block.content}
+            expandedContent={block.expandedContent}
             variant={block.variant}
             interactive={block.interactive}
             references={block.references}
@@ -117,8 +129,6 @@ export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendere
 
       case "kpi-showcase":
         return <KpiShowcaseBlockComponent key={index} block={block} />;
-
-
 
       case "interactive-map":
         return (
@@ -161,10 +171,14 @@ export function DataStoryRenderer({ blocks, globalReferences }: DataStoryRendere
             showPortFocusControl={block.showPortFocusControl !== false}
             showMapStyleControl={block.showMapStyleControl !== false}
             showSeamarkLayerControl={block.showSeamarkLayerControl !== false}
-            showSeamarkOpacityControl={block.showSeamarkOpacityControl !== false}
+            showSeamarkOpacityControl={
+              block.showSeamarkOpacityControl !== false
+            }
             showRailwayLayerControl={block.showRailwayLayerControl !== false}
             showRailwayStyleControl={block.showRailwayStyleControl !== false}
-            showRailwayOpacityControl={block.showRailwayOpacityControl !== false}
+            showRailwayOpacityControl={
+              block.showRailwayOpacityControl !== false
+            }
           />
         );
 

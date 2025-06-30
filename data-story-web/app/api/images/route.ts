@@ -8,7 +8,7 @@ export async function GET() {
     const images = await CloudflareR2Manager.getAllImages();
 
     console.log("API: Successfully fetched", images?.length || 0, "images");
-
+    console.log(images[0].metadata.caption);
     return NextResponse.json({ images });
   } catch (error) {
     console.error("Fetch all images error:", error);

@@ -25,7 +25,11 @@ interface ImageDropdownProps {
   selectedImageId?: string;
   onImageChange: (
     imageId: string,
-    imageData?: { category: string; scenario?: string }
+    imageData?: {
+      category: string;
+      scenario?: string;
+      caption?: { en: string; de: string };
+    }
   ) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -60,18 +64,37 @@ export function ImageDropdown({
       console.log("Received images data:", data);
 
       const formattedImages = (data.images || [])
-        .map((img: { path?: string; url: string; metadata?: { id?: string; category?: string; scenario?: string; description?: string } }) => {
-          const filename =
-            img.path?.split("/").pop() || img.metadata?.id || "unknown";
-          return {
-            id: img.metadata?.id || filename,
-            name: filename,
-            url: img.url,
-            category: img.metadata?.category || "unknown",
-            scenario: img.metadata?.scenario,
-            description: img.metadata?.description,
-          };
-        })
+        .map(
+          (img: {
+            path?: string;
+            url: string;
+            metadata?: {
+              id?: string;
+              category?: string;
+              scenario?: string;
+              caption?: string;
+            };
+          }) => {
+            const filename =
+              img.path?.split("/").pop() || img.metadata?.id || "unknown";
+            console.log({
+              id: img.metadata?.id || filename,
+              name: filename,
+              url: img.url,
+              category: img.metadata?.category || "unknown",
+              scenario: img.metadata?.scenario,
+              caption: img.metadata?.caption,
+            });
+            return {
+              id: img.metadata?.id || filename,
+              name: filename,
+              url: img.url,
+              category: img.metadata?.category || "unknown",
+              scenario: img.metadata?.scenario,
+              caption: img.metadata?.caption,
+            };
+          }
+        )
         .filter((img: ImageOption) => img.url && img.name !== "unknown");
 
       console.log("Formatted images:", formattedImages);
@@ -171,6 +194,7 @@ export function ImageDropdown({
                     onImageChange(image.id, {
                       category: image.category,
                       scenario: image.scenario,
+                      caption: image.caption,
                     });
                     setOpen(false);
                   }}
