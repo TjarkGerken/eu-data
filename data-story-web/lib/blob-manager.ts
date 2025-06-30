@@ -31,6 +31,20 @@ export interface CloudflareR2Image {
   metadata?: ImageMetadata;
 }
 
+interface ApiFileResponse {
+  id: string;
+  name: string;
+  url: string;
+  path: string;
+  category: string;
+  scenario: string;
+  indicators: string[];
+  alt: { en: string; de: string };
+  caption: { en: string; de: string };
+  size: number;
+  created_at?: string;
+}
+
 export class CloudflareR2Manager {
   private static s3Client = new S3Client(R2_CONFIG);
 
@@ -86,7 +100,7 @@ export class CloudflareR2Manager {
         if (!res.ok) throw new Error("Failed to fetch images");
         // Response shape: { files: [{ url, path, category, scenario, size, created_at }] }
         const { files } = await res.json();
-        return (files as any[]).map((f) => ({
+        return (files as ApiFileResponse[]).map((f) => ({
           url: f.url,
           path:
             f.path ||

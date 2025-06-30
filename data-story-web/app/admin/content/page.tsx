@@ -437,12 +437,9 @@ export default function ContentAdminPage() {
         };
 
       case "climate-dashboard":
-        return {
+        return        {
           type: "climate-dashboard",
           title: isGerman ? "Klima-Dashboard" : "Climate Dashboard",
-          description: isGerman
-            ? "Überblick über Klimaindikatoren"
-            : "Overview of climate indicators",
           metrics: [
             {
               title: isGerman ? "Globale Temperatur" : "Global Temperature",
@@ -476,9 +473,6 @@ export default function ContentAdminPage() {
           title: isGerman
             ? "Klimaauswirkungen-Vergleich"
             : "Climate Impact Comparison",
-          description: isGerman
-            ? "Verschiedene Klimaszenarien vergleichen"
-            : "Compare different climate scenarios",
           comparisons: [
             {
               category: isGerman ? "Temperatur" : "Temperature",
@@ -486,7 +480,6 @@ export default function ContentAdminPage() {
               projectedValue: 2.5,
               unit: "°C",
               severity: "high" as const,
-              description: isGerman ? "Temperaturanstieg" : "Temperature increase",
             },
           ],
         };
@@ -496,9 +489,6 @@ export default function ContentAdminPage() {
           title: isGerman
             ? "Schlüsselleistungsindikatoren"
             : "Key Performance Indicators",
-          description: isGerman
-            ? "Wichtige Klimakennzahlen"
-            : "Important climate metrics",
           kpis: [
             {
               title: isGerman ? "Temperatur" : "Temperature",
@@ -1161,13 +1151,6 @@ export default function ContentAdminPage() {
               />
             </div>
             <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
               <Label>Metrics</Label>
               {(blockData.metrics || []).map((metric: { title: string; value: string; change: string; trend: "up" | "down"; status: "success" | "warning" | "danger"; progress: number; target: string; description: string }, index: number) => (
                 <Card key={index} className="p-4">
@@ -1284,13 +1267,6 @@ export default function ContentAdminPage() {
               />
             </div>
             <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
-              />
-            </div>
-            <div>
               <Label>Comparisons</Label>
               {(blockData.comparisons || []).map((comparison: { category: string; currentValue: number; projectedValue: number; unit: string; severity: "low" | "medium" | "high"; description?: string }, index: number) => (
                 <Card key={index} className="p-4">
@@ -1374,13 +1350,6 @@ export default function ContentAdminPage() {
               <Input
                 value={blockData.title || ""}
                 onChange={(e) => updateField("title", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={blockData.description || ""}
-                onChange={(e) => updateField("description", e.target.value)}
               />
             </div>
             <div>

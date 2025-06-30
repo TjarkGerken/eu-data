@@ -20,7 +20,7 @@ function extractKeyFromPath(pathOrUrl: string): string {
       const url = new URL(pathOrUrl);
       // Remove leading slash and return the key
       return url.pathname.substring(1);
-    } catch (e) {
+    } catch {
       console.warn("Failed to parse URL, using as-is:", pathOrUrl);
       return pathOrUrl;
     }
