@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { DataStoryBlock } from "@/lib/types";
 import { MarkdownBlock } from "./markdown-block";
 import { CalloutBlock } from "./callout-block";
@@ -13,12 +14,18 @@ import { ClimateDashboardBlock } from "./climate-dashboard-block";
 import { InteractiveCalloutBlock } from "./interactive-callout-block";
 import ImpactComparisonBlockComponent from "./impact-comparison-block";
 import KpiShowcaseBlockComponent from "./kpi-showcase-block";
+import { GlobalCitationProvider } from "@/contexts/global-citation-context";
+import { processGlobalCitations } from "@/lib/global-citation-processor";
 
 interface DataStoryRendererProps {
   blocks: DataStoryBlock[];
 }
 
 export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
+  // Process global citations once for all blocks
+  const globalCitationData = useMemo(() => {
+    return processGlobalCitations(blocks || []);
+  }, [blocks]);
   const renderBlock = (block: DataStoryBlock, index: number) => {
     switch (block.type) {
       case "markdown":
@@ -176,8 +183,10 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
   }
 
   return (
-    <div className="space-y-8">
-      {blocks.map((block, index) => renderBlock(block, index))}
-    </div>
+    <GlobalCitationProvider globalCitationData={globalCitationData}>
+      <div className="space-y-8">
+        {blocks.map((block, index) => renderBlock(block, index))}
+      </div>
+    </GlobalCitationProvider>
   );
 }

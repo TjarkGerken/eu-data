@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import { CitationAwareMarkdown } from "./citation-aware-markdown";
 
 interface InteractiveCalloutBlockProps {
   title: string;
@@ -141,11 +142,7 @@ export function InteractiveCalloutBlock({
                   transition={{ duration: 0.3 }}
                   className="text-sm text-muted-foreground leading-relaxed"
                 >
-                  {content.split("\n").map((line, index) => (
-                    <p key={index} className={index > 0 ? "mt-2" : ""}>
-                      {line}
-                    </p>
-                  ))}
+                  <CitationAwareMarkdown content={content} references={references} />
                 </motion.div>
 
                 {interactive && (

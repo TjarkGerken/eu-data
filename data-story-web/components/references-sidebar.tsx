@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ExternalLink, BookOpen } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
+import { useGlobalCitation } from "@/contexts/global-citation-context";
 import { Reference } from "@/lib/types";
 
 const typeColors = {
@@ -23,20 +24,12 @@ const typeColors = {
 };
 
 interface ReferencesSidebarProps {
-  references: Reference[];
+  references?: Reference[];
 }
 
-function generateReadableId(ref: Reference, index: number): string {
-  // Extract first author's last name
-  const firstAuthor = ref.authors[0]?.split(' ').pop() || 'Unknown';
-  // Get year
-  const year = ref.year || new Date().getFullYear();
-  // Create a readable ID based on author and year
-  return `${firstAuthor}${year}${index > 0 ? `-${index + 1}` : ''}`;
-}
-
-export function ReferencesSidebar({ references }: ReferencesSidebarProps) {
+export function ReferencesSidebar({ references = [] }: ReferencesSidebarProps) {
   const { t } = useLanguage();
+  const { globalCitationData } = useGlobalCitation();
   const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
   const refRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -67,17 +60,16 @@ export function ReferencesSidebar({ references }: ReferencesSidebarProps) {
     };
   }, []);
 
-  // Generate readable IDs for references
-  const referencesWithReadableIds = references.map((ref, index) => {
-    // Check for duplicate readable IDs and adjust accordingly
-    const baseId = generateReadableId(ref, 0);
-    const existingIds = references.slice(0, index).map((r, i) => generateReadableId(r, 0));
-    const duplicateCount = existingIds.filter(id => id === baseId).length;
-    
+  // Use global citation data if available, otherwise fall back to provided references
+  const referencesToDisplay = globalCitationData?.orderedReferences || references;
+  
+  // Create references with citation numbers from global data
+  const referencesWithNumbers = referencesToDisplay.map((ref) => {
+    const citationNumber = globalCitationData?.citationMap.get(ref.id);
     return {
       ...ref,
-      displayId: duplicateCount > 0 ? generateReadableId(ref, duplicateCount) : baseId
-    };
+      citationNumber: citationNumber || null
+    } as Reference & { citationNumber: number | null };
   });
 
   return (
@@ -92,7 +84,7 @@ export function ReferencesSidebar({ references }: ReferencesSidebarProps) {
       <CardContent className="overflow-visible">
         <ScrollArea className="h-[600px] pr-4">
           <div className="space-y-4 p-2" style={{ overflow: 'visible' }}>
-            {referencesWithReadableIds.map((ref) => (
+            {referencesWithNumbers.map((ref) => (
               <div
                 key={ref.id}
                 ref={(el) => { refRefs.current[ref.id] = el; }}
@@ -108,17 +100,19 @@ export function ReferencesSidebar({ references }: ReferencesSidebarProps) {
                 <div className="flex items-start justify-between mb-2">
                   <Badge
                     variant="secondary"
-                    className={`text-xs ${typeColors[ref.type]}`}
+                    className={`text-xs ${typeColors[ref.type as keyof typeof typeColors] || typeColors.journal}`}
                   >
                     {ref.type}
                   </Badge>
-                  <span className={`text-xs font-mono transition-colors ${
-                    highlightedRef === ref.id 
-                      ? 'text-[#2d5a3d] font-semibold' 
-                      : 'text-muted-foreground'
-                  }`}>
-                    [{ref.displayId}]
-                  </span>
+                  {ref.citationNumber && (
+                    <span className={`text-xs font-mono transition-colors ${
+                      highlightedRef === ref.id 
+                        ? 'text-[#2d5a3d] font-semibold' 
+                        : 'text-muted-foreground'
+                    }`}>
+                      [{ref.citationNumber}]
+                    </span>
+                  )}
                 </div>
 
                 <h4 className={`text-sm font-medium leading-tight mb-1 transition-colors ${
