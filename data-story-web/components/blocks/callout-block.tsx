@@ -2,6 +2,7 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { CitationAwareMarkdown } from "./citation-aware-markdown";
 
 interface CalloutBlockProps {
   title: string;
@@ -27,8 +28,8 @@ export function CalloutBlock({ title, content, variant, references }: CalloutBlo
     <div className="space-y-4">
       <Alert className={cn("border-l-4", variantStyles[variant])}>
         <AlertTitle className="text-lg font-semibold mb-2">{title}</AlertTitle>
-        <AlertDescription className="text-base whitespace-pre-wrap">
-          {content}
+        <AlertDescription className="text-base">
+          <CitationAwareMarkdown content={content} references={references} />
         </AlertDescription>
       </Alert>
       

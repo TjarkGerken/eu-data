@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageDropdown } from "@/components/image-dropdown";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
+import { CitationInsertionButton } from "@/components/admin/citation-insertion-button";
 import { Trash2, Layers, Settings, Plus } from "lucide-react";
 import { getFieldError, type ValidationError } from "@/lib/validation";
 import { Switch } from "@/components/ui/switch";
@@ -604,6 +605,30 @@ export function BlockTypeFields({
   onContentChange,
   mode = "all",
 }: BlockTypeFieldsProps) {
+  const markdownTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [availableReferences, setAvailableReferences] = useState<Array<{
+    id: string;
+    title: string;
+    authors: string[];
+    year: number;
+    type: "journal" | "report" | "dataset" | "book";
+  }>>([]);
+
+  useEffect(() => {
+    if (blockType === "markdown") {
+      loadReferences();
+    }
+  }, [blockType]);
+
+  const loadReferences = async () => {
+    try {
+      const response = await fetch("/api/content");
+      const data = await response.json();
+      setAvailableReferences(data.references || []);
+    } catch (error) {
+      console.error("Failed to load references:", error);
+    }
+  };
   const updateDataField = (path: string, value: unknown) => {
     const newData = { ...data };
     const pathParts = path.split(".");
@@ -1352,13 +1377,24 @@ export function BlockTypeFields({
       case "markdown":
         return (
           <div className="space-y-1">
-            <Label>Content</Label>
+            <div className="flex items-center justify-between">
+              <Label>Content</Label>
+              <CitationInsertionButton
+                textareaRef={markdownTextareaRef}
+                onContentChange={(newContent) => onContentChange?.(newContent)}
+                availableReferences={availableReferences}
+              />
+            </div>
             <Textarea
+              ref={markdownTextareaRef}
               value={content || ""}
               onChange={(e) => onContentChange?.(e.target.value)}
-              placeholder="Enter markdown content..."
+              placeholder="Enter markdown content... Use \cite{ReadableId} for citations (e.g., \cite{Smith2023})."
               rows={10}
             />
+            <div className="text-xs text-muted-foreground">
+              Use <code>\cite{`{ReadableId}`}</code> to insert citations. Example: <code>\cite{`{Smith2023}`}</code>
+            </div>
             {renderFieldError("content")}
           </div>
         );
