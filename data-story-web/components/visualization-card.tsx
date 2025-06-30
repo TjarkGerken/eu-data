@@ -44,8 +44,8 @@ export function VisualizationCard({
 }: VisualizationCardProps) {
   const Icon = iconMap[type];
   const { t, language } = useLanguage();
-  const [captionEn, setCaptionEn] = useState<string | null>(null);
-  const [captionDe, setCaptionDe] = useState<string | null>(null);
+  const [captionEn, setCaptionEn] = useState<string | undefined>(undefined);
+  const [captionDe, setCaptionDe] = useState<string | undefined>(undefined);
 
   return (
     <Card className="w-full mb-8">

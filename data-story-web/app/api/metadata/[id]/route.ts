@@ -1,13 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-const METADATA_BASE_URL =
-  process.env.NEXT_PUBLIC_METADATA_BASE_URL || "https://tjarkgerken.com";
+const METADATA_BASE_URL = process.env.R2_PUBLIC_URL_BASE;
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await params;
   if (!id) {
     return NextResponse.json({ error: "Missing metadata id" }, { status: 400 });
   }

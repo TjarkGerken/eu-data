@@ -58,8 +58,6 @@ export function DataStoryRenderer({
           <VisualizationCard
             key={index}
             title={block.data.title as string}
-            captionEn={block.data.captionEn as string}
-            captionDe={block.data.captionDe as string}
             imageCategory={
               block.data.imageCategory as
                 | "hazard"
