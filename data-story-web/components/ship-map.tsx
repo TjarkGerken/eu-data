@@ -36,11 +36,9 @@ interface ShipMapProps {
   tileServerOption?: "openseamap" | "hybrid";
   portFocus?: "rotterdam" | "groningen" | "amsterdam" | "full" | "custom";
   showControls?: boolean;
-  // Railway overlay options
   enableRailwayLayer?: boolean;
   railwayOpacity?: number;
   railwayStyle?: "standard" | "signals" | "maxspeed";
-  // Admin control over user-facing controls
   showPortFocusControl?: boolean;
   showMapStyleControl?: boolean;
   showSeamarkLayerControl?: boolean;
@@ -50,10 +48,9 @@ interface ShipMapProps {
   showRailwayOpacityControl?: boolean;
 }
 
-// Pre-defined port coordinates for quick selection
 const PORT_COORDINATES = {
   rotterdam: { lat: 51.93971438866205, lng: 4.1296399384512394, zoom: 12 }, 
-  groningen: { lat: 53.3217, lng: 6.9413, zoom: 13 }, 
+  groningen: { lat: 53.44610707492235, lng: 6.8335077397728945, zoom: 13 }, 
   amsterdam: { lat: 52.41698553531954, lng: 4.804527798530235, zoom: 12 },
   full: { lat: 52.1326, lng: 5.2913, zoom: 7 },
   custom: { lat: 52.1326, lng: 5.2913, zoom: 8 },
@@ -71,11 +68,9 @@ export function ShipMap({
   tileServerOption = "openseamap",
   portFocus = "rotterdam",
   showControls = true,
-  // Railway overlay defaults
   enableRailwayLayer = false,
   railwayOpacity = 70,
   railwayStyle = "standard",
-  // Admin control defaults (all enabled by default for backward compatibility)
   showPortFocusControl = true,
   showMapStyleControl = true,
   showSeamarkLayerControl = true,
@@ -89,7 +84,6 @@ export function ShipMap({
     enableSeamarkLayer: enableSeamarkLayer,
     tileServerOption: tileServerOption,
     portFocus: portFocus,
-    // Railway layer controls
     enableRailwayLayer: enableRailwayLayer,
     railwayOpacity: railwayOpacity,
     railwayStyle: railwayStyle,
@@ -97,7 +91,6 @@ export function ShipMap({
 
   const [showControlPanel, setShowControlPanel] = useState(showControls);
 
-  // Get coordinates based on port focus or custom values
   const getMapCoordinates = () => {
     if (centerLat && centerLng && zoom) {
       return { lat: centerLat, lng: centerLng, zoom: zoom };
@@ -107,7 +100,6 @@ export function ShipMap({
 
   const coordinates = getMapCoordinates();
 
-  // Configure tile layers based on selection
   const getTileConfiguration = () => {
     const baseConfig = {
       baseTileLayer: {
