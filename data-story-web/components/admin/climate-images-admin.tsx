@@ -319,41 +319,39 @@ export default function ClimateImagesAdmin() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="alt-en">Alt Text (EN)</Label>
-                <Input
-                  id="alt-en"
-                  value={altEn}
-                  onChange={(e) => setAltEn(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="alt-de">Alt Text (DE)</Label>
-                <Input
-                  id="alt-de"
-                  value={altDe}
-                  onChange={(e) => setAltDe(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="cap-en">Caption (EN)</Label>
-                <Textarea
-                  id="cap-en"
-                  value={captionEn}
-                  onChange={(e) => setCaptionEn(e.target.value)}
-                  rows={3}
-                />
-              </div>
-              <div>
-                <Label htmlFor="cap-de">Caption (DE)</Label>
-                <Textarea
-                  id="cap-de"
-                  value={captionDe}
-                  onChange={(e) => setCaptionDe(e.target.value)}
-                  rows={3}
-                />
-              </div>
+            <div>
+              <Label htmlFor="alt-en">Alt Text (EN)</Label>
+              <Input
+                id="alt-en"
+                value={altEn}
+                onChange={(e) => setAltEn(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="alt-de">Alt Text (DE)</Label>
+              <Input
+                id="alt-de"
+                value={altDe}
+                onChange={(e) => setAltDe(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="cap-en">Caption (EN)</Label>
+              <Textarea
+                id="cap-en"
+                value={captionEn}
+                onChange={(e) => setCaptionEn(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label htmlFor="cap-de">Caption (DE)</Label>
+              <Textarea
+                id="cap-de"
+                value={captionDe}
+                onChange={(e) => setCaptionDe(e.target.value)}
+                rows={3}
+              />
             </div>
             <div className="md:col-span-2">
               <Button type="submit" disabled={uploading}>
@@ -488,7 +486,7 @@ export default function ClimateImagesAdmin() {
         open={!!editingImage}
         onOpenChange={(open) => !open && setEditingImage(null)}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Edit Image Metadata</DialogTitle>
           </DialogHeader>
@@ -496,15 +494,17 @@ export default function ClimateImagesAdmin() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="edit-alt-en">Alt Text (EN)</Label>
-                <Input
+                <Textarea
                   id="edit-alt-en"
                   value={editAltEn}
+                  rows={7}
                   onChange={(e) => setEditAltEn(e.target.value)}
                 />
               </div>
               <div>
                 <Label htmlFor="edit-alt-de">Alt Text (DE)</Label>
-                <Input
+                <Textarea
+                  rows={7}
                   id="edit-alt-de"
                   value={editAltDe}
                   onChange={(e) => setEditAltDe(e.target.value)}
@@ -516,7 +516,7 @@ export default function ClimateImagesAdmin() {
                   id="edit-cap-en"
                   value={editCaptionEn}
                   onChange={(e) => setEditCaptionEn(e.target.value)}
-                  rows={3}
+                  rows={7}
                 />
               </div>
               <div>
@@ -525,7 +525,7 @@ export default function ClimateImagesAdmin() {
                   id="edit-cap-de"
                   value={editCaptionDe}
                   onChange={(e) => setEditCaptionDe(e.target.value)}
-                  rows={3}
+                  rows={7}
                 />
               </div>
             </div>

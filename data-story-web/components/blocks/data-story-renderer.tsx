@@ -61,14 +61,22 @@ export function DataStoryRenderer({
             captionDe={block.data.captionDe as string}
             imageCategory={
               block.data.imageCategory as
-                | "risk"
-                | "exposition"
                 | "hazard"
-                | "combined"
+                | "exposition"
+                | "relevance"
+                | "risk"
+                | "risk-clusters"
                 | undefined
             }
             imageScenario={
-              block.data.imageScenario as "current" | "severe" | undefined
+              block.data.imageScenario as
+                | "current"
+                | "conservative"
+                | "moderate"
+                | "severe"
+                | "none"
+                | "all"
+                | undefined
             }
             imageId={block.data.imageId as string}
             content={block.data.content as string}
