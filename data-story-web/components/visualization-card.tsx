@@ -78,7 +78,7 @@ export function VisualizationCard({
           ) : imagePath ? (
             <div className="relative w-full h-full">
               <ClimateImage
-                category="combined"
+                category="risk"
                 alt={title}
                 className="object-contain"
                 priority={false}
