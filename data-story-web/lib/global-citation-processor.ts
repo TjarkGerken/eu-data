@@ -91,7 +91,7 @@ function getAllReferencesFromBlocks(blocks: DataStoryBlock[]): Reference[] {
   return allReferences;
 }
 
-export function processGlobalCitations(blocks: DataStoryBlock[]): GlobalCitationData {
+export function processGlobalCitations(blocks: DataStoryBlock[], globalReferences: Reference[] = []): GlobalCitationData {
   const citationMap = new Map<string, number>();
   const referenceToNumberMap = new Map<string, number>(); // Maps reference ID to citation number
   const citationOrder: string[] = [];
@@ -100,8 +100,8 @@ export function processGlobalCitations(blocks: DataStoryBlock[]): GlobalCitation
   // Get all available references from all blocks
   const allReferences = getAllReferencesFromBlocks(blocks);
   
-  // Create readable ID mapping
-  const readableIdMap = createReadableIdMap(allReferences);
+  // Create readable ID mapping from globalReferences (not just block references)
+  const readableIdMap = createReadableIdMap(globalReferences.length > 0 ? globalReferences : allReferences);
   
   // Process blocks in order to maintain citation sequence
   blocks.forEach(block => {

@@ -82,7 +82,7 @@ export default function HomePage() {
                   </h2>
                   <div className="w-24 h-1 bg-gradient-to-r from-[#2d5a3d] to-[#c4a747] rounded-full"></div>
                 </div>
-                <DataStoryRenderer blocks={content.blocks} />
+                <DataStoryRenderer blocks={content.blocks} globalReferences={content.references || []} />
               </motion.section>
 
               {/* Technical Section */}

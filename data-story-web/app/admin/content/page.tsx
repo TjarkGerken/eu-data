@@ -479,13 +479,14 @@ export default function ContentAdminPage() {
           description: isGerman
             ? "Verschiedene Klimaszenarien vergleichen"
             : "Compare different climate scenarios",
-          scenarios: [
+          comparisons: [
             {
-              name: isGerman ? "Aktuell" : "Current",
-              temperature: 1.2,
-              seaLevel: 0.1,
-              precipitation: 5,
-              extremeEvents: 10,
+              category: isGerman ? "Temperatur" : "Temperature",
+              currentValue: 1.2,
+              projectedValue: 2.5,
+              unit: "°C",
+              severity: "high" as const,
+              description: isGerman ? "Temperaturanstieg" : "Temperature increase",
             },
           ],
         };
@@ -500,11 +501,11 @@ export default function ContentAdminPage() {
             : "Important climate metrics",
           kpis: [
             {
-              label: isGerman ? "Temperatur" : "Temperature",
+              title: isGerman ? "Temperatur" : "Temperature",
               value: "+1.2°C",
-              change: "+0.1°C",
-              trend: "up",
-              icon: "thermometer",
+              changeValue: "+0.1°C",
+              trend: "up" as const,
+              color: "red",
             },
           ],
         };
@@ -1075,7 +1076,7 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>Statistics</Label>
-              {(blockData.stats || []).map((stat: any, index: number) => (
+              {(blockData.stats || []).map((stat: { icon: string; value: string; label: string; change?: string; trend?: "up" | "down"; color: string }, index: number) => (
                 <Card key={index} className="p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="font-medium">Statistic {index + 1}</h4>
@@ -1168,7 +1169,7 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>Metrics</Label>
-              {(blockData.metrics || []).map((metric: any, index: number) => (
+              {(blockData.metrics || []).map((metric: { title: string; value: string; change: string; trend: "up" | "down"; status: "success" | "warning" | "danger"; progress: number; target: string; description: string }, index: number) => (
                 <Card key={index} className="p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="font-medium">Metric {index + 1}</h4>
@@ -1291,7 +1292,7 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>Comparisons</Label>
-              {(blockData.comparisons || []).map((comparison: any, index: number) => (
+              {(blockData.comparisons || []).map((comparison: { category: string; currentValue: number; projectedValue: number; unit: string; severity: "low" | "medium" | "high"; description?: string }, index: number) => (
                 <Card key={index} className="p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="font-medium">Comparison {index + 1}</h4>
@@ -1384,7 +1385,7 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>KPIs</Label>
-              {(blockData.kpis || []).map((kpi: any, index: number) => (
+              {(blockData.kpis || []).map((kpi: { title: string; value: string; unit?: string; trend?: "up" | "down" | "stable"; changeValue?: string; color?: string }, index: number) => (
                 <Card key={index} className="p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="font-medium">KPI {index + 1}</h4>
