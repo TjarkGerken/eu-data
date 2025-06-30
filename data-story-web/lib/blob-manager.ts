@@ -88,7 +88,9 @@ export class CloudflareR2Manager {
         const { files } = await res.json();
         return (files as any[]).map((f) => ({
           url: f.url,
-          path: f.path || f.url, // ensure path exists
+          path:
+            f.path ||
+            (f.url ? f.url.replace(/^https?:\/\/[^\/]+\//, "") : f.url), // extract key from URL if path missing
           metadata: {
             id: f.id || f.name,
             category: f.category as ImageCategory,
