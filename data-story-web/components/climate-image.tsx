@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { CloudflareR2Image } from "@/lib/blob-manager";
+import { CloudflareR2Image, ImageMetadata } from "@/lib/blob-manager";
 import { ImageCategory, ImageScenario } from "@/lib/blob-config";
 import { SupabaseAnalytics } from "@/lib/blob-analytics";
 
@@ -16,6 +16,7 @@ interface ClimateImageProps {
   fill?: boolean;
   width?: number;
   height?: number;
+  onMetadataLoaded?: (metadata: ImageMetadata | undefined) => void;
 }
 
 export default function ClimateImage({
@@ -28,8 +29,10 @@ export default function ClimateImage({
   fill = true,
   width,
   height,
+  onMetadataLoaded,
 }: ClimateImageProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [, setMetadata] = useState<ImageMetadata | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,44 +41,53 @@ export default function ClimateImage({
       try {
         let targetImage: CloudflareR2Image | null = null;
 
-        // Use API routes instead of direct blob manager calls
         const response = await fetch(`/api/images/${category}`);
         if (!response.ok) {
           throw new Error("Failed to fetch images");
         }
 
         const data = await response.json();
-        const images = data.images as CloudflareR2Image[];
+        const imageList = data.images as CloudflareR2Image[];
 
         if (id) {
           targetImage =
-            images.find(
-              (img) =>
-                img.metadata?.id === id &&
-                (!scenario || img.metadata?.scenario === scenario)
+            imageList.find(
+              (imageItem) =>
+                imageItem.metadata?.id === id &&
+                (!scenario || imageItem.metadata?.scenario === scenario)
             ) || null;
         } else {
           targetImage =
-            images.find(
-              (img) => !scenario || img.metadata?.scenario === scenario
+            imageList.find(
+              (imageItem) =>
+                !scenario || imageItem.metadata?.scenario === scenario
             ) ||
-            images[0] ||
+            imageList[0] ||
             null;
         }
 
         if (targetImage) {
           setImageUrl(targetImage.url);
 
-          // Track analytics
-          SupabaseAnalytics.trackImageView(
-            targetImage.url,
-            category,
-            scenario,
-            {
-              userAgent: navigator.userAgent,
-              referrer: document.referrer,
-            }
-          );
+          let richMetadata: ImageMetadata | undefined = targetImage.metadata;
+
+          if (richMetadata?.id) {
+            try {
+              const metaRes = await fetch(`/api/metadata/${richMetadata.id}`);
+
+              if (metaRes.ok) {
+                richMetadata = (await metaRes.json()) as ImageMetadata;
+              }
+            } catch {}
+          }
+
+          setMetadata(richMetadata);
+
+          if (onMetadataLoaded) {
+            onMetadataLoaded(richMetadata);
+          }
+
+          SupabaseAnalytics.trackImageView(targetImage.url, category, scenario);
         } else {
           setError(
             `No image found for ${category}${scenario ? ` - ${scenario}` : ""}${
@@ -91,7 +103,7 @@ export default function ClimateImage({
     }
 
     loadImage();
-  }, [category, scenario, id]);
+  }, [category, scenario, id, onMetadataLoaded]);
 
   if (loading) {
     return (

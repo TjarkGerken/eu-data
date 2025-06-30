@@ -255,7 +255,11 @@ export default function ImageAdmin() {
                       category={image.metadata?.category || "risk"}
                       scenario={image.metadata?.scenario}
                       id={image.metadata?.id}
-                      alt={image.metadata?.caption?.en || image.metadata?.alt?.en || "Climate image"}
+                      alt={
+                        image.metadata?.caption?.en ||
+                        image.metadata?.alt?.en ||
+                        "Climate image"
+                      }
                       className="object-cover"
                     />
                   </div>
