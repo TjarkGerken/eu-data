@@ -198,15 +198,22 @@ export default function ClimateImagesAdmin() {
           caption: { en: editCaptionEn, de: editCaptionDe },
         }),
       });
-      if (!res.ok) throw new Error("Update failed");
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Update failed");
+      }
+
       toast({ title: "Success", description: "Image updated" });
       setEditingImage(null);
       loadImages();
     } catch (error) {
       console.error("Update error", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update image";
       toast({
         title: "Error",
-        description: "Failed to update image",
+        description: errorMessage,
         variant: "destructive",
       });
     }

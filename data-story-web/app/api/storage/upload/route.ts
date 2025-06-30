@@ -6,10 +6,27 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   CopyObjectCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { R2_CONFIG, R2_BUCKET_NAME, R2_PUBLIC_URL_BASE } from "@/lib/r2-config";
 
 const s3Client = new S3Client(R2_CONFIG);
+
+// Helper function to extract S3 key from URL or return path as-is
+function extractKeyFromPath(pathOrUrl: string): string {
+  // If it's a full URL, extract just the key part
+  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) {
+    try {
+      const url = new URL(pathOrUrl);
+      // Remove leading slash and return the key
+      return url.pathname.substring(1);
+    } catch (e) {
+      console.warn("Failed to parse URL, using as-is:", pathOrUrl);
+      return pathOrUrl;
+    }
+  }
+  return pathOrUrl;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -169,6 +186,7 @@ export async function GET(request: NextRequest) {
           id: fileName,
           name: fileName,
           url: publicUrl,
+          path: object.Key!, // Add the actual path/key here
           category: meta?.category || pathParts[1] || "default",
           scenario: meta?.scenario || pathParts[2] || "default",
           indicators: (meta?.indicators as string[]) || [],
@@ -197,15 +215,19 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "No path provided" }, { status: 400 });
     }
 
+    // Extract the actual S3 key from the path (in case it's a full URL)
+    const actualPath = extractKeyFromPath(path);
+    console.log(`DELETE request for path: ${path} -> ${actualPath}`);
+
     const deleteCommand = new DeleteObjectCommand({
       Bucket: R2_BUCKET_NAME,
-      Key: path,
+      Key: actualPath,
     });
 
     await s3Client.send(deleteCommand);
 
     // Attempt to delete metadata file as well (if exists)
-    const metadataKey = path.replace(/\.[^/.]+$/, ".json");
+    const metadataKey = actualPath.replace(/\.[^/.]+$/, ".json");
     try {
       const metaDelete = new DeleteObjectCommand({
         Bucket: R2_BUCKET_NAME,
@@ -243,7 +265,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "No path provided" }, { status: 400 });
     }
 
-    const pathParts = path.split("/");
+    // Extract the actual S3 key from the path (in case it's a full URL)
+    const actualPath = extractKeyFromPath(path);
+    console.log(
+      `PUT request to update image metadata for path: ${path} -> ${actualPath}`
+    );
+
+    const pathParts = actualPath.split("/");
     const hasPrefix = pathParts[0] === "climate-images";
     const currentCategory = hasPrefix ? pathParts[1] : pathParts[0];
     const currentScenario = hasPrefix
@@ -253,7 +281,11 @@ export async function PUT(request: NextRequest) {
 
     const basePrefix = hasPrefix ? "climate-images/" : "";
 
-    let newPath = path;
+    console.log(
+      `Parsed path - category: ${currentCategory}, scenario: ${currentScenario}, file: ${fileName}`
+    );
+
+    let newPath = actualPath;
 
     // If category or scenario changed, move the object
     if (
@@ -264,28 +296,41 @@ export async function PUT(request: NextRequest) {
         scenario || currentScenario
       }/${fileName}`;
 
-      // Copy object to new path
-      const copyCmd = new CopyObjectCommand({
-        Bucket: R2_BUCKET_NAME,
-        CopySource: `${R2_BUCKET_NAME}/${path}`,
-        Key: newPath,
-        CacheControl: "public, max-age=3600",
-      });
+      // First check if source object exists
       try {
-        await s3Client.send(copyCmd);
-      } catch (e) {
-        console.warn("Copy failed", e);
-      }
+        const headCmd = new HeadObjectCommand({
+          Bucket: R2_BUCKET_NAME,
+          Key: actualPath,
+        });
+        await s3Client.send(headCmd);
 
-      // Delete old object
-      try {
+        // Copy object to new path
+        const copyCmd = new CopyObjectCommand({
+          Bucket: R2_BUCKET_NAME,
+          CopySource: `${R2_BUCKET_NAME}/${actualPath}`,
+          Key: newPath,
+          CacheControl: "public, max-age=3600",
+        });
+        await s3Client.send(copyCmd);
+
+        // Delete old object only if copy succeeded
         const delCmd = new DeleteObjectCommand({
           Bucket: R2_BUCKET_NAME,
-          Key: path,
+          Key: actualPath,
         });
         await s3Client.send(delCmd);
-      } catch {
-        /* ignore */
+
+        console.log(
+          `Successfully moved object from ${actualPath} to ${newPath}`
+        );
+      } catch (e) {
+        console.warn(
+          `Failed to move object from ${actualPath} to ${newPath}:`,
+          e
+        );
+        // If source doesn't exist or copy fails, continue with metadata update only
+        // Reset newPath to original path since move failed
+        newPath = actualPath;
       }
     }
 
@@ -313,11 +358,14 @@ export async function PUT(request: NextRequest) {
 
     await s3Client.send(putMeta);
 
+    console.log(`Successfully updated metadata for ${newPath}`);
     return NextResponse.json({ success: true, path: newPath });
   } catch (error) {
     console.error("Update error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to update metadata" },
+      { error: `Failed to update metadata: ${errorMessage}` },
       { status: 500 }
     );
   }
