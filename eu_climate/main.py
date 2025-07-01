@@ -87,6 +87,7 @@ Examples:
   python -m main --no-cache --hazard         # Run hazard layer without caching
   python -m main --no-upload --all           # Run all layers without data upload
   python -m main --clusters                  # Extract risk cluster polygons from existing results
+  python -m main --web-conversion            # Convert existing .tif to .cog and .gpkg to .mbtiles for web delivery
   python -m main --upload                    # Only upload existing data to Hugging Face (skip analysis)
   python -m main --download                  # Only download data from Hugging Face (skip analysis)
         """
@@ -135,6 +136,10 @@ Examples:
     layer_group.add_argument('--economic-impact', 
                            action='store_true',
                            help='Process Economic Impact Analysis (extract absolute economic values from risk clusters)')
+    
+    layer_group.add_argument('--web-conversion', 
+                           action='store_true',
+                           help='Convert existing .tif files to .cog and .gpkg files to .mbtiles for web delivery')
     
     layer_group.add_argument('--all', 
                            action='store_true',
@@ -209,9 +214,10 @@ Examples:
         args.population = False
         args.clusters = False
         args.economic_impact = False
+        args.web_conversion = False
         args.all = False
         args.no_upload = True  # Disable upload when downloading
-    elif not any([args.hazard, args.exposition, args.relevance, args.relevance_absolute, args.risk, args.population, args.population_relevance, args.clusters, args.economic_impact, args.all, args.freight_only]):
+    elif not any([args.hazard, args.exposition, args.relevance, args.relevance_absolute, args.risk, args.population, args.population_relevance, args.clusters, args.economic_impact, args.web_conversion, args.all, args.freight_only]):
         # If no specific layers are chosen, default to --all
         logger.info("No specific layers selected, defaulting to --all")
         args.all = True
@@ -226,7 +232,7 @@ Examples:
         args.population = True
         args.clusters = True
         args.economic_impact = True
-    
+        
     return args
 
 class RiskAssessment:
@@ -611,6 +617,356 @@ class RiskAssessment:
             logger.error(f"Could not execute economic impact analysis: {e}")
             raise e
 
+    def run_web_conversion(self, config: ProjectConfig) -> Dict[str, Any]:
+        """
+        Convert existing .tif files to .cog and .gpkg files to .mbtiles for web delivery.
+        
+        This scans the output directory for existing files and creates web-optimized versions
+        without running any analysis. Useful for converting legacy outputs to modern web formats.
+        
+        Args:
+            config: Project configuration containing output paths
+            
+        Returns:
+            Dict with conversion results and statistics
+        """
+        from eu_climate.utils.web_exports import WebOptimizedExporter
+        from pathlib import Path
+        import glob
+        
+        logger.info("Starting web conversion of existing files")
+        
+        web_exporter = WebOptimizedExporter(config=config.__dict__)
+        
+        # Check dependencies
+        deps = web_exporter.check_dependencies()
+        missing_deps = [name for name, available in deps.items() if not available]
+        if missing_deps:
+            logger.warning(f"Missing dependencies: {missing_deps}")
+            logger.info("Some conversions may fail or use fallback methods")
+        
+        results = {
+            'tif_to_cog': {'success': [], 'failed': []},
+            'gpkg_to_mbtiles': {'success': [], 'failed': []},
+            'summary': {}
+        }
+        
+        output_dir = Path(config.output_dir)
+        
+        # Find all .tif files recursively in output directory
+        tif_files = list(output_dir.rglob("*.tif"))
+        logger.info(f"Found {len(tif_files)} .tif files for COG conversion")
+        
+        # Convert .tif files to .cog
+        for tif_file in tif_files:
+            # Skip files that are already in web/cog directory
+            if 'web' in tif_file.parts and 'cog' in tif_file.parts:
+                logger.debug(f"Skipping already converted COG: {tif_file}")
+                continue
+                
+            try:
+                # Determine output directory structure
+                # Files are typically in: output_dir/scenario/tif/filename.tif
+                # We want to create: output_dir/scenario/web/cog/filename.tif
+                
+                # Get the scenario directory (parent of tif directory)
+                if tif_file.parent.name == 'tif':
+                    base_output_dir = tif_file.parent.parent
+                else:
+                    # If not in tif subdirectory, use parent directory
+                    base_output_dir = tif_file.parent
+                
+                # Create web directory structure
+                cog_dir = base_output_dir / "web" / "cog"
+                cog_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Set output path
+                cog_path = cog_dir / tif_file.name
+                
+                # Skip if COG already exists and is newer than source
+                if cog_path.exists() and cog_path.stat().st_mtime > tif_file.stat().st_mtime:
+                    logger.debug(f"COG already up-to-date: {cog_path}")
+                    results['tif_to_cog']['success'].append(str(tif_file))
+                    continue
+                
+                logger.info(f"Converting {tif_file.name} to COG...")
+                
+                success = web_exporter.export_raster_as_cog(
+                    input_path=tif_file,
+                    output_path=cog_path,
+                    overwrite=True,
+                    add_overviews=True
+                )
+                
+                if success:
+                    results['tif_to_cog']['success'].append(str(tif_file))
+                    logger.info(f"✓ Successfully converted: {tif_file.name}")
+                else:
+                    results['tif_to_cog']['failed'].append(str(tif_file))
+                    logger.error(f"✗ Failed to convert: {tif_file.name}")
+                    
+            except Exception as e:
+                results['tif_to_cog']['failed'].append(str(tif_file))
+                logger.error(f"✗ Error converting {tif_file.name}: {e}")
+        
+        # Find all .gpkg files recursively in output directory
+        gpkg_files = list(output_dir.rglob("*.gpkg"))
+        logger.info(f"Found {len(gpkg_files)} .gpkg files for MBTiles conversion")
+        
+        # Convert .gpkg files to .mbtiles
+        for gpkg_file in gpkg_files:
+            # Skip files that are already converted or in web directory
+            if 'web' in gpkg_file.parts:
+                logger.debug(f"Skipping file in web directory: {gpkg_file}")
+                continue
+                
+            try:
+                # Determine output directory structure
+                # Files are typically in: output_dir/scenario/gpkg/filename.gpkg
+                # We want to create: output_dir/scenario/web/mvt/filename.mbtiles
+                
+                # Get the scenario directory (parent of gpkg directory)
+                if gpkg_file.parent.name == 'gpkg':
+                    base_output_dir = gpkg_file.parent.parent
+                else:
+                    # If not in gpkg subdirectory, use parent directory
+                    base_output_dir = gpkg_file.parent
+                
+                # Create web directory structure
+                mvt_dir = base_output_dir / "web" / "mvt"
+                mvt_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Set output path
+                mbtiles_path = mvt_dir / f"{gpkg_file.stem}.mbtiles"
+                
+                # Skip if MBTiles already exists and is newer than source
+                if mbtiles_path.exists() and mbtiles_path.stat().st_mtime > gpkg_file.stat().st_mtime:
+                    logger.debug(f"MBTiles already up-to-date: {mbtiles_path}")
+                    results['gpkg_to_mbtiles']['success'].append(str(gpkg_file))
+                    continue
+                
+                logger.info(f"Converting {gpkg_file.name} to MBTiles...")
+                
+                success = web_exporter.export_vector_as_mvt(
+                    input_path=gpkg_file,
+                    output_path=mbtiles_path,
+                    layer_name=gpkg_file.stem,
+                    min_zoom=0,
+                    max_zoom=12,  # Reduced max zoom for better performance
+                    overwrite=True
+                )
+                
+                if success:
+                    results['gpkg_to_mbtiles']['success'].append(str(gpkg_file))
+                    logger.info(f"✓ Successfully converted: {gpkg_file.name}")
+                else:
+                    results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
+                    logger.error(f"✗ Failed to convert: {gpkg_file.name}")
+                    
+            except Exception as e:
+                results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
+                logger.error(f"✗ Error converting {gpkg_file.name}: {e}")
+        
+        # Generate summary
+        results['summary'] = {
+            'total_tif_files': len(tif_files),
+            'successful_cog_conversions': len(results['tif_to_cog']['success']),
+            'failed_cog_conversions': len(results['tif_to_cog']['failed']),
+            'total_gpkg_files': len(gpkg_files),
+            'successful_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
+            'failed_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed'])
+        }
+        
+        # Log summary
+        summary = results['summary']
+        logger.info(f"\n{'='*60}")
+        logger.info("WEB CONVERSION SUMMARY")
+        logger.info(f"{'='*60}")
+        logger.info(f"TIF to COG conversions: {summary['successful_cog_conversions']}/{summary['total_tif_files']} successful")
+        logger.info(f"GPKG to MBTiles conversions: {summary['successful_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+        
+        if summary['failed_cog_conversions'] > 0 or summary['failed_mbtiles_conversions'] > 0:
+            logger.warning(f"Some conversions failed. Check logs for details.")
+        else:
+            logger.info("All conversions completed successfully!")
+        
+        return results
+
+def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
+    """
+    Standalone web conversion function that doesn't require RiskAssessment initialization.
+    
+    This scans the output directory for existing files and creates web-optimized versions
+    without running any analysis. Useful for converting legacy outputs to modern web formats.
+    
+    Args:
+        config: Project configuration containing output paths
+        
+    Returns:
+        Dict with conversion results and statistics
+    """
+    from eu_climate.utils.web_exports import WebOptimizedExporter
+    from pathlib import Path
+    import glob
+    
+    logger.info("Starting web conversion of existing files")
+    
+    web_exporter = WebOptimizedExporter(config=config.__dict__)
+    
+    # Check dependencies
+    deps = web_exporter.check_dependencies()
+    missing_deps = [name for name, available in deps.items() if not available]
+    if missing_deps:
+        logger.warning(f"Missing dependencies: {missing_deps}")
+        logger.info("Some conversions may fail or use fallback methods")
+    
+    results = {
+        'tif_to_cog': {'success': [], 'failed': []},
+        'gpkg_to_mbtiles': {'success': [], 'failed': []},
+        'summary': {}
+    }
+    
+    output_dir = Path(config.output_dir)
+    
+    # Find all .tif files recursively in output directory
+    tif_files = list(output_dir.rglob("*.tif"))
+    logger.info(f"Found {len(tif_files)} .tif files for COG conversion")
+    
+    # Convert .tif files to .cog
+    for tif_file in tif_files:
+        # Skip files that are already in web/cog directory
+        if 'web' in tif_file.parts and 'cog' in tif_file.parts:
+            logger.debug(f"Skipping already converted COG: {tif_file}")
+            continue
+            
+        try:
+            # Determine output directory structure
+            # Files are typically in: output_dir/scenario/tif/filename.tif
+            # We want to create: output_dir/scenario/web/cog/filename.tif
+            
+            # Get the scenario directory (parent of tif directory)
+            if tif_file.parent.name == 'tif':
+                base_output_dir = tif_file.parent.parent
+            else:
+                # If not in tif subdirectory, use parent directory
+                base_output_dir = tif_file.parent
+            
+            # Create web directory structure
+            cog_dir = base_output_dir / "web" / "cog"
+            cog_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Set output path
+            cog_path = cog_dir / tif_file.name
+            
+            # Skip if COG already exists and is newer than source
+            if cog_path.exists() and cog_path.stat().st_mtime > tif_file.stat().st_mtime:
+                logger.debug(f"COG already up-to-date: {cog_path}")
+                results['tif_to_cog']['success'].append(str(tif_file))
+                continue
+            
+            logger.info(f"Converting {tif_file.name} to COG...")
+            
+            success = web_exporter.export_raster_as_cog(
+                input_path=tif_file,
+                output_path=cog_path,
+                overwrite=True,
+                add_overviews=True
+            )
+            
+            if success:
+                results['tif_to_cog']['success'].append(str(tif_file))
+                logger.info(f"✓ Successfully converted: {tif_file.name}")
+            else:
+                results['tif_to_cog']['failed'].append(str(tif_file))
+                logger.error(f"✗ Failed to convert: {tif_file.name}")
+                
+        except Exception as e:
+            results['tif_to_cog']['failed'].append(str(tif_file))
+            logger.error(f"✗ Error converting {tif_file.name}: {e}")
+    
+    # Find all .gpkg files recursively in output directory
+    gpkg_files = list(output_dir.rglob("*.gpkg"))
+    logger.info(f"Found {len(gpkg_files)} .gpkg files for MBTiles conversion")
+    
+    # Convert .gpkg files to .mbtiles
+    for gpkg_file in gpkg_files:
+        # Skip files that are already converted or in web directory
+        if 'web' in gpkg_file.parts:
+            logger.debug(f"Skipping file in web directory: {gpkg_file}")
+            continue
+            
+        try:
+            # Determine output directory structure
+            # Files are typically in: output_dir/scenario/gpkg/filename.gpkg
+            # We want to create: output_dir/scenario/web/mvt/filename.mbtiles
+            
+            # Get the scenario directory (parent of gpkg directory)
+            if gpkg_file.parent.name == 'gpkg':
+                base_output_dir = gpkg_file.parent.parent
+            else:
+                # If not in gpkg subdirectory, use parent directory
+                base_output_dir = gpkg_file.parent
+            
+            # Create web directory structure
+            mvt_dir = base_output_dir / "web" / "mvt"
+            mvt_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Set output path
+            mbtiles_path = mvt_dir / f"{gpkg_file.stem}.mbtiles"
+            
+            # Skip if MBTiles already exists and is newer than source
+            if mbtiles_path.exists() and mbtiles_path.stat().st_mtime > gpkg_file.stat().st_mtime:
+                logger.debug(f"MBTiles already up-to-date: {mbtiles_path}")
+                results['gpkg_to_mbtiles']['success'].append(str(gpkg_file))
+                continue
+            
+            logger.info(f"Converting {gpkg_file.name} to MBTiles...")
+            
+            success = web_exporter.export_vector_as_mvt(
+                input_path=gpkg_file,
+                output_path=mbtiles_path,
+                layer_name=gpkg_file.stem,
+                min_zoom=0,
+                max_zoom=12,  # Reduced max zoom for better performance
+                overwrite=True
+            )
+            
+            if success:
+                results['gpkg_to_mbtiles']['success'].append(str(gpkg_file))
+                logger.info(f"✓ Successfully converted: {gpkg_file.name}")
+            else:
+                results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
+                logger.error(f"✗ Failed to convert: {gpkg_file.name}")
+                
+        except Exception as e:
+            results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
+            logger.error(f"✗ Error converting {gpkg_file.name}: {e}")
+    
+    # Generate summary
+    results['summary'] = {
+        'total_tif_files': len(tif_files),
+        'successful_cog_conversions': len(results['tif_to_cog']['success']),
+        'failed_cog_conversions': len(results['tif_to_cog']['failed']),
+        'total_gpkg_files': len(gpkg_files),
+        'successful_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
+        'failed_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed'])
+    }
+    
+    # Log summary
+    summary = results['summary']
+    logger.info(f"\n{'='*60}")
+    logger.info("WEB CONVERSION SUMMARY")
+    logger.info(f"{'='*60}")
+    logger.info(f"TIF to COG conversions: {summary['successful_cog_conversions']}/{summary['total_tif_files']} successful")
+    logger.info(f"GPKG to MBTiles conversions: {summary['successful_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+    
+    if summary['failed_cog_conversions'] > 0 or summary['failed_mbtiles_conversions'] > 0:
+        logger.warning(f"Some conversions failed. Check logs for details.")
+    else:
+        logger.info("All conversions completed successfully!")
+    
+    return results
+
 def main():
     """
     Main execution function for the EU Climate Risk Assessment System.
@@ -656,6 +1012,8 @@ def main():
             selected_layers.append("Clusters")
         if args.economic_impact:
             selected_layers.append("Economic Impact")
+        if args.web_conversion:
+            selected_layers.append("Web Conversion")
         
         logger.info(f"Selected layers: {', '.join(selected_layers)}")
         
@@ -716,6 +1074,36 @@ def main():
                 sys.exit(1)
         except Exception as e:
             logger.error(f"Error during download: {str(e)}")
+            if args.verbose:
+                import traceback
+                logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            sys.exit(1)
+        return
+    
+    # Handle web-conversion-only mode
+    if args.web_conversion:
+        logger.info("\n" + "="*50)
+        logger.info("WEB-CONVERSION MODE: CONVERTING EXISTING FILES")
+        logger.info("="*50)
+        try:
+            # Initialize project configuration
+            config = ProjectConfig()
+            
+            # Override output directory if specified
+            if args.output_dir:
+                config.output_dir = Path(args.output_dir)
+                config.output_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Using custom output directory: {config.output_dir}")
+            
+            # Run web conversion directly without initializing full RiskAssessment
+            conversion_results = run_web_conversion_standalone(config)
+            
+            logger.info(f"\n{'='*60}")
+            logger.info("WEB CONVERSION COMPLETED SUCCESSFULLY")
+            logger.info(f"{'='*60}")
+            
+        except Exception as e:
+            logger.error(f"Error during web conversion: {str(e)}")
             if args.verbose:
                 import traceback
                 logger.error(f"Full traceback:\n{traceback.format_exc()}")

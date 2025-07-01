@@ -71,14 +71,11 @@ const AVAILABLE_BLOCK_TYPES = [
   "animated-quote",
   "animated-statistics",
   "interactive-map",
-  "climate-timeline",
+  "ship-map",
   "climate-dashboard",
-  "temperature-spiral",
   "interactive-callout",
   "impact-comparison",
   "kpi-showcase",
-  "climate-timeline-minimal",
-  "climate-infographic",
 ];
 
 export default function ContentBlockEditor() {
@@ -140,13 +137,13 @@ export default function ContentBlockEditor() {
           .order("order_index");
 
         if (error) throw error;
-        
+
         // Ensure data field is properly parsed
-        const blocks = (data || []).map(block => ({
+        const blocks = (data || []).map((block) => ({
           ...block,
-          data: block.data || {}
+          data: block.data || {},
         }));
-        
+
         return blocks;
       };
 
@@ -194,13 +191,16 @@ export default function ContentBlockEditor() {
       content: "",
       data: {},
       language: "en",
-      order_index: Math.max(...blockPairs.map(p => p.orderIndex), 0) + 1,
+      order_index: Math.max(...blockPairs.map((p) => p.orderIndex), 0) + 1,
       selectedReferences: [],
     });
     setValidationErrors([]);
   };
 
-  const updateFormField = (field: keyof ContentBlockFormData, value: string | Json) => {
+  const updateFormField = (
+    field: keyof ContentBlockFormData,
+    value: string | Json
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
     if (validationErrors.length > 0) {
@@ -212,9 +212,9 @@ export default function ContentBlockEditor() {
 
   const shiftBlockIndexes = async (fromIndex: number) => {
     if (!storyIds) return;
-    
+
     console.log(`Shifting block indexes from ${fromIndex} and above`);
-    
+
     try {
       // First, get all blocks that need to be shifted
       const [englishBlocks, germanBlocks] = await Promise.all([
@@ -255,7 +255,7 @@ export default function ContentBlockEditor() {
       }
 
       const results = await Promise.all(updates);
-      
+
       for (const result of results) {
         if (result.error) {
           console.error("Error updating block index:", result.error);
@@ -270,16 +270,89 @@ export default function ContentBlockEditor() {
     }
   };
 
+  const reorderBlocksAfterDeletion = async (deletedOrderIndex: number) => {
+    if (!storyIds) return;
+
+    console.log(
+      `Reordering blocks after deletion of index ${deletedOrderIndex}`
+    );
+
+    try {
+      // Get all blocks that come after the deleted block (order_index > deletedOrderIndex)
+      const [englishBlocks, germanBlocks] = await Promise.all([
+        supabase
+          .from("content_blocks")
+          .select("id, order_index")
+          .eq("story_id", storyIds.english)
+          .gt("order_index", deletedOrderIndex)
+          .order("order_index", { ascending: true }),
+        supabase
+          .from("content_blocks")
+          .select("id, order_index")
+          .eq("story_id", storyIds.german)
+          .gt("order_index", deletedOrderIndex)
+          .order("order_index", { ascending: true }),
+      ]);
+
+      if (englishBlocks.error) throw englishBlocks.error;
+      if (germanBlocks.error) throw germanBlocks.error;
+
+      // Update each block to decrease its order_index by 1
+      const updates = [];
+
+      for (const block of englishBlocks.data || []) {
+        updates.push(
+          supabase
+            .from("content_blocks")
+            .update({ order_index: block.order_index - 1 })
+            .eq("id", block.id)
+        );
+      }
+
+      for (const block of germanBlocks.data || []) {
+        updates.push(
+          supabase
+            .from("content_blocks")
+            .update({ order_index: block.order_index - 1 })
+            .eq("id", block.id)
+        );
+      }
+
+      if (updates.length > 0) {
+        const results = await Promise.all(updates);
+
+        for (const result of results) {
+          if (result.error) {
+            console.error("Error reordering block:", result.error);
+            throw result.error;
+          }
+        }
+
+        console.log(
+          `Successfully reordered ${updates.length} blocks after deletion`
+        );
+      } else {
+        console.log("No blocks to reorder after deletion");
+      }
+    } catch (error) {
+      console.error("Failed to reorder blocks after deletion:", error);
+      throw error;
+    }
+  };
+
   const createNewBlockPair = async () => {
     // Only validate required fields for creation: block_type and order_index
     const errors: ValidationError[] = [];
-    
+
     if (!formData.block_type) {
       errors.push({ field: "block_type", message: "Block type is required" });
     }
-    
+
     if (!formData.order_index || formData.order_index < 1) {
-      errors.push({ field: "order_index", message: "Order index must be a positive number" });
+      errors.push({
+        field: "order_index",
+        message: "Order index must be a positive number",
+      });
     }
 
     setValidationErrors(errors);
@@ -305,10 +378,14 @@ export default function ContentBlockEditor() {
     setSaving(true);
     try {
       // Check if a block already exists at this index
-      const existingPair = blockPairs.find(pair => pair.orderIndex === formData.order_index);
-      
+      const existingPair = blockPairs.find(
+        (pair) => pair.orderIndex === formData.order_index
+      );
+
       if (existingPair) {
-        console.log(`Block already exists at index ${formData.order_index}, shifting indexes`);
+        console.log(
+          `Block already exists at index ${formData.order_index}, shifting indexes`
+        );
         // Shift all blocks at this index and above by 1
         await shiftBlockIndexes(formData.order_index);
       }
@@ -360,7 +437,7 @@ export default function ContentBlockEditor() {
 
       console.log("Block pair created successfully:", {
         english: englishResult.data,
-        german: germanResult.data
+        german: germanResult.data,
       });
 
       toast({
@@ -370,7 +447,7 @@ export default function ContentBlockEditor() {
 
       setShowNewForm(false);
       resetForm();
-      
+
       // Refresh the block pairs list
       await fetchBlockPairs();
 
@@ -402,7 +479,7 @@ export default function ContentBlockEditor() {
           language: "de",
         },
       };
-      
+
       console.log("Opening newly created pair for editing:", newPair);
       setSelectedPair(newPair);
     } catch (error) {
@@ -448,9 +525,13 @@ export default function ContentBlockEditor() {
 
       await Promise.all(deletePromises);
 
+      // Reorder remaining blocks to maintain sequential indices
+      await reorderBlocksAfterDeletion(orderIndex);
+
       toast({
         title: "Success",
-        description: "Block pair deleted successfully",
+        description:
+          "Block pair deleted and remaining blocks reordered successfully",
       });
 
       // Refresh the block pairs list
@@ -529,7 +610,8 @@ export default function ContentBlockEditor() {
       console.error("Failed to move block pair:", error);
       toast({
         title: "Failed to move block pair",
-        description: error instanceof Error ? error.message : "Could not reorder blocks",
+        description:
+          error instanceof Error ? error.message : "Could not reorder blocks",
         variant: "destructive",
       });
     }
@@ -548,8 +630,12 @@ export default function ContentBlockEditor() {
         } else {
           // Update specific field path
           let current = block.data as Record<string, unknown>;
-          
-          if (current && typeof current === 'object' && !Array.isArray(current)) {
+
+          if (
+            current &&
+            typeof current === "object" &&
+            !Array.isArray(current)
+          ) {
             for (let i = 0; i < fieldPath.length - 1; i++) {
               if (!current[fieldPath[i]]) current[fieldPath[i]] = {};
               current = current[fieldPath[i]] as Record<string, unknown>;
@@ -572,7 +658,7 @@ export default function ContentBlockEditor() {
 
     try {
       console.log("Saving block pair:", selectedPair);
-      
+
       const updates = [];
 
       if (selectedPair.english) {
@@ -604,7 +690,7 @@ export default function ContentBlockEditor() {
       }
 
       const results = await Promise.all(updates);
-      
+
       console.log("Update results:", results);
 
       for (const result of results) {
@@ -698,7 +784,8 @@ export default function ContentBlockEditor() {
 
   const renderLanguageSpecificFields = (
     block: ContentBlock | null,
-    updateBlock: (updatedBlock: ContentBlock) => void
+    updateBlock: (updatedBlock: ContentBlock) => void,
+    language: "en" | "de"
   ) => {
     if (!block) return null;
 
@@ -712,6 +799,7 @@ export default function ContentBlockEditor() {
         content={block.content}
         onTitleChange={(title) => updateBlock({ ...block, title })}
         onContentChange={(content) => updateBlock({ ...block, content })}
+        language={language}
         mode="language-specific"
       />
     );
@@ -733,10 +821,12 @@ export default function ContentBlockEditor() {
           <h2 className="text-xl font-semibold">Content Block Editor</h2>
           <Badge variant="outline">{blockPairs.length} block pairs</Badge>
         </div>
-        <Button onClick={() => {
-          resetForm(); // This will set the correct order index
-          setShowNewForm(true);
-        }}>
+        <Button
+          onClick={() => {
+            resetForm(); // This will set the correct order index
+            setShowNewForm(true);
+          }}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add Block Pair
         </Button>
@@ -946,7 +1036,7 @@ export default function ContentBlockEditor() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base flex items-center gap-2">
-                        🇺🇸 English
+                        🇬🇧 English
                         {selectedPair.english && (
                           <Badge variant="outline" className="text-xs">
                             ID: {selectedPair.english.id.slice(0, 8)}
@@ -975,7 +1065,8 @@ export default function ContentBlockEditor() {
                           setSelectedPair({
                             ...selectedPair,
                             english: updatedBlock,
-                          })
+                          }),
+                        "en"
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">
@@ -1018,7 +1109,8 @@ export default function ContentBlockEditor() {
                           setSelectedPair({
                             ...selectedPair,
                             german: updatedBlock,
-                          })
+                          }),
+                        "de"
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">

@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import {
+  S3Client,
+  ListObjectsV2Command,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME } from "@/lib/r2-config";
 import { promises as fs } from "fs";
 import path from "path";
+
+const s3Client = new S3Client(R2_CONFIG);
 
 export async function DELETE(
   request: NextRequest,
@@ -23,20 +30,23 @@ export async function DELETE(
     const deletedFiles: string[] = [];
     const foundFiles: string[] = [];
 
-    // First, get all files from Supabase storage and find matches
+    // Get all files from R2 storage and find matches
     try {
-      const { data: files, error: listError } = await supabase.storage
-        .from("map-layers")
-        .list();
+      const command = new ListObjectsV2Command({
+        Bucket: R2_BUCKET_NAME,
+        Prefix: "map-layers/",
+        MaxKeys: 1000,
+      });
 
-      if (listError) {
-        console.warn("Error listing Supabase files:", listError);
-      } else if (files) {
-        console.log(`Found ${files.length} files in Supabase storage`);
+      const response = await s3Client.send(command);
+
+      if (response.Contents) {
+        console.log(`Found ${response.Contents.length} files in R2 storage`);
 
         // Find files that match our layerId (exact match or with common extensions)
-        const matchingFiles = files.filter((file) => {
-          const fileName = file.name;
+        const matchingFiles = response.Contents.filter((object) => {
+          if (!object.Key) return false;
+          const fileName = path.basename(object.Key);
           const baseName = path.basename(fileName, path.extname(fileName));
           return baseName === layerId || fileName === layerId;
         });
@@ -46,24 +56,28 @@ export async function DELETE(
         );
 
         for (const file of matchingFiles) {
-          foundFiles.push(file.name);
-          console.log(`Found in Supabase: ${file.name}`);
+          if (!file.Key) continue;
+
+          foundFiles.push(file.Key);
+          console.log(`Found in R2: ${file.Key}`);
 
           // Attempt to delete
-          const { error: deleteError } = await supabase.storage
-            .from("map-layers")
-            .remove([file.name]);
+          try {
+            const deleteCommand = new DeleteObjectCommand({
+              Bucket: R2_BUCKET_NAME,
+              Key: file.Key,
+            });
 
-          if (!deleteError) {
-            deletedFiles.push(file.name);
-            console.log(`Deleted from Supabase: ${file.name}`);
-          } else {
-            console.warn(`Failed to delete ${file.name}:`, deleteError);
+            await s3Client.send(deleteCommand);
+            deletedFiles.push(file.Key);
+            console.log(`Deleted from R2: ${file.Key}`);
+          } catch (deleteError) {
+            console.warn(`Failed to delete ${file.Key}:`, deleteError);
           }
         }
       }
     } catch (storageError) {
-      console.warn("Supabase storage access failed:", storageError);
+      console.warn("R2 storage access failed:", storageError);
     }
 
     // Also check local files (for completeness)

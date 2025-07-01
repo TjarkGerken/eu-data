@@ -3,20 +3,27 @@
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Quote } from "lucide-react";
-// import { useLanguage } from "@/contexts/language-context";
+import { useLanguage } from "@/contexts/language-context";
 
 interface AnimatedQuoteBlockProps {
   text: string;
   author: string;
   role?: string;
+  references?: Array<{
+    id: string;
+    title: string;
+    authors: string[];
+    type: string;
+  }>;
 }
 
 export function AnimatedQuoteBlock({
   text,
   author,
   role,
+  references,
 }: AnimatedQuoteBlockProps) {
-  // const { language } = useLanguage();
+  const { language } = useLanguage();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -126,6 +133,43 @@ export function AnimatedQuoteBlock({
           </CardContent>
         </Card>
       </motion.div>
+
+      {references && references.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 1.2, duration: 0.6 }}
+          className="mt-8 pt-6 border-t border-muted"
+        >
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">
+            {language === "de" ? "Referenzen" : "References"}
+          </h4>
+          <div className="space-y-2">
+            {references.map((ref) => (
+              <motion.div
+                key={ref.id}
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4 }}
+                className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => {
+                  const event = new CustomEvent("highlightReference", {
+                    detail: ref.id,
+                  });
+                  window.dispatchEvent(event);
+                }}
+              >
+                <span className="font-medium">{ref.title}</span>
+                {ref.authors && ref.authors.length > 0 && (
+                  <span className="ml-2">- {ref.authors.join(", ")}</span>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

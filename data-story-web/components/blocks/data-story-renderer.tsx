@@ -1,31 +1,45 @@
 "use client";
 
-import { DataStoryBlock } from "@/lib/types";
+import { useMemo } from "react";
+import { DataStoryBlock, Reference } from "@/lib/types";
 import { MarkdownBlock } from "./markdown-block";
 import { CalloutBlock } from "./callout-block";
 
 import { VisualizationCard } from "@/components/visualization-card";
 import { InteractiveMap } from "@/components/interactive-map";
+import { ShipMap } from "@/components/ship-map";
 import { AnimatedQuoteBlock } from "./animated-quote-block";
 import { AnimatedStatisticsBlock } from "./animated-statistics-block";
-import { ClimateTimelineBlock } from "./climate-timeline-block";
 import { ClimateDashboardBlock } from "./climate-dashboard-block";
-import { TemperatureSpiralBlock } from "./temperature-spiral-block";
 import { InteractiveCalloutBlock } from "./interactive-callout-block";
 import ImpactComparisonBlockComponent from "./impact-comparison-block";
 import KpiShowcaseBlockComponent from "./kpi-showcase-block";
-import ClimateTimelineMinimalBlockComponent from "./climate-timeline-minimal-block";
-import ClimateInfographicBlockComponent from "./climate-infographic-block";
+import { GlobalCitationProvider } from "@/contexts/global-citation-context";
+import { processGlobalCitations } from "@/lib/global-citation-processor";
 
 interface DataStoryRendererProps {
   blocks: DataStoryBlock[];
+  globalReferences: Reference[];
 }
 
-export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
+export function DataStoryRenderer({
+  blocks,
+  globalReferences,
+}: DataStoryRendererProps) {
+  // Process global citations once for all blocks, using the global references list
+  const globalCitationData = useMemo(() => {
+    return processGlobalCitations(blocks || [], globalReferences || []);
+  }, [blocks, globalReferences]);
   const renderBlock = (block: DataStoryBlock, index: number) => {
     switch (block.type) {
       case "markdown":
-        return <MarkdownBlock key={index} content={block.content} />;
+        return (
+          <MarkdownBlock
+            key={index}
+            content={block.content}
+            references={block.references}
+          />
+        );
 
       case "callout":
         return (
@@ -34,25 +48,34 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             title={block.title}
             content={block.content}
             variant={block.variant}
+            references={block.references}
           />
         );
 
       case "visualization":
+        console.log(block.data.captionEn, block.data.captionDe);
         return (
           <VisualizationCard
             key={index}
             title={block.data.title as string}
-            description={block.data.description as string}
             imageCategory={
               block.data.imageCategory as
-                | "risk"
-                | "exposition"
                 | "hazard"
-                | "combined"
+                | "exposition"
+                | "relevance"
+                | "risk"
+                | "risk-clusters"
                 | undefined
             }
             imageScenario={
-              block.data.imageScenario as "current" | "severe" | undefined
+              block.data.imageScenario as
+                | "current"
+                | "conservative"
+                | "moderate"
+                | "severe"
+                | "none"
+                | "all"
+                | undefined
             }
             imageId={block.data.imageId as string}
             content={block.data.content as string}
@@ -68,6 +91,7 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             text={block.text}
             author={block.author}
             role={block.role}
+            references={block.references}
           />
         );
 
@@ -78,16 +102,9 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             title={block.title}
             description={block.description}
             stats={block.stats}
-          />
-        );
-
-      case "climate-timeline":
-        return (
-          <ClimateTimelineBlock
-            key={index}
-            title={block.title}
-            description={block.description}
-            events={block.events}
+            gridColumns={block.gridColumns}
+            colorScheme={block.colorScheme}
+            references={block.references}
           />
         );
 
@@ -96,20 +113,8 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
           <ClimateDashboardBlock
             key={index}
             title={block.title}
-            description={block.description}
             metrics={block.metrics}
-          />
-        );
-
-      case "temperature-spiral":
-        return (
-          <TemperatureSpiralBlock
-            key={index}
-            title={block.title}
-            description={block.description}
-            startYear={block.startYear}
-            endYear={block.endYear}
-            rotations={block.rotations}
+            references={block.references}
           />
         );
 
@@ -119,8 +124,10 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             key={index}
             title={block.title}
             content={block.content}
+            expandedContent={block.expandedContent}
             variant={block.variant}
             interactive={block.interactive}
+            references={block.references}
           />
         );
 
@@ -129,14 +136,6 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
 
       case "kpi-showcase":
         return <KpiShowcaseBlockComponent key={index} block={block} />;
-
-      case "climate-timeline-minimal":
-        return (
-          <ClimateTimelineMinimalBlockComponent key={index} block={block} />
-        );
-
-      case "climate-infographic":
-        return <ClimateInfographicBlockComponent key={index} block={block} />;
 
       case "interactive-map":
         return (
@@ -151,6 +150,44 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
             centerLng={block.centerLng || 5.2913}
             zoom={block.zoom || 8}
             autoFitBounds={block.autoFitBounds || false}
+            showLayerToggles={block.showLayerToggles !== false}
+            showOpacityControls={block.showOpacityControls !== false}
+            showDownloadButtons={block.showDownloadButtons !== false}
+            predefinedOpacities={block.predefinedOpacities || {}}
+            enableClusterGroups={block.enableClusterGroups || false}
+            clusterGroups={block.clusterGroups || []}
+          />
+        );
+
+      case "ship-map":
+        return (
+          <ShipMap
+            key={index}
+            title={block.title}
+            description={block.description}
+            height={block.height || "600px"}
+            centerLat={block.centerLat}
+            centerLng={block.centerLng}
+            zoom={block.zoom}
+            seamarkOpacity={block.seamarkOpacity || 80}
+            enableSeamarkLayer={block.enableSeamarkLayer !== false}
+            tileServerOption={block.tileServerOption || "openseamap"}
+            portFocus={block.portFocus || "rotterdam"}
+            showControls={block.showControls !== false}
+            enableRailwayLayer={block.enableRailwayLayer || false}
+            railwayOpacity={block.railwayOpacity || 70}
+            railwayStyle={block.railwayStyle || "standard"}
+            showPortFocusControl={block.showPortFocusControl !== false}
+            showMapStyleControl={block.showMapStyleControl !== false}
+            showSeamarkLayerControl={block.showSeamarkLayerControl !== false}
+            showSeamarkOpacityControl={
+              block.showSeamarkOpacityControl !== false
+            }
+            showRailwayLayerControl={block.showRailwayLayerControl !== false}
+            showRailwayStyleControl={block.showRailwayStyleControl !== false}
+            showRailwayOpacityControl={
+              block.showRailwayOpacityControl !== false
+            }
           />
         );
 
@@ -170,8 +207,10 @@ export function DataStoryRenderer({ blocks }: DataStoryRendererProps) {
   }
 
   return (
-    <div className="space-y-8">
-      {blocks.map((block, index) => renderBlock(block, index))}
-    </div>
+    <GlobalCitationProvider globalCitationData={globalCitationData}>
+      <div className="space-y-8">
+        {blocks.map((block, index) => renderBlock(block, index))}
+      </div>
+    </GlobalCitationProvider>
   );
 }

@@ -22,13 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Upload,
-  Trash2,
-  FileImage,
-  Map,
-  Loader2,
-} from "lucide-react";
+import { Upload, Trash2, FileImage, Map, Loader2 } from "lucide-react";
 import {
   mapTileService,
   MapLayerMetadata,
@@ -75,9 +69,9 @@ export default function LayerManager() {
       setLayerName(baseName);
 
       const extension = file.name.split(".").pop()?.toLowerCase();
-      if (extension === "tif" || extension === "tiff") {
+      if (extension === "cog" || extension === "tif" || extension === "tiff") {
         setLayerType("raster");
-      } else if (extension === "geojson" || extension === "gpkg") {
+      } else if (extension === "mbtiles") {
         setLayerType("vector");
       }
     }
@@ -204,15 +198,15 @@ export default function LayerManager() {
                 <Input
                   id="file"
                   type="file"
-                  accept=".tif,.tiff,.geojson,.gpkg"
+                  accept=".cog,.mbtiles,.tif,.tiff"
                   onChange={handleFileSelect}
                   disabled={uploading}
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Supported formats: TIF, GeoJSON, GeoPackage
+                  Supported formats: COG, MBTiles, TIFF (for cluster processing)
                   <br />
-                  Files will be automatically optimized (COG for TIF, simplified
-                  GeoJSON for vectors)
+                  Files are already web-optimized and ready for efficient
+                  serving
                 </p>
               </div>
 
@@ -248,10 +242,8 @@ export default function LayerManager() {
                     <SelectValue placeholder="Select layer type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="raster">Raster (TIF)</SelectItem>
-                    <SelectItem value="vector">
-                      Vector (GeoJSON/GeoPackage)
-                    </SelectItem>
+                    <SelectItem value="raster">Raster (COG)</SelectItem>
+                    <SelectItem value="vector">Vector (MBTiles)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

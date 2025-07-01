@@ -12,7 +12,7 @@ import {
   BarChart3,
   Globe,
 } from "lucide-react";
-// import { useLanguage } from "@/contexts/language-context";
+import { useLanguage } from "@/contexts/language-context";
 
 interface AnimatedStatisticsBlockProps {
   title?: string;
@@ -24,6 +24,14 @@ interface AnimatedStatisticsBlockProps {
     change?: string;
     trend?: "up" | "down";
     color: string;
+  }>;
+  gridColumns?: number;
+  colorScheme?: "default" | "green" | "blue" | "purple" | "orange";
+  references?: Array<{
+    id: string;
+    title: string;
+    authors: string[];
+    type: string;
   }>;
 }
 
@@ -41,11 +49,48 @@ export function AnimatedStatisticsBlock({
   title,
   description,
   stats,
+  gridColumns = 4,
+  colorScheme = "default",
+  references,
 }: AnimatedStatisticsBlockProps) {
-  // const { language } = useLanguage();
+  const { language } = useLanguage();
 
   const getIconComponent = (iconName: string) => {
     return iconMap[iconName as keyof typeof iconMap] || BarChart3;
+  };
+
+  const getColorScheme = () => {
+    switch (colorScheme) {
+      case "green":
+        return "from-green-50 to-emerald-50";
+      case "blue":
+        return "from-blue-50 to-cyan-50";
+      case "purple":
+        return "from-purple-50 to-violet-50";
+      case "orange":
+        return "from-orange-50 to-amber-50";
+      default:
+        return "from-[#2d5a3d]/5 to-[#c4a747]/5";
+    }
+  };
+
+  const getGridColumns = () => {
+    switch (gridColumns) {
+      case 1:
+        return "grid-cols-1";
+      case 2:
+        return "grid-cols-1 md:grid-cols-2";
+      case 3:
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
+      case 4:
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
+      case 5:
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5";
+      case 6:
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6";
+      default:
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
+    }
   };
 
   const containerVariants = {
@@ -70,7 +115,9 @@ export function AnimatedStatisticsBlock({
   };
 
   return (
-    <div className="my-16 p-8 bg-gradient-to-r from-[#2d5a3d]/5 to-[#c4a747]/5 rounded-lg">
+    <div
+      className={`my-16 p-8 bg-gradient-to-r ${getColorScheme()} rounded-lg`}
+    >
       {(title || description) && (
         <motion.div
           initial="hidden"
@@ -103,7 +150,7 @@ export function AnimatedStatisticsBlock({
         whileInView="visible"
         viewport={{ once: true, margin: "-50px" }}
         variants={containerVariants}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        className={`grid ${getGridColumns()} gap-6`}
       >
         {stats.map((stat, index) => {
           const IconComponent = getIconComponent(stat.icon);
@@ -158,6 +205,40 @@ export function AnimatedStatisticsBlock({
           );
         })}
       </motion.div>
+
+      {references && references.length > 0 && (
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+          variants={containerVariants}
+          className="mt-8 pt-6 border-t border-muted"
+        >
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">
+            {language === "de" ? "Referenzen" : "References"}
+          </h4>
+          <div className="space-y-2">
+            {references.map((ref) => (
+              <motion.div
+                key={ref.id}
+                variants={itemVariants}
+                className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => {
+                  const event = new CustomEvent("highlightReference", {
+                    detail: ref.id,
+                  });
+                  window.dispatchEvent(event);
+                }}
+              >
+                <span className="font-medium">{ref.title}</span>
+                {ref.authors && ref.authors.length > 0 && (
+                  <span className="ml-2">- {ref.authors.join(", ")}</span>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

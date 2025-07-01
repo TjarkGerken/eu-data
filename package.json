@@ -1,0 +1,5 @@
+{
+	"dependencies": {
+		"leaflet-defaulticon-compatibility": "^0.1.2"
+	}
+}
