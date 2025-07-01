@@ -89,7 +89,7 @@ class CachingLayerWrapper:
             },
             'calculate_exposition': {
                 'cache_type': 'final_results',
-                'input_files_attr': ['ghs_built_c_path', 'ghs_built_v_path', 'population_path'],
+                'input_files_attr': ['ghs_built_c_path', 'ghs_built_v_path', 'population_2025_path'],
                 'config_attrs': base_config_attrs + ['exposition_weights', 'ghs_built_c_class_weights']
             },
             'normalize_ghs_built_c': {
