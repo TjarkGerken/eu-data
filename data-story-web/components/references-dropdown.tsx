@@ -72,12 +72,13 @@ export function ReferencesDropdown({
     return selectedReferences
       .map((id) => references.find((ref) => ref.id === id))
       .filter(Boolean)
-      .map(
-        (ref) =>
-          `[${ref!.id}] ${ref!.title.substring(0, 30)}${
-            ref!.title.length > 30 ? "..." : ""
-          }`
-      );
+      .map((ref) => {
+        if (!ref || !ref.id || !ref.title) return '';
+        return `[${ref.id}] ${ref.title.substring(0, 30)}${
+          ref.title.length > 30 ? "..." : ""
+        }`;
+      })
+      .filter(Boolean);
   };
 
   if (loading) {

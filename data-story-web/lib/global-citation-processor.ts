@@ -31,6 +31,8 @@ function generateReadableId(ref: Reference, index: number = 0): string {
 function createReadableIdMap(references: Reference[]): Map<string, string> {
   const readableIdMap = new Map<string, string>();
   
+  if (!Array.isArray(references)) return readableIdMap;
+  
   references.forEach((ref) => {
     // Check for duplicates to generate unique readable ID
     const duplicates = references.filter(r => {
@@ -68,8 +70,10 @@ function getAllReferencesFromBlocks(blocks: DataStoryBlock[]): Reference[] {
   const allReferences: Reference[] = [];
   const seenIds = new Set<string>();
   
+  if (!Array.isArray(blocks)) return allReferences;
+  
   blocks.forEach(block => {
-    if ('references' in block && block.references) {
+    if ('references' in block && Array.isArray(block.references)) {
       block.references.forEach((ref) => {
         // Handle both string IDs and Reference objects
         if (typeof ref === 'string') {
@@ -97,14 +101,20 @@ export function processGlobalCitations(blocks: DataStoryBlock[], globalReference
   const citationOrder: string[] = [];
   let citationCounter = 1;
   
+  // Ensure we have valid arrays
+  const safeBlocks = Array.isArray(blocks) ? blocks : [];
+  const safeGlobalReferences = Array.isArray(globalReferences) ? globalReferences : [];
+  
   // Get all available references from all blocks
-  const allReferences = getAllReferencesFromBlocks(blocks);
+  const allReferences = getAllReferencesFromBlocks(safeBlocks);
   
   // Create readable ID mapping from globalReferences (not just block references)
-  const readableIdMap = createReadableIdMap(globalReferences.length > 0 ? globalReferences : allReferences);
+  const readableIdMap = createReadableIdMap(
+    safeGlobalReferences.length > 0 ? safeGlobalReferences : allReferences
+  );
   
   // Process blocks in order to maintain citation sequence
-  blocks.forEach(block => {
+  safeBlocks.forEach(block => {
     let content = '';
     
     // Extract content that might contain citations

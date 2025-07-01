@@ -48,9 +48,9 @@ export function CitationAwareMarkdown({ content, references = [] }: CitationAwar
       }
       
       // Fallback: find citations that exist in this block's content and available references
-      const originalCitationMatches = [...content.matchAll(/\\cite\{([^}]+)\}/g)];
+      const originalCitationMatches = content && typeof content === 'string' ? [...content.matchAll(/\\cite\{([^}]+)\}/g)] : [];
       
-      if (originalCitationMatches.length > 0) {
+      if (originalCitationMatches && originalCitationMatches.length > 0) {
         const localCitationReferences = new Map<number, string>();
         
         // For each citation found in the original content, check if:
@@ -93,7 +93,7 @@ export function CitationAwareMarkdown({ content, references = [] }: CitationAwar
     const referencedIds = new Set<string>();
     let citationCounter = 1;
 
-    const citationMatches = [...content.matchAll(/\\cite\{([^}]+)\}/g)];
+    const citationMatches = content && typeof content === 'string' ? [...content.matchAll(/\\cite\{([^}]+)\}/g)] : [];
     
     citationMatches.forEach(match => {
       const refId = match[1];
@@ -254,12 +254,15 @@ export function CitationAwareMarkdown({ content, references = [] }: CitationAwar
         {processedData.processedContent}
       </ReactMarkdown>
 
-{processedData.citationReferences.size > 0 && (() => {
-        const referencesToShow = Array.from(processedData.citationReferences.entries())
+{processedData?.citationReferences?.size > 0 && (() => {
+        const referencesToShow = Array.from(processedData.citationReferences.entries() || [])
           .sort((a, b) => a[0] - b[0])
           .map(([citationNumber, referenceId]) => {
-            const ref = references.find(r => r?.id === referenceId);
-            return ref ? (
+            if (!referenceId) return null;
+            const ref = (references || []).find(r => r?.id === referenceId);
+            if (!ref || !ref.id || !ref.title) return null;
+            
+            return (
               <div 
                 key={ref.id} 
                 className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors flex items-start gap-2"
@@ -270,16 +273,16 @@ export function CitationAwareMarkdown({ content, references = [] }: CitationAwar
                 </span>
                 <div className="flex-1">
                   <span className="font-medium">{ref.title}</span>
-                  {ref.authors && ref.authors.length > 0 && (
+                  {Array.isArray(ref.authors) && ref.authors.length > 0 && (
                     <span className="ml-2">- {ref.authors.join(", ")}</span>
                   )}
                 </div>
               </div>
-            ) : null;
+            );
           })
           .filter(Boolean);
 
-        return referencesToShow.length > 0 ? (
+        return (referencesToShow?.length || 0) > 0 ? (
           <div className="mt-8 pt-6 border-t border-muted">
             <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
             <div className="space-y-2">
