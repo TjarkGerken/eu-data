@@ -269,6 +269,13 @@ export interface InteractiveMapBlock {
   showDownloadButtons?: boolean;
   // Pre-defined layer opacities
   predefinedOpacities?: Record<string, number>;
+  // Cluster groups for SLR scenarios
+  enableClusterGroups?: boolean;
+  clusterGroups?: Array<{
+    id: string;
+    name: string;
+    layerIds: string[];
+  }>;
 }
 
 export interface ShipMapBlock {

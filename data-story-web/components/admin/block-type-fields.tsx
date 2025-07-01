@@ -52,6 +52,13 @@ interface MapLayerData {
   showDownloadButtons?: boolean;
   // Pre-defined layer opacities
   predefinedOpacities?: Record<string, number>;
+  // Cluster groups for SLR scenarios
+  enableClusterGroups?: boolean;
+  clusterGroups?: Array<{
+    id: string;
+    name: string;
+    layerIds: string[];
+  }>;
 }
 
 interface ShipMapData {
@@ -108,7 +115,13 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
 
   const updateDataField = (
     field: keyof MapLayerData,
-    value: string | boolean | string[] | number | Record<string, number>
+    value:
+      | string
+      | boolean
+      | string[]
+      | number
+      | Record<string, number>
+      | Array<{ id: string; name: string; layerIds: string[] }>
   ) => {
     onDataChange({ ...data, [field]: value });
   };
@@ -379,6 +392,156 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
                 );
               })}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Cluster Groups Section */}
+      <div className="border-t pt-4 mt-4">
+        <div className="flex items-center space-x-2 mb-3">
+          <Switch
+            id="enable-cluster-groups"
+            checked={data?.enableClusterGroups || false}
+            onCheckedChange={(checked) =>
+              updateDataField("enableClusterGroups", checked)
+            }
+          />
+          <Label
+            htmlFor="enable-cluster-groups"
+            className="text-sm font-medium"
+          >
+            Enable SLR Scenario Groups
+          </Label>
+        </div>
+
+        {data?.enableClusterGroups && (
+          <div className="space-y-4">
+            <div className="text-xs text-muted-foreground mb-3">
+              Group layers into SLR (Sea Level Rise) scenarios that users can
+              switch between with a wave slider.
+            </div>
+
+            {(
+              (data?.clusterGroups as Array<{
+                id: string;
+                name: string;
+                layerIds: string[];
+              }>) || []
+            ).map((group, index) => (
+              <Card key={index}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <Label className="text-sm font-medium">
+                      Scenario {index + 1}
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const newGroups = [...(data?.clusterGroups || [])];
+                        newGroups.splice(index, 1);
+                        updateDataField("clusterGroups", newGroups);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <Label className="text-xs">Scenario ID</Label>
+                      <Input
+                        value={group.id}
+                        onChange={(e) => {
+                          const newGroups = [...(data?.clusterGroups || [])];
+                          newGroups[index] = { ...group, id: e.target.value };
+                          updateDataField("clusterGroups", newGroups);
+                        }}
+                        placeholder="e.g., SLR-0"
+                        className="text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Display Name</Label>
+                      <Input
+                        value={group.name}
+                        onChange={(e) => {
+                          const newGroups = [...(data?.clusterGroups || [])];
+                          newGroups[index] = { ...group, name: e.target.value };
+                          updateDataField("clusterGroups", newGroups);
+                        }}
+                        placeholder="e.g., Current Scenario"
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs mb-2 block">
+                      Selected Layers for this Scenario
+                    </Label>
+                    <div className="grid grid-cols-1 gap-1 max-h-32 overflow-y-auto">
+                      {availableLayers.map((layer) => {
+                        const isInGroup = group.layerIds.includes(layer.id);
+                        return (
+                          <div
+                            key={layer.id}
+                            className={`flex items-center justify-between p-2 rounded cursor-pointer text-xs ${
+                              isInGroup
+                                ? "bg-primary/10 border border-primary/20"
+                                : "bg-gray-50 hover:bg-gray-100"
+                            }`}
+                            onClick={() => {
+                              const newGroups = [
+                                ...(data?.clusterGroups || []),
+                              ];
+                              const newLayerIds = isInGroup
+                                ? group.layerIds.filter((id) => id !== layer.id)
+                                : [...group.layerIds, layer.id];
+                              newGroups[index] = {
+                                ...group,
+                                layerIds: newLayerIds,
+                              };
+                              updateDataField("clusterGroups", newGroups);
+                            }}
+                          >
+                            <span>{layer.name}</span>
+                            {isInGroup && (
+                              <Badge
+                                variant="default"
+                                className="text-xs px-1 py-0"
+                              >
+                                ✓
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                const newGroups = [
+                  ...(data?.clusterGroups || []),
+                  {
+                    id: `SLR-${(data?.clusterGroups || []).length}`,
+                    name: `Scenario ${(data?.clusterGroups || []).length + 1}`,
+                    layerIds: [],
+                  },
+                ];
+                updateDataField("clusterGroups", newGroups);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add SLR Scenario
+            </Button>
           </div>
         )}
       </div>
