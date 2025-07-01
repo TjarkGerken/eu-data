@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SupabaseImageManager } from "@/lib/blob-manager";
+import { CloudflareR2Manager } from "@/lib/blob-manager";
 import { BLOB_CONFIG, ImageCategory, ImageScenario } from "@/lib/blob-config";
 
 export async function POST(request: NextRequest) {
@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const category = formData.get("category") as string;
     const scenario = formData.get("scenario") as string;
-    const description = formData.get("description") as string;
     const id = formData.get("id") as string;
+    const description = formData.get("description") as string;
 
-    if (!file || !category || !description || !id) {
+    if (!file || !category || !id) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -34,11 +34,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
 
-    const result = await SupabaseImageManager.uploadImage(file, {
+    const result = await CloudflareR2Manager.uploadImage(file, {
       id,
       category: category as ImageCategory,
       scenario: scenario === "" ? undefined : (scenario as ImageScenario),
-      description,
+      alt: { en: "", de: "" },
+      caption: { en: description || "", de: "" },
     });
 
     return NextResponse.json(result);

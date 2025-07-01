@@ -11,10 +11,51 @@ export function useDynamicContent() {
   const [error, setError] = useState<string | null>(null);
 
   const transformContentData = (data: any): DynamicContent => {
+    // Helper function to resolve reference IDs to full reference objects
+    const resolveReferences = (block: any) => {
+      // References can come from multiple sources:
+      // 1. block.references (direct from database) - already full objects
+      // 2. block.data.references (from admin interface) - array of IDs that need resolution
+      // 3. block.references (from content) - array of string IDs that need resolution
+
+      let referenceIds: string[] = [];
+
+      if (
+        block.references &&
+        Array.isArray(block.references) &&
+        block.references.length > 0
+      ) {
+        // Check if we have full reference objects
+        if (typeof block.references[0] === "object" && block.references[0].id) {
+          return block.references;
+        }
+        // Otherwise, they're string IDs
+        referenceIds = block.references;
+      }
+
+      // Also check data.references for IDs
+      if (block.data?.references && Array.isArray(block.data.references)) {
+        referenceIds = [...referenceIds, ...block.data.references];
+      }
+
+      // Resolve all collected IDs to full reference objects
+      if (referenceIds.length > 0) {
+        return referenceIds
+          .map((id: string) => {
+            const fullRef = data.references?.find((ref: any) => ref.id === id);
+            return fullRef || null;
+          })
+          .filter(Boolean); // Remove any null values
+      }
+
+      return [];
+    };
+
     const transformBlock = (block: any) => {
       // Handle specific block type transformations
       switch (block.blockType) {
         case "visualization":
+          console.log("Transforming visualization block:", block);
           return {
             type: "visualization",
             data: {
@@ -22,6 +63,8 @@ export function useDynamicContent() {
               description: block.data.description || "",
               content: block.data.content || "",
               type: block.data.type || "map",
+              captionDe: block.data.captionDe || "",
+              captionEn: block.data.captionEn || "",
               imageCategory: block.data.imageCategory || "",
               imageScenario: block.data.imageScenario || "",
               imageId: block.data.imageId || "",
@@ -30,12 +73,11 @@ export function useDynamicContent() {
           };
 
         case "markdown":
-          console.log("Transforming markdown block:", block);
           const markdownBlock = {
             type: "markdown",
             content: block.content || block.data.content || "",
+            references: resolveReferences(block),
           };
-          console.log("Transformed markdown block:", markdownBlock);
           return markdownBlock;
 
         case "callout":
@@ -44,6 +86,7 @@ export function useDynamicContent() {
             title: block.title || block.data.title || "",
             content: block.content || block.data.content || "",
             variant: block.data.variant || "default",
+            references: resolveReferences(block),
           };
 
         case "quote":
@@ -52,18 +95,21 @@ export function useDynamicContent() {
             content: block.data.content,
             author: block.data.author,
             role: block.data.role,
+            references: resolveReferences(block),
           };
 
         case "statistics":
           return {
             type: "statistics",
             stats: block.data.stats,
+            references: resolveReferences(block),
           };
 
         case "timeline":
           return {
             type: "timeline",
             events: block.data.events,
+            references: resolveReferences(block),
           };
 
         case "animated-quote":
@@ -74,6 +120,7 @@ export function useDynamicContent() {
             text: block.data.text || "",
             author: block.data.author || "",
             role: block.data.role || "",
+            references: resolveReferences(block),
           };
 
         default:
@@ -81,6 +128,7 @@ export function useDynamicContent() {
             type: block.blockType,
             title: block.title || block.data.title,
             content: block.content || block.data.content,
+            references: resolveReferences(block),
             ...block.data,
           };
       }
@@ -92,11 +140,13 @@ export function useDynamicContent() {
       .filter((block: any) => block.blockType === "visualization")
       .map((block: any) => ({
         title: block.data.title || "",
-        description: block.data.description || "",
+        captionDe: block.data.captionDe || "",
+        captionEn: block.data.captionEn || "",
         content: block.data.content || "",
         type: block.data.type || "map",
         imageCategory: block.data.imageCategory || "",
         imageScenario: block.data.imageScenario || "",
+        imageIndicator: block.data.imageIndicator || "",
         imageId: block.data.imageId || "",
         references: block.references?.map((ref: any) => ref.id) || [],
       }));
@@ -119,8 +169,10 @@ export function useDynamicContent() {
       setError(null);
 
       // Add cache busting for forced reloads
-      const cacheParam = forceReload ? `&_t=${Date.now()}` : '';
-      const response = await fetch(`/api/content?language=${language}${cacheParam}`);
+      const cacheParam = forceReload ? `&_t=${Date.now()}` : "";
+      const response = await fetch(
+        `/api/content?language=${language}${cacheParam}`
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch content");
       }
@@ -131,43 +183,11 @@ export function useDynamicContent() {
         throw new Error(`Content not found for language: ${language}`);
       }
 
-      console.log("Fetched content data:", contentData);
-      console.log("Content blocks:", contentData.blocks);
-
       const transformedContent = transformContentData(contentData);
-      console.log("Transformed content blocks:", transformedContent.blocks);
       setContent(transformedContent);
     } catch (err) {
       console.error("Error loading content:", err);
       setError(err instanceof Error ? err.message : "Failed to load content");
-
-      const fallbackContent: DynamicContent = {
-        heroTitle: "European Climate Data Analysis",
-        heroDescription:
-          "Exploring climate patterns and environmental changes across European regions through comprehensive data visualization and analysis.",
-        dataStoryTitle: "European Climate Risk Assessment",
-        introText1:
-          "Climate change poses significant threats to European coastal regions through sea level rise, increased storm intensity, and changing precipitation patterns.",
-        introText2:
-          "This data story presents a systematic approach to climate risk assessment, integrating high-resolution spatial data, scenario modeling, and impact analysis.",
-        blocks: [],
-        visualizations: [
-          {
-            title: "Climate Hazard Risk Assessment",
-            description:
-              "Comprehensive analysis of climate hazards across different sea level rise scenarios showing current and projected risk levels.",
-            content:
-              "Our hazard assessment reveals significant variations in climate risk across European coastal regions. Under current conditions, 9.7% of the study area faces high risk.",
-            type: "map",
-            imageCategory: "hazard",
-            imageScenario: "current",
-            imageId: "current-scenario",
-            references: ["1", "3"],
-          },
-        ],
-        references: [],
-      };
-      setContent(fallbackContent);
     } finally {
       setLoading(false);
     }
@@ -180,7 +200,6 @@ export function useDynamicContent() {
   // Subscribe to cache invalidation events
   useEffect(() => {
     const unsubscribe = contentCacheService.subscribe(() => {
-      console.log('Content cache invalidated, reloading...');
       loadContent(true);
     });
 

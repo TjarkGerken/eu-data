@@ -22,6 +22,7 @@ export interface Visualization {
 export interface MarkdownBlock {
   type: "markdown";
   content: string;
+  references?: Reference[];
 }
 
 export interface CalloutBlock {
@@ -29,6 +30,7 @@ export interface CalloutBlock {
   title: string;
   content: string;
   variant: "success" | "warning" | "info" | "error";
+  references?: Reference[];
 }
 
 export interface QuoteBlock {
@@ -79,6 +81,7 @@ export interface AnimatedQuoteBlock {
   text: string;
   author: string;
   role?: string;
+  references?: Reference[];
 }
 
 export interface AnimatedStatisticsBlock {
@@ -93,6 +96,9 @@ export interface AnimatedStatisticsBlock {
     trend?: "up" | "down";
     color: string;
   }>;
+  gridColumns?: number;
+  colorScheme?: "default" | "green" | "blue" | "purple" | "orange";
+  references?: Reference[];
 }
 
 export interface ClimateTimelineBlock {
@@ -112,7 +118,6 @@ export interface ClimateTimelineBlock {
 export interface ClimateDashboardBlock {
   type: "climate-dashboard";
   title?: string;
-  description?: string;
   metrics: Array<{
     title: string;
     value: string;
@@ -123,6 +128,7 @@ export interface ClimateDashboardBlock {
     target: string;
     description: string;
   }>;
+  references?: Reference[];
 }
 
 export interface TemperatureSpiralBlock {
@@ -138,8 +144,10 @@ export interface InteractiveCalloutBlock {
   type: "interactive-callout";
   title: string;
   content: string;
+  expandedContent?: string;
   variant: "success" | "warning" | "info" | "error";
   interactive?: boolean;
+  references?: Reference[];
 }
 
 export interface NeuralClimateNetworkBlock {
@@ -161,27 +169,30 @@ export interface EarthPulseBlock {
 export interface ImpactComparisonBlock {
   type: "impact-comparison";
   title?: string;
-  description?: string;
-  scenarios: Array<{
-    name: string;
-    temperature: number;
-    seaLevel: number;
-    precipitation: number;
-    extremeEvents: number;
+  comparisons: Array<{
+    category: string;
+    currentValue: number;
+    projectedValue: number;
+    unit: string;
+    severity: "low" | "medium" | "high";
   }>;
+  references?: Reference[];
 }
 
 export interface KpiShowcaseBlock {
   type: "kpi-showcase";
   title?: string;
-  description?: string;
   kpis: Array<{
-    label: string;
+    title: string;
     value: string;
-    change: string;
-    trend: "up" | "down";
-    icon: string;
+    unit?: string;
+    trend?: "up" | "down" | "stable";
+    changeValue?: string;
+    color?: string;
   }>;
+  gridColumns?: number;
+  displayFormat?: "card" | "inline" | "badge";
+  references?: Reference[];
 }
 
 export interface ClimateMetamorphosisBlock {
@@ -252,6 +263,46 @@ export interface InteractiveMapBlock {
   centerLng?: number;
   zoom?: number;
   autoFitBounds?: boolean;
+  // Admin control over user-facing controls
+  showLayerToggles?: boolean;
+  showOpacityControls?: boolean;
+  showDownloadButtons?: boolean;
+  // Pre-defined layer opacities
+  predefinedOpacities?: Record<string, number>;
+  // Cluster groups for SLR scenarios
+  enableClusterGroups?: boolean;
+  clusterGroups?: Array<{
+    id: string;
+    name: string;
+    layerIds: string[];
+  }>;
+}
+
+export interface ShipMapBlock {
+  type: "ship-map";
+  title: string;
+  description: string;
+  height?: string;
+  centerLat?: number;
+  centerLng?: number;
+  zoom?: number;
+  seamarkOpacity?: number;
+  enableSeamarkLayer?: boolean;
+  tileServerOption?: "openseamap" | "hybrid";
+  portFocus?: "rotterdam" | "groningen" | "amsterdam" | "full" | "custom";
+  showControls?: boolean;
+  // Railway overlay options
+  enableRailwayLayer?: boolean;
+  railwayOpacity?: number;
+  railwayStyle?: "standard" | "signals" | "maxspeed";
+  // Admin control over user-facing controls
+  showPortFocusControl?: boolean;
+  showMapStyleControl?: boolean;
+  showSeamarkLayerControl?: boolean;
+  showSeamarkOpacityControl?: boolean;
+  showRailwayLayerControl?: boolean;
+  showRailwayStyleControl?: boolean;
+  showRailwayOpacityControl?: boolean;
 }
 
 export interface Story {
@@ -283,7 +334,8 @@ export type DataStoryBlock =
   | DataStormBlock
   | CarbonMoleculeDanceBlock
   | ClimateInfographicBlock
-  | InteractiveMapBlock;
+  | InteractiveMapBlock
+  | ShipMapBlock;
 
 export interface LanguageContent {
   heroTitle: string;
@@ -311,5 +363,5 @@ export interface ImageOption {
   url: string;
   category: string;
   scenario?: string;
-  description?: string;
+  caption?: { en: string; de: string };
 }

@@ -172,9 +172,13 @@ class WebOptimizedExporter:
             logger.error(f"Input raster not found: {input_path}")
             return False
         
-        if output_path.exists() and not overwrite:
-            logger.info(f"COG already exists: {output_path}")
-            return True
+        if output_path.exists():
+            if not overwrite:
+                logger.info(f"COG already exists: {output_path}")
+                return True
+            else:
+                logger.info(f"Removing existing COG: {output_path}")
+                output_path.unlink()
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -245,10 +249,10 @@ class WebOptimizedExporter:
                            min_zoom: int = 0,
                            max_zoom: int = 14,
                            simplification: str = "drop-densest-as-needed",
-                           overwrite: bool = True,
-                           fallback_to_python: bool = True) -> bool:
+                           overwrite: bool = True) -> bool:
         """
         Export vector data as Mapbox Vector Tiles (MVT) in MBTiles format.
+        Requires tippecanoe to be installed and available in PATH.
         
         Args:
             input_path: Path to input vector file (GeoPackage, Shapefile, etc.)
@@ -269,34 +273,38 @@ class WebOptimizedExporter:
             logger.error(f"Input vector file not found: {input_path}")
             return False
         
-        if output_path.exists() and not overwrite:
-            logger.info(f"MVT already exists: {output_path}")
-            return True
+        if output_path.exists():
+            if not overwrite:
+                logger.info(f"MVT already exists: {output_path}")
+                return True
+            else:
+                logger.info(f"Removing existing MVT: {output_path}")
+                output_path.unlink()
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
+        # Use configuration settings if available
+        mvt_config = self.web_config.get('mvt_settings', {})
+        min_zoom = mvt_config.get('min_zoom', min_zoom)
+        max_zoom = mvt_config.get('max_zoom', max_zoom)
+        simplification = mvt_config.get('simplification', simplification)
+        
+        logger.info(f"Exporting MVT with optimized settings: zoom {min_zoom}-{max_zoom}, simplification: {simplification}")
+        
         # Check if tippecanoe is available
-        tippecanoe_available = False
         try:
             subprocess.run(['tippecanoe', '--version'], 
                           capture_output=True, check=True)
-            tippecanoe_available = True
+            logger.info("Tippecanoe found - proceeding with MVT generation")
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.warning("Tippecanoe not found. Trying alternatives...")
-            
-            if not fallback_to_python:
-                logger.error("Tippecanoe required but not available. See installation instructions.")
-                return False
+            logger.error("Tippecanoe not found. MVT export requires tippecanoe.")
+            logger.error("Install tippecanoe: https://github.com/mapbox/tippecanoe")
+            return False
         
         try:
-            if tippecanoe_available:
-                return self._export_mvt_with_tippecanoe(
-                    input_path, output_path, layer_name, min_zoom, max_zoom, simplification
-                )
-            else:
-                return self._export_mvt_with_python(
-                    input_path, output_path, layer_name, min_zoom, max_zoom
-                )
+            return self._export_mvt_with_tippecanoe(
+                input_path, output_path, layer_name, min_zoom, max_zoom, simplification
+            )
             
         except Exception as e:
             logger.error(f"Failed to create MVT {output_path}: {e}")
@@ -309,45 +317,185 @@ class WebOptimizedExporter:
                                   min_zoom: int,
                                   max_zoom: int,
                                   simplification: str) -> bool:
-        """Export MVT using tippecanoe (Unix/Linux/WSL)."""
+        """Export MVT using tippecanoe with proper CRS transformation."""
         temp_geojson = None
         try:
             # Convert to GeoJSON first if needed
             if input_path.suffix.lower() in ['.gpkg', '.shp']:
                 gdf = gpd.read_file(input_path)
                 
-                # Create temporary GeoJSON
+                logger.info(f"Original data: {len(gdf)} features, CRS: {gdf.crs}")
+                logger.info(f"Original bounds: {gdf.total_bounds}")
+                
+                # CRITICAL FIX: Transform to WGS84 before bounds validation
+                if gdf.crs != 'EPSG:4326':
+                    logger.info(f"Transforming from {gdf.crs} to EPSG:4326 (WGS84)")
+                    gdf = gdf.to_crs('EPSG:4326')
+                    logger.info(f"Transformed bounds: {gdf.total_bounds}")
+                
+                # Validate transformed bounds
+                bounds = gdf.total_bounds
+                west, south, east, north = bounds
+                bounds_are_invalid = False
+                
+                # Check basic coordinate validity in WGS84
+                if west < -180 or west > 180 or east < -180 or east > 180:
+                    logger.warning(f"Invalid longitude bounds after transformation: W={west}, E={east}")
+                    bounds_are_invalid = True
+                if south < -90 or south > 90 or north < -90 or north > 90:
+                    logger.warning(f"Invalid latitude bounds after transformation: S={south}, N={north}")
+                    bounds_are_invalid = True
+                
+                # Check for degenerate bounds
+                if abs(north - south) < 0.001:
+                    logger.warning(f"Degenerate bounds - same north/south: {north} ≈ {south}")
+                    bounds_are_invalid = True
+                if abs(east - west) < 0.001:
+                    logger.warning(f"Degenerate bounds - same east/west: {east} ≈ {west}")
+                    bounds_are_invalid = True
+                
+                # Check for unreasonably large bounds (global extent)
+                if (east - west) > 350 or (north - south) > 170:
+                    logger.warning(f"Bounds span nearly entire globe - likely transformation error: W={west}, S={south}, E={east}, N={north}")
+                    bounds_are_invalid = True
+                
+                # For European data, check if bounds are reasonable
+                if not bounds_are_invalid:
+                    if not (-20 <= west <= 40 and 30 <= south <= 75 and -20 <= east <= 40 and 30 <= north <= 75):
+                        logger.warning(f"Bounds outside expected European range: W={west}, S={south}, E={east}, N={north}")
+                        # Don't mark as invalid - could be valid data outside Europe
+                
+                # If bounds are still invalid after transformation, apply geographic filtering
+                if bounds_are_invalid:
+                    logger.warning("Applying geographic filtering to fix invalid bounds...")
+                    
+                    # Remove completely invalid geometries
+                    original_count = len(gdf)
+                    gdf = gdf[gdf.geometry.is_valid]
+                    
+                    # Apply reasonable European bounds filtering in WGS84
+                    gdf = gdf.cx[-20:45, 30:75]  # Extended European bounds in WGS84
+                    
+                    filtered_count = len(gdf)
+                    logger.info(f"Filtered from {original_count} to {filtered_count} features")
+                    
+                    if gdf.empty:
+                        logger.error("No valid geometries remain after geographic filtering")
+                        return False
+                    
+                    # Recalculate bounds after filtering
+                    bounds = gdf.total_bounds
+                    west, south, east, north = bounds
+                    logger.info(f"Final bounds after filtering: W={west}, S={south}, E={east}, N={north}")
+                
+                # Validate final data before export
+                if gdf.empty:
+                    logger.error("No features to export after processing")
+                    return False
+                
+                # Create temporary GeoJSON with transformed data
                 temp_geojson = tempfile.NamedTemporaryFile(mode='w', suffix='.geojson', delete=False)
                 gdf.to_file(temp_geojson.name, driver='GeoJSON')
                 input_for_tippecanoe = temp_geojson.name
+                
+                # Use the validated bounds for tippecanoe
+                bounds_str = f"{west},{south},{east},{north}"
+                
             else:
+                # For existing GeoJSON files, validate and transform if needed
+                try:
+                    gdf = gpd.read_file(input_path)
+                    
+                    # Transform to WGS84 if not already
+                    if gdf.crs != 'EPSG:4326':
+                        logger.info(f"Transforming existing GeoJSON from {gdf.crs} to EPSG:4326")
+                        gdf = gdf.to_crs('EPSG:4326')
+                    
+                    bounds = gdf.total_bounds
+                    west, south, east, north = bounds
+                    bounds_str = f"{west},{south},{east},{north}"
+                    logger.info(f"Using bounds from existing GeoJSON: {bounds_str}")
+                except Exception as e:
+                    logger.warning(f"Could not validate existing GeoJSON bounds: {e}")
+                    bounds_str = None
+                
                 input_for_tippecanoe = str(input_path)
             
             # Set layer name
             if not layer_name:
                 layer_name = input_path.stem
             
-            # Build tippecanoe command
+            # Build optimized tippecanoe command for clusters
             cmd = [
                 'tippecanoe',
                 '-o', str(output_path),
                 '-l', layer_name,
                 f'-Z{min_zoom}',
                 f'-z{max_zoom}',
-                f'--{simplification}',
                 '--force',  # Overwrite existing
                 '--read-parallel',
                 '--generate-ids',
                 '--detect-shared-borders',
-                '--simplify-only-low-zooms',
-                input_for_tippecanoe
             ]
+            
+            # Optimize simplification based on data type and zoom levels
+            if 'cluster' in layer_name.lower():
+                # For cluster data: preserve shape accuracy more than point density
+                cmd.extend([
+                    '--simplify-only-low-zooms',
+                    '--drop-densest-as-needed',
+                    '--preserve-input-order',
+                    '--extend-zooms-if-still-dropping'  # Better detail preservation
+                ])
+            else:
+                # Standard simplification
+                cmd.append(f'--{simplification}')
+            
+            # Note: Skip explicit bounds as this tippecanoe version doesn't support --bounds
+            # Tippecanoe will calculate bounds automatically from the data
+            if 'bounds_str' in locals() and bounds_str:
+                logger.info(f"Data bounds (will be auto-calculated by tippecanoe): {bounds_str}")
+            else:
+                logger.info("Tippecanoe will auto-calculate bounds from data")
+            
+            # File size optimization: Add compression and optimization flags
+            if max_zoom > 10:  # For detailed zoom levels, add size optimizations
+                cmd.extend([
+                    '--drop-fraction-as-needed',  # Reduce feature density if needed
+                    '--buffer=0',  # Reduce tile buffer for smaller files
+                ])
+            
+            cmd.append(input_for_tippecanoe)
+            
+            logger.info(f"Running optimized tippecanoe command: {' '.join(cmd[:8])}...")  # Log first part to avoid very long output
             
             # Run tippecanoe
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             
-            logger.info(f"Successfully created MVT with tippecanoe: {output_path}")
-            logger.debug(f"Tippecanoe output: {result.stderr}")
+            logger.info(f"Successfully created optimized MVT: {output_path}")
+            
+            # Validate output file size
+            if output_path.exists():
+                file_size_mb = output_path.stat().st_size / (1024 * 1024)
+                logger.info(f"Generated MBTiles size: {file_size_mb:.2f} MB")
+                
+                if file_size_mb > 50:
+                    logger.warning(f"⚠️ MBTiles file is large ({file_size_mb:.2f} MB). Consider reducing max_zoom or adding more aggressive simplification.")
+            
+            # Log bounds information from created MBTiles
+            try:
+                conn = sqlite3.connect(output_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT name, value FROM metadata WHERE name IN ('bounds', 'center', 'minzoom', 'maxzoom')")
+                metadata_info = cursor.fetchall()
+                conn.close()
+                
+                logger.info("Created MBTiles metadata:")
+                for name, value in metadata_info:
+                    logger.info(f"  {name}: {value}")
+                    
+            except Exception as e:
+                logger.debug(f"Could not read MBTiles metadata: {e}")
             
             return True
             
@@ -359,97 +507,7 @@ class WebOptimizedExporter:
             if temp_geojson and os.path.exists(temp_geojson.name):
                 os.unlink(temp_geojson.name)
     
-    def _export_mvt_with_python(self,
-                              input_path: Path,
-                              output_path: Path,
-                              layer_name: str,
-                              min_zoom: int,
-                              max_zoom: int) -> bool:
-        """Export MVT using pure Python libraries (Windows-compatible)."""
-        try:
-            # Try to import required libraries
-            try:
-                from shapely.geometry import mapping
-            except ImportError as e:
-                logger.error(f"Required libraries not available for Python MVT export: {e}")
-                logger.info("Install with: pip install shapely")
-                return False
-            
-            # Read the vector data
-            gdf = gpd.read_file(input_path)
-            
-            if gdf.empty:
-                logger.warning(f"No features found in {input_path}")
-                return False
-            
-            # Set layer name
-            if not layer_name:
-                layer_name = input_path.stem
-            
-            # Create MBTiles database
-            conn = sqlite3.connect(output_path)
-            cursor = conn.cursor()
-            
-            # Create MBTiles schema
-            cursor.execute('''
-                CREATE TABLE metadata (name text, value text);
-            ''')
-            cursor.execute('''
-                CREATE TABLE tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob);
-            ''')
-            
-            # Add metadata
-            metadata = {
-                'name': layer_name,
-                'type': 'overlay',
-                'version': '1.0.0',
-                'description': f'Generated by eu_climate - {layer_name}',
-                'format': 'pbf',
-                'minzoom': str(min_zoom),
-                'maxzoom': str(max_zoom)
-            }
-            
-            # Get bounds
-            bounds = gdf.total_bounds
-            metadata['bounds'] = f"{bounds[0]},{bounds[1]},{bounds[2]},{bounds[3]}"
-            
-            for name, value in metadata.items():
-                cursor.execute('INSERT INTO metadata (name, value) VALUES (?, ?)', (name, value))
-            
-            # Create a simplified version for lower zoom levels
-            # For this basic implementation, we'll just save as GeoJSON-like structure
-            # This is a simplified approach - tippecanoe does much more sophisticated tiling
-            
-            logger.warning("Using simplified Python MVT export - consider installing tippecanoe for better performance")
-            logger.info("For Windows: Use WSL, Docker, or consider using COG for raster data instead")
-            
-            # For now, create a basic tile structure
-            # This is a minimal implementation - real MVT generation is quite complex
-            for zoom in range(min_zoom, min(max_zoom + 1, 10)):  # Limit to prevent excessive processing
-                # Simplified: create one tile per zoom level
-                # Real implementation would properly tile the data
-                simplified_gdf = gdf.simplify(tolerance=0.001 * (2 ** (10 - zoom)))
-                
-                # Convert to a basic format (this is very simplified)
-                geojson_str = simplified_gdf.to_json()
-                
-                # Store as a single tile (very basic approach)
-                cursor.execute(
-                    'INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?, ?, ?, ?)',
-                    (zoom, 0, 0, geojson_str.encode('utf-8'))
-                )
-            
-            conn.commit()
-            conn.close()
-            
-            logger.info(f"Created basic MVT using Python: {output_path}")
-            logger.warning("Note: This is a simplified MVT. For production use, install tippecanoe.")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to create MVT with Python: {e}")
-            return False
+
     
     def create_web_exports(self,
                          data_type: str,

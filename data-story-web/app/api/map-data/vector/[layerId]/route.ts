@@ -1,124 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import proj4 from "proj4";
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { R2_CONFIG, R2_BUCKET_NAME } from "@/lib/r2-config";
+import Database from "better-sqlite3";
+import { writeFileSync, unlinkSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import path from "path";
 
-// Define common coordinate systems
-proj4.defs(
-  "EPSG:3857",
-  "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"
-);
-proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
-proj4.defs(
-  "EPSG:3035",
-  "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
-);
-
-type Coordinate = [number, number];
-type CoordinateArray = Coordinate | Coordinate[] | Coordinate[][] | Coordinate[][][];
-
-function transformCoordinates(
-  coords: CoordinateArray | null | undefined,
-  sourceCRS: string = "EPSG:3857"
-): CoordinateArray | null | undefined {
-  if (!coords) return coords;
-
-  // Check if coordinates look like they're already in lat/lng (WGS84)
-  if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
-    const [x, y] = coords as Coordinate;
-    if (x >= -180 && x <= 180 && y >= -90 && y <= 90) {
-      // Already in WGS84, no transformation needed
-      return coords;
-    }
-  }
-
-  if (Array.isArray(coords) && Array.isArray(coords[0])) {
-    // Array of coordinates
-    return (coords as CoordinateArray[]).map((coord) => transformCoordinates(coord, sourceCRS)) as CoordinateArray;
-  } else if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
-    // Single coordinate pair
-    try {
-      const [x, y] = coords as Coordinate;
-      
-      // Skip transformation if coordinates are clearly invalid
-      if (!isFinite(x) || !isFinite(y)) {
-        console.warn("Invalid coordinates detected:", coords);
-        return coords;
-      }
-      
-      const transformed = proj4(sourceCRS, "EPSG:4326", [x, y]) as Coordinate;
-      return transformed;
-    } catch (error) {
-      console.warn("Failed to transform coordinates:", coords, error);
-      return coords;
-    }
-  }
-
-  return coords;
-}
-
-interface GeoJSONFeature {
-  type: string;
-  geometry?: {
-    coordinates?: CoordinateArray;
-  };
-  properties?: Record<string, unknown>;
-}
-
-interface GeoJSONObject {
-  type: string;
-  features?: GeoJSONFeature[];
-  crs?: {
-    properties?: {
-      name?: string;
-    };
-  };
-}
-
-function transformGeoJSONCoordinates(geojson: GeoJSONObject): GeoJSONObject {
-  if (!geojson || !geojson.features) return geojson;
-
-  // Check if CRS is specified in the GeoJSON
-  let sourceCRS = "EPSG:3857"; // Default assumption
-
-  if (geojson.crs && geojson.crs.properties && geojson.crs.properties.name) {
-    const crsName = geojson.crs.properties.name;
-    if (typeof crsName === "string") {
-      if (crsName.includes("3857")) sourceCRS = "EPSG:3857";
-      else if (crsName.includes("4326")) sourceCRS = "EPSG:4326";
-      else if (crsName.includes("3035")) sourceCRS = "EPSG:3035";
-    }
-  }
-
-  console.log(
-    "Vector API: Transforming coordinates from",
-    sourceCRS,
-    "to EPSG:4326"
-  );
-
-  const transformedFeatures = geojson.features.map((feature: GeoJSONFeature) => {
-    if (feature.geometry && feature.geometry.coordinates) {
-      const transformedCoords = transformCoordinates(
-        feature.geometry.coordinates,
-        sourceCRS
-      );
-      return {
-        ...feature,
-        geometry: {
-          ...feature.geometry,
-          coordinates: transformedCoords || feature.geometry.coordinates,
-        },
-      };
-    }
-    return feature;
-  });
-
-  return {
-    ...geojson,
-    features: transformedFeatures,
-    // Remove the original CRS and let Leaflet assume WGS84
-    crs: undefined,
-  };
-}
+const s3Client = new S3Client(R2_CONFIG);
 
 export async function GET(
   request: NextRequest,
@@ -128,8 +21,6 @@ export async function GET(
     const resolvedParams = await params;
     const { layerId } = resolvedParams;
 
-    console.log("Vector API: Requested layer ID:", layerId);
-
     if (!layerId) {
       return NextResponse.json(
         { error: "Layer ID is required" },
@@ -137,86 +28,65 @@ export async function GET(
       );
     }
 
-    // Try different possible file extensions for vector data
-    const possibleFileNames = [
-      `${layerId}.geojson`,
-      `${layerId}_optimized.geojson`,
-      `${layerId}.json`,
-      `clusters_${layerId}_optimized.geojson`,
-      `clusters_${layerId}.geojson`,
-      `${layerId}_COMBINED_optimized.geojson`,
-      `${layerId}_COMBINED.geojson`,
-    ];
+    // Find the actual filename for this layer ID
+    const actualFileName = await findFileByLayerId(layerId);
 
-    // Special handling for cluster layers with SLR scenario patterns
-    if (layerId.includes('clusters-slr')) {
-      const scenario = layerId.replace('clusters-slr-', '');
-      const scenarioCapitalized = scenario.charAt(0).toUpperCase() + scenario.slice(1);
-      possibleFileNames.push(
-        `clusters_SLR-0-${scenarioCapitalized}_COMBINED_optimized.geojson`,
-        `clusters_SLR-0-${scenarioCapitalized}_COMBINED.geojson`,
-        `clusters_SLR-1-${scenarioCapitalized}_COMBINED_optimized.geojson`,
-        `clusters_SLR-1-${scenarioCapitalized}_COMBINED.geojson`,
-        `clusters_SLR-2-${scenarioCapitalized}_COMBINED_optimized.geojson`,
-        `clusters_SLR-2-${scenarioCapitalized}_COMBINED.geojson`,
-        `clusters_SLR-3-${scenarioCapitalized}_COMBINED_optimized.geojson`,
-        `clusters_SLR-3-${scenarioCapitalized}_COMBINED.geojson`
+    if (!actualFileName) {
+      return NextResponse.json(
+        { error: `Layer ${layerId} not found` },
+        { status: 404 }
       );
     }
 
-    console.log("Vector API: Trying file names:", possibleFileNames);
+    try {
+      const command = new GetObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: `map-layers/${actualFileName}`,
+      });
 
-    for (const fileName of possibleFileNames) {
-      try {
-        console.log("Vector API: Attempting to download:", fileName);
-        const { data, error } = await supabase.storage
-          .from("map-layers")
-          .download(fileName);
+      const response = await s3Client.send(command);
 
-        if (!error && data) {
-          console.log("Vector API: Successfully downloaded:", fileName);
-          const text = await data.text();
-          const vectorData = JSON.parse(text);
-
-          console.log(
-            "Vector API: Parsed data features count:",
-            vectorData?.features?.length || 0
-          );
-
-          // Transform coordinates to WGS84 if needed
-          const transformedData = transformGeoJSONCoordinates(vectorData);
-
-          return NextResponse.json(transformedData, {
-            headers: {
-              "Cache-Control": "public, max-age=3600",
-              "Content-Type": "application/json",
-            },
-          });
-        } else {
-          console.log("Vector API: Failed to download:", fileName, error);
-        }
-      } catch (downloadError) {
-        console.warn(`Could not download ${fileName}:`, downloadError);
-        // Continue trying other file names
+      if (!response.Body) {
+        return NextResponse.json(
+          { error: `Layer ${layerId} not found` },
+          { status: 404 }
+        );
       }
-    }
 
-    // If no vector data found, return empty GeoJSON
-    console.warn(
-      `Layer ${layerId} not found in storage, returning empty GeoJSON`
-    );
-    return NextResponse.json(
-      {
-        type: "FeatureCollection",
-        features: [],
-      },
-      {
-        headers: {
-          "Cache-Control": "public, max-age=300", // Shorter cache for missing data
-          "Content-Type": "application/json",
+      // Convert to GeoJSON based on file type
+      const arrayBuffer = await response.Body.transformToByteArray();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // For GeoJSON files, return directly
+      if (actualFileName.endsWith(".geojson")) {
+        const geoJson = JSON.parse(buffer.toString());
+        return NextResponse.json(geoJson);
+      }
+
+      // For MBTiles files, extract tile coverage information
+      if (actualFileName.endsWith(".mbtiles")) {
+        const geoJson = await analyzeMBTilesCoverage(
+          buffer,
+          layerId,
+          actualFileName
+        );
+        return NextResponse.json(geoJson);
+      }
+
+      // For other formats, return error as they need processing
+      return NextResponse.json(
+        {
+          error: `Unsupported vector format for ${actualFileName}. Expected .geojson or .mbtiles`,
         },
-      }
-    );
+        { status: 400 }
+      );
+    } catch (error) {
+      console.error("Error processing vector data:", error);
+      return NextResponse.json(
+        { error: "Failed to process vector data" },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Error serving vector data:", error);
     return NextResponse.json(
@@ -224,4 +94,326 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+async function findFileByLayerId(layerId: string): Promise<string | null> {
+  try {
+    // Get all files from R2 storage
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: "map-layers/",
+      MaxKeys: 1000,
+    });
+
+    const response = await s3Client.send(command);
+
+    if (!response.Contents) {
+      return null;
+    }
+
+    // Find the file that would generate this layer ID
+    for (const object of response.Contents) {
+      if (!object.Key) continue;
+      const fileName = path.basename(object.Key);
+      const generatedLayerId = convertFilenameToLayerId(fileName);
+      if (generatedLayerId === layerId) {
+        return fileName;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error finding file by layer ID:", error);
+    return null;
+  }
+}
+
+function convertFilenameToLayerId(fileName: string): string {
+  // Remove extension
+  let layerId = fileName.substring(0, fileName.lastIndexOf("."));
+
+  // Remove timestamp prefix if present (from upload process: "1234567890_originalname")
+  const timestampMatch = layerId.match(/^\d+_(.+)$/);
+  if (timestampMatch) {
+    layerId = timestampMatch[1];
+  }
+
+  // Handle special naming patterns for clusters to create more readable IDs
+  if (fileName.includes("clusters_SLR")) {
+    // Extract scenario and risk type from filename like "123456_clusters_SLR-0-Current_GDP.mbtiles"
+    const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_(\w+)/);
+    if (match) {
+      const scenario = match[2].toLowerCase(); // "current", "severe", etc.
+      const riskType = match[3].toLowerCase(); // "gdp", "population", "freight", etc.
+      layerId = `clusters-slr-${scenario}-${riskType}`;
+    }
+  }
+
+  return layerId;
+}
+
+interface CoverageAnalysis {
+  total_tiles: number;
+  min_zoom: number | null;
+  max_zoom: number | null;
+  min_x: number | null;
+  max_x: number | null;
+  min_y: number | null;
+  max_y: number | null;
+  features: Array<{
+    type: string;
+    geometry: {
+      type: string;
+      coordinates: number[][][];
+    };
+    properties: Record<string, string | number>;
+  }>;
+}
+
+async function analyzeMBTilesCoverage(
+  mbtileBuffer: Buffer,
+  layerId: string,
+  fileName: string
+): Promise<CoverageAnalysis> {
+  let tempFilePath: string | null = null;
+
+  try {
+    // Write MBTiles buffer to temporary file
+    tempFilePath = join(tmpdir(), `temp_${Date.now()}.mbtiles`);
+    writeFileSync(tempFilePath, mbtileBuffer);
+
+    // Open MBTiles database
+    const db = new Database(tempFilePath, { readonly: true });
+
+    // Get metadata
+    const metadataStmt = db.prepare("SELECT name, value FROM metadata");
+    const metadataRows = metadataStmt.all() as Array<{
+      name: string;
+      value: string;
+    }>;
+
+    const metadata: Record<string, string> = {};
+    for (const row of metadataRows) {
+      metadata[row.name] = row.value;
+    }
+
+    // Check what tables exist
+    // const tablesStmt = db.prepare(
+    //   "SELECT name FROM sqlite_master WHERE type='table'"
+    // );
+    // const tables = tablesStmt.all() as Array<{ name: string }>;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function analyzeCoverageFromDB(db: any) {
+      const patterns = [
+        // Standard MBTiles schema
+        `SELECT 
+           COUNT(*) as total_tiles,
+           MIN(zoom_level) as min_zoom,
+           MAX(zoom_level) as max_zoom,
+           MIN(tile_column) as min_x,
+           MAX(tile_column) as max_x,
+           MIN(tile_row) as min_y,
+           MAX(tile_row) as max_y
+         FROM tiles`,
+        // Alternative column names
+        `SELECT 
+           COUNT(*) as total_tiles,
+           MIN(z) as min_zoom,
+           MAX(z) as max_zoom,
+           MIN(x) as min_x,
+           MAX(x) as max_x,
+           MIN(y) as min_y,
+           MAX(y) as max_y
+         FROM tiles`,
+        // Map table variant
+        `SELECT 
+           COUNT(*) as total_tiles,
+           MIN(zoom_level) as min_zoom,
+           MAX(zoom_level) as max_zoom,
+           MIN(tile_column) as min_x,
+           MAX(tile_column) as max_x,
+           MIN(tile_row) as min_y,
+           MAX(tile_row) as max_y
+         FROM map`,
+      ];
+
+      for (const pattern of patterns) {
+        try {
+          const stmt = db.prepare(pattern);
+          const result = stmt.get();
+          if (result && result.total_tiles > 0) {
+            return result;
+          }
+        } catch (error) {
+          console.log("Coverage pattern failed:", (error as Error).message);
+        }
+      }
+
+      // Return default if all patterns fail
+      return {
+        total_tiles: 0,
+        min_zoom: null,
+        max_zoom: null,
+        min_x: null,
+        max_x: null,
+        min_y: null,
+        max_y: null,
+      };
+    }
+
+    // Get tile coverage information using the function
+    const coverage = analyzeCoverageFromDB(db);
+
+    // Try to get actual tiles using different query patterns
+    let sampleTiles: Array<Record<string, number>> = [];
+    const sampleQueries = [
+      "SELECT zoom_level, tile_column, tile_row FROM tiles LIMIT 10",
+      "SELECT z, x, y FROM tiles LIMIT 10",
+      "SELECT zoom_level, tile_column, tile_row FROM map LIMIT 10",
+    ];
+
+    for (const query of sampleQueries) {
+      try {
+        const stmt = db.prepare(query);
+        sampleTiles = stmt.all() as Array<Record<string, number>>;
+        if (sampleTiles.length > 0) {
+          break;
+        }
+      } catch (error) {
+        console.log("Sample query failed:", query, (error as Error).message);
+      }
+    }
+
+    // Close database
+    db.close();
+
+    // Extract scenario and risk type from filename
+    let scenario = "unknown";
+    let riskType = "unknown";
+
+    if (fileName.includes("clusters_SLR")) {
+      const match = fileName.match(/clusters_SLR-(\d+)-(\w+)_(\w+)/);
+      if (match) {
+        scenario = match[2].toLowerCase();
+        riskType = match[3].toLowerCase();
+      }
+    }
+
+    // Create features based on tile coverage
+    const features = [];
+
+    if (coverage.total_tiles > 0 && sampleTiles.length > 0) {
+      // Create features for each sample tile to show actual coverage
+      for (const tile of sampleTiles.slice(0, 5)) {
+        // Limit to 5 features for performance
+        const z = tile.zoom_level || tile.z;
+        const x = tile.tile_column || tile.x;
+        const y = tile.tile_row || tile.y;
+
+        if (z !== undefined && x !== undefined && y !== undefined) {
+          const bounds = getTileBounds(x, y, z);
+
+          features.push({
+            type: "Feature",
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [bounds.west, bounds.north],
+                  [bounds.east, bounds.north],
+                  [bounds.east, bounds.south],
+                  [bounds.west, bounds.south],
+                  [bounds.west, bounds.north],
+                ],
+              ],
+            },
+            properties: {
+              tile_x: x,
+              tile_y: y,
+              zoom_level: z,
+              scenario: scenario,
+              risk_type: riskType,
+              layer_id: layerId,
+            },
+          });
+        }
+      }
+    } else {
+      // Fallback: create a feature based on metadata bounds if available
+      let bounds = [-180, -90, 180, 90]; // Default world bounds
+
+      if (metadata.bounds) {
+        try {
+          bounds = metadata.bounds.split(",").map(Number);
+        } catch {
+          console.warn(
+            "Could not parse bounds from metadata:",
+            metadata.bounds
+          );
+        }
+      }
+
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [bounds[0], bounds[3]], // west, north
+              [bounds[2], bounds[3]], // east, north
+              [bounds[2], bounds[1]], // east, south
+              [bounds[0], bounds[1]], // west, south
+              [bounds[0], bounds[3]], // west, north
+            ],
+          ],
+        },
+        properties: {
+          scenario: scenario,
+          risk_type: riskType,
+          layer_id: layerId,
+          source: "metadata_bounds",
+          note: "Fallback bounds from MBTiles metadata",
+        },
+      });
+    }
+
+    // Return coverage analysis with features
+    return {
+      total_tiles: coverage.total_tiles,
+      min_zoom: coverage.min_zoom,
+      max_zoom: coverage.max_zoom,
+      min_x: coverage.min_x,
+      max_x: coverage.max_x,
+      min_y: coverage.min_y,
+      max_y: coverage.max_y,
+      features: features,
+    };
+  } catch (error) {
+    console.error("Error analyzing MBTiles coverage:", error);
+    throw new Error(
+      `Failed to analyze MBTiles coverage: ${(error as Error).message}`
+    );
+  } finally {
+    // Clean up temporary file
+    if (tempFilePath) {
+      try {
+        unlinkSync(tempFilePath);
+      } catch (cleanupError) {
+        console.warn("Failed to clean up temporary file:", cleanupError);
+      }
+    }
+  }
+}
+
+function getTileBounds(x: number, y: number, z: number) {
+  const n = Math.pow(2, z);
+  const west = (x / n) * 360 - 180;
+  const east = ((x + 1) / n) * 360 - 180;
+  const north =
+    (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
+  const south =
+    (Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))) * 180) / Math.PI;
+
+  return { west, east, north, south };
 }
