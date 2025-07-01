@@ -1422,11 +1422,12 @@ class HazardLayer:
         # Improve styling
         plt.xticks(fontsize=12, fontweight='bold')
         plt.yticks(fontsize=12)
-        plt.tight_layout()
         
-        # Add subtitle with methodology
-        plt.figtext(0.5, 0.02, 'Based on DEM analysis with river polygon enhancement and 30m resolution', 
-                   ha='center', fontsize=10, style='italic')
+        # Add subtitle with methodology positioned in bottom right corner
+        plt.figtext(0.98, 0.02, 'Based on DEM analysis with river polygon enhancement and 30m resolution', 
+                   ha='right', va='bottom', fontsize=10, style='italic')
+        
+        plt.tight_layout()
         
         # Save the chart
         output_path = self.config.output_dir / "hazard" / "flood_risk_absolute_by_scenario.png"
@@ -1501,11 +1502,11 @@ class HazardLayer:
         # Set y-axis to 0-100%
         plt.ylim(0, 100)
         
-        plt.tight_layout()
+        # Add subtitle with total area information positioned in bottom right corner
+        plt.figtext(0.98, 0.02, f'Total Study Area: {total_area_km2:.1f} km² (NUTS regions on land)', 
+                   ha='right', va='bottom', fontsize=10, style='italic')
         
-        # Add subtitle with total area information
-        plt.figtext(0.5, 0.02, f'Total Study Area: {total_area_km2:.1f} km² (NUTS regions on land)', 
-                   ha='center', fontsize=10, style='italic')
+        plt.tight_layout()
         
         # Save the chart
         output_path = self.config.output_dir / "hazard" / "flood_risk_relative_by_scenario.png"

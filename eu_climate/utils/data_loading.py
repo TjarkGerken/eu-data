@@ -1,11 +1,17 @@
 from datetime import datetime
 import os
 from pathlib import Path
+from typing import Tuple
 from huggingface_hub import HfApi, upload_folder, snapshot_download
 from dotenv import load_dotenv
 import logging
+import rasterio
+import rasterio.warp
+import numpy as np
+import geopandas as gpd
 
 from eu_climate.config.config import ProjectConfig
+from eu_climate.utils.conversion import RasterTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +166,7 @@ def check_data_availability() -> bool:
     # Check for some key files to ensure data is properly downloaded
     key_files = [
         data_dir / config.config['file_paths']['dem_file'],
-        data_dir / config.config['file_paths']['population_file']
+    
     ]
     
     for file_path in key_files:
@@ -277,3 +283,233 @@ def check_data_integrity(config: ProjectConfig) -> None:
     except Exception as e:
         logger.error(f"Data integrity check failed: {e}")
         raise
+
+def load_population_2025_with_validation(config, apply_study_area_mask: bool = True) -> Tuple[np.ndarray, dict, bool]:
+    """
+    Load 2025 population data with proper resolution handling and validation.
+    
+    Args:
+        config: ProjectConfig instance
+        apply_study_area_mask: Whether to apply Netherlands study area masking
+        
+    Returns:
+        Tuple of (population_data, metadata, validation_passed)
+    """
+    logger.info("Loading 2025 population data with resolution adaptation and validation...")
+    
+    # Initialize transformer with GHS-aware parameters
+    transformer = RasterTransformer(
+        target_crs=config.target_crs,
+        config=config
+    )
+    
+    # Get reference bounds from NUTS L3 shapefile
+    nuts_l3_path = config.data_dir / "NUTS-L3-NL.shp"
+    reference_bounds = transformer.get_reference_bounds(nuts_l3_path)
+    
+    # Load the 2025 population file (3 arcsecond, WGS84)
+    population_2025_path = config.population_2025_path
+    
+    if not population_2025_path.exists():
+        raise FileNotFoundError(f"2025 population file not found: {population_2025_path}")
+    
+    logger.info(f"Loading 2025 population from: {population_2025_path}")
+    
+    # Check source resolution and coordinate system
+    with rasterio.open(population_2025_path) as src:
+        logger.info(f"Source CRS: {src.crs}")
+        logger.info(f"Source resolution: {src.res}")
+        logger.info(f"Source bounds: {src.bounds}")
+        logger.info(f"Source shape: {src.shape}")
+    
+    # Transform to target resolution and CRS with appropriate resampling
+    # CRITICAL FIX: Population data must preserve TOTAL count, not density
+    # Source: 57.1m x 92.8m pixels (5,298 m²)
+    # Target: 30m x 30m pixels (900 m²)  
+    # Problem: 'average' resampling copies density to all new pixels → inflates total by ~6x
+    
+    effective_resolution = config.ghs_native_resolution_meters_netherlands
+    
+    if effective_resolution > config.target_resolution:
+        # For population downsampling, we need to preserve TOTAL population
+        # Use 'bilinear' for smooth interpolation while attempting to preserve totals
+        resampling_method = "bilinear"
+        
+        # Calculate the area scaling factor
+        source_pixel_area = effective_resolution * config.ghs_latitude_resolution_meters
+        target_pixel_area = config.target_resolution * config.target_resolution
+        area_ratio = target_pixel_area / source_pixel_area
+        
+        logger.info(f"Downsampling GHS data from {effective_resolution}m x {config.ghs_latitude_resolution_meters}m to {config.target_resolution}m")
+        logger.info(f"Source pixel area: {source_pixel_area:.0f} m², Target: {target_pixel_area:.0f} m²")
+        logger.info(f"Using bilinear resampling to preserve spatial distribution")
+        logger.info(f"Area ratio: {area_ratio:.3f} - population values will be scaled by this factor")
+    else:
+        # Upsampling: use sum to preserve population totals
+        resampling_method = "sum"
+        area_ratio = 1.0
+        logger.info(f"Upsampling GHS data from {effective_resolution}m to {config.target_resolution}m using sum aggregation")
+    
+    population_data, transform, crs = transformer.transform_raster(
+        population_2025_path,
+        reference_bounds=reference_bounds,
+        resampling_method=resampling_method
+    )
+    
+    # Apply area scaling correction for downsampling
+    if effective_resolution > config.target_resolution:
+        logger.info(f"Applying area scaling correction: multiplying by {area_ratio:.3f}")
+        total_before = np.sum(population_data[population_data > 0])
+        population_data = population_data * area_ratio
+        total_after = np.sum(population_data[population_data > 0])
+        logger.info(f"Population total: {total_before:,.0f} -> {total_after:,.0f} (correction factor: {total_after/total_before:.3f})")
+    
+    metadata = {
+        'transform': transform,
+        'crs': crs,
+        'height': population_data.shape[0],
+        'width': population_data.shape[1],
+        'source_file': str(population_2025_path),
+        'resampling_method': resampling_method,
+        'area_scaling_applied': effective_resolution > config.target_resolution,
+        'area_scaling_factor': area_ratio if effective_resolution > config.target_resolution else 1.0
+    }
+    
+    # Apply study area masking if requested
+    if apply_study_area_mask:
+        population_data = _apply_netherlands_study_area_mask(
+            population_data, transform, population_data.shape, config, transformer
+        )
+    
+    # Validate against ground truth if validation parameters are available
+    validation_passed = True
+    if hasattr(config, 'expected_nl_population_2025') and hasattr(config, 'population_tolerance_percent'):
+        validation_passed = _validate_population_total(
+            population_data, config.expected_nl_population_2025, config.population_tolerance_percent
+        )
+    else:
+        logger.info("Population validation parameters not configured - skipping validation")
+    
+    logger.info(f"2025 population data loaded successfully. Validation: {'PASSED' if validation_passed else 'FAILED'}")
+    
+    return population_data, metadata, validation_passed
+
+
+def _apply_netherlands_study_area_mask(data: np.ndarray, transform: rasterio.Affine, 
+                                     shape: Tuple[int, int], config, transformer: RasterTransformer) -> np.ndarray:
+    """Apply Netherlands study area mask to population data."""
+    logger.info("Applying Netherlands study area mask to 2025 population data...")
+    
+    try:
+        # Load NUTS-L3 boundaries for study area definition
+        nuts_l3_path = config.data_dir / "NUTS-L3-NL.shp"
+        nuts_gdf = gpd.read_file(nuts_l3_path)
+        
+        # Ensure NUTS is in target CRS
+        target_crs = rasterio.crs.CRS.from_string(config.target_crs)
+        if nuts_gdf.crs != target_crs:
+            nuts_gdf = nuts_gdf.to_crs(target_crs)
+        
+        # Create NUTS mask
+        from rasterio.features import rasterize
+        nuts_mask = rasterize(
+            [(geom, 1) for geom in nuts_gdf.geometry],
+            out_shape=shape,
+            transform=transform,
+            dtype=np.uint8
+        )
+        logger.info(f"Created NUTS mask: {np.sum(nuts_mask)} pixels within Netherlands boundaries")
+        
+        # Load and align land mass data
+        resampling_method_str = (config.resampling_method.name.lower() 
+                               if hasattr(config.resampling_method, 'name') 
+                               else str(config.resampling_method).lower())
+        
+        land_mass_data, land_transform, _ = transformer.transform_raster(
+            config.land_mass_path,
+            reference_bounds=transformer.get_reference_bounds(nuts_l3_path),
+            resampling_method=resampling_method_str
+        )
+        
+        # Ensure land mass data is aligned with population data
+        if not transformer.validate_alignment(land_mass_data, land_transform, data, transform):
+            land_mass_data = transformer.ensure_alignment(
+                land_mass_data, land_transform, transform, shape,
+                resampling_method_str
+            )
+        
+        # Create land mask (1=land, 0=water/no data)
+        land_mask = (land_mass_data > 0).astype(np.uint8)
+        logger.info(f"Created land mask: {np.sum(land_mask)} pixels identified as land")
+        
+        # Combine masks: only areas that are both within NUTS and on land
+        combined_mask = (nuts_mask == 1) & (land_mask == 1)
+        logger.info(f"Combined study area mask: {np.sum(combined_mask)} pixels in relevant study area")
+        
+        # Apply mask to population data
+        masked_data = data.copy()
+        masked_data[~combined_mask] = 0.0
+        
+        # Log masking statistics
+        original_nonzero = np.sum(data > 0)
+        masked_nonzero = np.sum(masked_data > 0)
+        original_total = np.sum(data[data > 0]) if original_nonzero > 0 else 0
+        masked_total = np.sum(masked_data[masked_data > 0]) if masked_nonzero > 0 else 0
+        
+        logger.info(f"Population masking removed {original_nonzero - masked_nonzero} non-zero pixels "
+                   f"({(original_nonzero - masked_nonzero) / original_nonzero * 100:.1f}% reduction)")
+        logger.info(f"Population total reduced from {original_total:,.0f} to {masked_total:,.0f} "
+                   f"({(original_total - masked_total) / original_total * 100:.1f}% reduction)")
+        
+        return masked_data
+        
+    except Exception as e:
+        logger.warning(f"Could not apply study area mask to 2025 population data: {str(e)}")
+        logger.warning("Proceeding with unmasked population data")
+        return data
+
+
+def _validate_population_total(population_data: np.ndarray, expected_total: int, tolerance_percent: float) -> bool:
+    """Validate population total against ground truth with tolerance."""
+    
+    # Calculate actual total
+    valid_data = population_data[~np.isnan(population_data) & (population_data > 0)]
+    actual_total = int(valid_data.sum()) if len(valid_data) > 0 else 0
+    
+    # Calculate tolerance range
+    tolerance_absolute = int(expected_total * tolerance_percent / 100)
+    min_acceptable = expected_total - tolerance_absolute
+    max_acceptable = expected_total + tolerance_absolute
+    
+    # Check if within tolerance
+    validation_passed = min_acceptable <= actual_total <= max_acceptable
+    
+    logger.info("="*70)
+    logger.info("POPULATION VALIDATION RESULTS")
+    logger.info("="*70)
+    logger.info(f"Expected total (Netherlands 2025): {expected_total:,} persons")
+    logger.info(f"Actual total (processed): {actual_total:,} persons")
+    logger.info(f"Difference: {actual_total - expected_total:,} persons")
+    logger.info(f"Tolerance: ±{tolerance_percent}% (±{tolerance_absolute:,} persons)")
+    logger.info(f"Acceptable range: {min_acceptable:,} - {max_acceptable:,} persons")
+    logger.info(f"Validation: {'✓ PASSED' if validation_passed else '✗ FAILED'}")
+    
+    if not validation_passed:
+        deviation_percent = abs(actual_total - expected_total) / expected_total * 100
+        logger.warning(f"Population total deviates by {deviation_percent:.1f}% from expected ground truth")
+        logger.warning("This may indicate issues with:")
+        logger.warning("- Source data covers broader geographic area than Netherlands")
+        logger.warning("- Study area masking not restrictive enough")
+        logger.warning("- Resolution handling during transformation")
+        logger.warning("- Ground truth applies to different geographic scope")
+        
+        # Specific analysis for high totals
+        if actual_total > expected_total * 2:
+            logger.warning("ANALYSIS: Population total is much higher than expected")
+            logger.warning("- 2025 GHS file appears to cover multiple countries (Germany, Belgium, etc.)")
+            logger.warning("- Current masking using NUTS-L3 + land mask may not be sufficient")
+            logger.warning("- Consider using more restrictive geographic boundaries")
+    
+    logger.info("="*70)
+    
+    return validation_passed
