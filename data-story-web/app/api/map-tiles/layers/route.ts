@@ -116,7 +116,11 @@ async function extractLayerMetadata(layer: {
         format = "mbtiles";
       } else {
         // For ambiguous cases, decide based on layerType
-        if (layerType === "clusters" || layerType === "nuts") {
+        if (
+          layerType === "clusters" ||
+          layerType === "nuts" ||
+          layerType === "port"
+        ) {
           dataType = "vector";
           format = "mbtiles";
         } else {
@@ -175,6 +179,7 @@ function determineLayerType(fileName: string): string {
     return "relevance";
   if (name.includes("slr")) return "sea-level-rise";
   if (name.startsWith("nuts") || name.includes("_nuts")) return "nuts";
+  if (name.startsWith("port") || name.includes("_port_")) return "port";
 
   console.log(
     `Could not determine specific layer type for: ${fileName}, defaulting to unknown`
@@ -210,6 +215,7 @@ function getDefaultBounds(layerType: string): [number, number, number, number] {
     clusters: euBounds,
     "sea-level-rise": euBounds,
     nuts: euBounds,
+    port: euBounds,
     unknown: [-180, -90, 180, 90] as [number, number, number, number],
   };
 
@@ -225,6 +231,7 @@ function getDefaultValueRange(layerType: string): [number, number] {
     clusters: [0, 500] as [number, number],
     "sea-level-rise": [0, 3] as [number, number],
     nuts: [0, 500] as [number, number],
+    port: [0, 500] as [number, number],
     unknown: [0, 100] as [number, number],
   };
 
