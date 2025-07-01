@@ -16,8 +16,8 @@ except ImportError:
         cubic = 'cubic'
         average = 'average'
 import yaml
-from eu_climate.utils.utils import setup_logging
-# from eu_climate.utils.data_loading import get_config
+from utils.utils import setup_logging
+# from utils.data_loading import get_config
 
 # Set up logging for the config module
 logger = setup_logging(__name__)
@@ -65,7 +65,7 @@ class ProjectConfig:
         
         # Set up paths
         self.workspace_root = Path(os.getcwd())
-        self.huggingface_folder = self.workspace_root / "eu_climate" / self.config['data_paths']['local_data_dir']
+        self.huggingface_folder = self.workspace_root / self.config['data_paths']['local_data_dir']
         self.data_dir =  self.huggingface_folder / self.config['data_paths']['source_data_dir']
         self.output_dir = self.huggingface_folder / self.config['data_paths']['local_output_dir']
         

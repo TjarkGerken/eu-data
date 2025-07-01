@@ -58,23 +58,46 @@ export default function BaseLeafletMap({
   autoFitBounds = false,
   baseTileLayer = {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-    maxZoom: 18
+    attribution:
+      "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+    maxZoom: 18,
   },
   overlayTileLayers = [],
   customPopupStyle = "climate-popup",
   enableDataLayers = true,
 }: BaseLeafletMapProps) {
   // Generate unique map ID to avoid conflicts between multiple map instances
-  const mapId = useMemo(() => `leaflet-map-${Math.random().toString(36).substr(2, 9)}`, []);
-  
+  const mapId = useMemo(
+    () => `leaflet-map-${Math.random().toString(36).substr(2, 9)}`,
+    []
+  );
+
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const cogLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const overlayLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const loadedLayersRef = useRef<Map<string, { layer: L.Layer; opacity: number; visible: boolean; isCogLayer?: boolean }>>(new Map());
-  const dataCacheRef = useRef<Map<string, { data: ArrayBuffer | GeoJSON.FeatureCollection | string; timestamp: number; type: 'cog' | 'vector' | 'raster' }>>(new Map());
+  const loadedLayersRef = useRef<
+    Map<
+      string,
+      {
+        layer: L.Layer;
+        opacity: number;
+        visible: boolean;
+        isCogLayer?: boolean;
+      }
+    >
+  >(new Map());
+  const dataCacheRef = useRef<
+    Map<
+      string,
+      {
+        data: ArrayBuffer | GeoJSON.FeatureCollection | string;
+        timestamp: number;
+        type: "cog" | "vector" | "raster";
+      }
+    >
+  >(new Map());
   const georasterCacheRef = useRef<Map<string, GeorasterObject>>(new Map());
 
   // Add custom CSS for popup styling
@@ -139,7 +162,7 @@ export default function BaseLeafletMap({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           delete (mapContainer as any)._leaflet_id;
         } catch (error) {
-          console.warn('Error cleaning up existing map container:', error);
+          console.warn("Error cleaning up existing map container:", error);
         }
       }
 
@@ -182,12 +205,12 @@ export default function BaseLeafletMap({
     // Cleanup function
     return () => {
       const loadedLayers = loadedLayersRef.current;
-      
+
       if (mapRef.current) {
         try {
           mapRef.current.remove();
         } catch (error) {
-          console.warn('Error removing map:', error);
+          console.warn("Error removing map:", error);
         }
         mapRef.current = null;
         layerGroupRef.current = null;
@@ -197,7 +220,7 @@ export default function BaseLeafletMap({
         loadedLayers.clear();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapId, centerLat, centerLng, zoom, baseTileLayer, overlayTileLayers]);
 
   // Separate effect for updating map view when coordinates/zoom change
@@ -206,7 +229,7 @@ export default function BaseLeafletMap({
       try {
         mapRef.current.setView([centerLat, centerLng], zoom);
       } catch (error) {
-        console.warn('Error updating map view:', error);
+        console.warn("Error updating map view:", error);
       }
     }
   }, [centerLat, centerLng, zoom]);
@@ -244,121 +267,133 @@ export default function BaseLeafletMap({
   );
 
   // Load vector layers with popups for GeoJSON data
-  const loadVectorLayer = useCallback(async (layer: LayerState, storeReference: boolean = true) => {
-    if (!vectorLayerGroupRef.current || !L || !enableDataLayers) return;
+  const loadVectorLayer = useCallback(
+    async (layer: LayerState, storeReference: boolean = true) => {
+      if (!vectorLayerGroupRef.current || !L || !enableDataLayers) return;
 
-    try {
-      const cached = dataCacheRef.current.get(layer.id);
-      let vectorData;
-      
-      if (cached && cached.type === 'vector') {
-        vectorData = cached.data as GeoJSON.FeatureCollection;
-      } else {
-        const response = await fetch(`/api/map-data/vector/${layer.id}`);
-        
-        if (response.ok) {
-          vectorData = await response.json();
-          dataCacheRef.current.set(layer.id, {
-            data: vectorData,
-            timestamp: Date.now(),
-            type: 'vector'
-          });
+      try {
+        const cached = dataCacheRef.current.get(layer.id);
+        let vectorData;
+
+        if (cached && cached.type === "vector") {
+          vectorData = cached.data as GeoJSON.FeatureCollection;
         } else {
-          console.error("Failed to load vector layer:", response.status, response.statusText);
-          return;
+          const response = await fetch(`/api/map-data/vector/${layer.id}`);
+
+          if (response.ok) {
+            vectorData = await response.json();
+            dataCacheRef.current.set(layer.id, {
+              data: vectorData,
+              timestamp: Date.now(),
+              type: "vector",
+            });
+          } else {
+            console.error(
+              "Failed to load vector layer:",
+              response.status,
+              response.statusText
+            );
+            return;
+          }
         }
-      }
 
-      if (vectorData && vectorData.features && vectorData.features.length > 0) {
-        const geoJSONLayer = L.geoJSON(vectorData, {
-          style: () => {
-            const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
-            return {
-              fillColor: fillColor,
-              weight: 2,
-              color: "#ffffff",
-              opacity: layer.opacity,
-              fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
-            };
-          },
-          onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
-            if (feature.properties) {
-              const formatNumber = (value: number): string => {
-                if (typeof value !== "number" || isNaN(value))
+        if (
+          vectorData &&
+          vectorData.features &&
+          vectorData.features.length > 0
+        ) {
+          const geoJSONLayer = L.geoJSON(vectorData, {
+            style: () => {
+              const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
+              return {
+                fillColor: fillColor,
+                weight: 2,
+                color: "#ffffff",
+                opacity: layer.opacity,
+                fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
+              };
+            },
+            onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
+              if (feature.properties) {
+                const formatNumber = (value: number): string => {
+                  if (typeof value !== "number" || isNaN(value))
+                    return value?.toString() || "";
+                  return new Intl.NumberFormat("de-DE", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 3,
+                  }).format(value);
+                };
+
+                const formatPropertyValue = (
+                  key: string,
+                  value: unknown
+                ): string => {
+                  if (typeof value === "number") {
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
+                      const squareKm = value / 1000000;
+                      return formatNumber(squareKm) + " km²";
+                    }
+                    return formatNumber(value);
+                  }
+                  if (typeof value === "string" && !isNaN(Number(value))) {
+                    const numValue = Number(value);
+                    if (
+                      key.toLowerCase().includes("area") &&
+                      key.toLowerCase().includes("square") &&
+                      key.toLowerCase().includes("meter")
+                    ) {
+                      const squareKm = numValue / 1000000;
+                      return formatNumber(squareKm) + " km²";
+                    }
+                    return formatNumber(numValue);
+                  }
                   return value?.toString() || "";
-                return new Intl.NumberFormat("de-DE", {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 3,
-                }).format(value);
-              };
-              
-              const formatPropertyValue = (key: string, value: unknown): string => {
-                if (typeof value === "number") {
-                  if (
-                    key.toLowerCase().includes("area") &&
-                    key.toLowerCase().includes("square") &&
-                    key.toLowerCase().includes("meter")
-                  ) {
-                    const squareKm = value / 1000000;
-                    return formatNumber(squareKm) + " km²";
+                };
+
+                const formatPropertyName = (key: string): string => {
+                  let formattedName = key
+                    .replace(/_/g, " ")
+                    .replace(/([A-Z])/g, " $1")
+                    .split(" ")
+                    .map(
+                      (word) =>
+                        word.charAt(0).toUpperCase() +
+                        word.slice(1).toLowerCase()
+                    )
+                    .join(" ");
+
+                  if (formattedName.toLowerCase().includes("square meters")) {
+                    formattedName = formattedName.replace(
+                      /Square Meters/gi,
+                      "Square Kilometers"
+                    );
                   }
-                  return formatNumber(value);
-                }
-                if (typeof value === "string" && !isNaN(Number(value))) {
-                  const numValue = Number(value);
-                  if (
-                    key.toLowerCase().includes("area") &&
-                    key.toLowerCase().includes("square") &&
-                    key.toLowerCase().includes("meter")
-                  ) {
-                    const squareKm = numValue / 1000000;
-                    return formatNumber(squareKm) + " km²";
-                  }
-                  return formatNumber(numValue);
-                }
-                return value?.toString() || "";
-              };
-              
-              const formatPropertyName = (key: string): string => {
-                let formattedName = key
-                  .replace(/_/g, " ")
-                  .replace(/([A-Z])/g, " $1")
-                  .split(" ")
-                  .map(
-                    (word) =>
-                      word.charAt(0).toUpperCase() +
-                      word.slice(1).toLowerCase()
+
+                  return formattedName;
+                };
+
+                const propertyEntries = Object.entries(feature.properties)
+                  .filter(
+                    ([, value]) =>
+                      value !== null && value !== undefined && value !== ""
                   )
-                  .join(" ");
+                  .filter(
+                    ([key]) =>
+                      !key.toLowerCase().includes("pixel_count") &&
+                      !key.toLowerCase().includes("risk_density") &&
+                      !key.toLowerCase().includes("cluster_id")
+                  )
+                  .map(([key, value]) => {
+                    const formattedKey = formatPropertyName(key);
+                    const formattedValue = formatPropertyValue(key, value);
+                    return { key: formattedKey, value: formattedValue };
+                  });
 
-                if (formattedName.toLowerCase().includes("square meters")) {
-                  formattedName = formattedName.replace(
-                    /Square Meters/gi,
-                    "Square Kilometers"
-                  );
-                }
-
-                return formattedName;
-              };
-              
-              const propertyEntries = Object.entries(feature.properties)
-                .filter(
-                  ([, value]) =>
-                    value !== null && value !== undefined && value !== ""
-                )
-                .filter(
-                  ([key]) =>
-                    !key.toLowerCase().includes("pixel_count") &&
-                    !key.toLowerCase().includes("risk_density") &&
-                    !key.toLowerCase().includes("cluster_id")
-                )
-                .map(([key, value]) => {
-                  const formattedKey = formatPropertyName(key);
-                  const formattedValue = formatPropertyValue(key, value);
-                  return { key: formattedKey, value: formattedValue };
-                });
-
-              const popupContent = `
+                const popupContent = `
                 <div style="
                   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                   max-width: 300px;
@@ -375,8 +410,12 @@ export default function BaseLeafletMap({
                     text-align: center;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                   ">
-                    ${feature.properties.name || feature.properties.cluster_id
-                        ? `Cluster ID: ${feature.properties.cluster_id || feature.properties.name}`
+                    ${
+                      feature.properties.name || feature.properties.cluster_id
+                        ? `Cluster ID: ${
+                            feature.properties.cluster_id ||
+                            feature.properties.name
+                          }`
                         : "Feature Details"
                     }
                   </div>
@@ -390,7 +429,8 @@ export default function BaseLeafletMap({
                         align-items: center;
                         padding: 8px 12px;
                         margin: 2px 0;
-                        background: ${key.toLowerCase().includes("risk")
+                        background: ${
+                          key.toLowerCase().includes("risk")
                             ? "#fef2f2"
                             : key.toLowerCase().includes("area")
                             ? "#f0fdf4"
@@ -398,7 +438,8 @@ export default function BaseLeafletMap({
                             ? "#f7fee7"
                             : "#f9fafb"
                         };
-                        border-left: 3px solid ${key.toLowerCase().includes("risk")
+                        border-left: 3px solid ${
+                          key.toLowerCase().includes("risk")
                             ? "#ef4444"
                             : key.toLowerCase().includes("area")
                             ? "#22c55e"
@@ -432,142 +473,149 @@ export default function BaseLeafletMap({
                 </div>
               `;
 
-              geoLayer.bindPopup(popupContent, {
-                maxWidth: 350,
-                className: customPopupStyle,
-              });
-            }
-          },
-        });
-        vectorLayerGroupRef.current.addLayer(geoJSONLayer);
-        
-        if (storeReference) {
-          loadedLayersRef.current.set(layer.id, {
-            layer: geoJSONLayer,
-            opacity: layer.opacity,
-            visible: layer.visible
+                geoLayer.bindPopup(popupContent, {
+                  maxWidth: 350,
+                  className: customPopupStyle,
+                });
+              }
+            },
           });
+          vectorLayerGroupRef.current.addLayer(geoJSONLayer);
+
+          if (storeReference) {
+            loadedLayersRef.current.set(layer.id, {
+              layer: geoJSONLayer,
+              opacity: layer.opacity,
+              visible: layer.visible,
+            });
+          }
+        } else {
+          console.warn("No valid features found in vector data");
         }
-      } else {
-        console.warn("No valid features found in vector data");
+      } catch (error) {
+        console.error("Failed to load vector layer:", error);
       }
-    } catch (error) {
-      console.error("Failed to load vector layer:", error);
-    }
-  }, [customPopupStyle, enableDataLayers]);
+    },
+    [customPopupStyle, enableDataLayers]
+  );
 
   // Load COG layers using dynamic georaster imports
-  const loadCogLayer = useCallback(async (layer: LayerState) => {
-    if (!cogLayerGroupRef.current || !enableDataLayers) return;
+  const loadCogLayer = useCallback(
+    async (layer: LayerState) => {
+      if (!cogLayerGroupRef.current || !enableDataLayers) return;
 
-    try {
-      // Dynamic imports for georaster libraries (only loaded when needed)
-      const [parseGeoraster, GeoRasterLayer] = await Promise.all([
-        // @ts-expect-error - georaster library doesn't have TypeScript definitions
-        import("georaster").then(module => module.default),
-        // @ts-expect-error - georaster-layer-for-leaflet library doesn't have TypeScript definitions
-        import("georaster-layer-for-leaflet").then(module => module.default)
-      ]);
+      try {
+        // Dynamic imports for georaster libraries (only loaded when needed)
+        const [parseGeoraster, GeoRasterLayer] = await Promise.all([
+          // @ts-expect-error - georaster library doesn't have TypeScript definitions
+          import("georaster").then((module) => module.default),
+          // @ts-expect-error - georaster-layer-for-leaflet library doesn't have TypeScript definitions
+          import("georaster-layer-for-leaflet").then(
+            (module) => module.default
+          ),
+        ]);
 
-      let georaster = georasterCacheRef.current.get(layer.id);
-      
-      if (georaster) {
-        // Using cached georaster
-      } else {
-        const response = await fetch(`/api/map-data/cog/${layer.id}`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch COG: ${response.statusText}`);
+        let georaster = georasterCacheRef.current.get(layer.id);
+
+        if (georaster) {
+          // Using cached georaster
+        } else {
+          const response = await fetch(`/api/map-data/cog/${layer.id}`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch COG: ${response.statusText}`);
+          }
+
+          const arrayBuffer = await response.arrayBuffer();
+          georaster = (await parseGeoraster(arrayBuffer)) as GeorasterObject;
+
+          georasterCacheRef.current.set(layer.id, georaster);
         }
 
-        const arrayBuffer = await response.arrayBuffer();
-        georaster = await parseGeoraster(arrayBuffer) as GeorasterObject;
-        
-        georasterCacheRef.current.set(layer.id, georaster);
-      }
+        if (!georaster) {
+          throw new Error("Failed to load or parse georaster data");
+        }
 
-      if (!georaster) {
-        throw new Error("Failed to load or parse georaster data");
-      }
+        const colorScale = layer.metadata.colorScale;
+        const valueRange = layer.metadata.valueRange;
 
-      const colorScale = layer.metadata.colorScale;
-      const valueRange = layer.metadata.valueRange;
-
-      const cogLayer = new GeoRasterLayer({
-        georaster: georaster,
-        opacity: layer.opacity || 0.8,
-        pixelValuesToColorFn: function (pixelValues: number[]) {
-          const pixelValue = pixelValues[0];
-          if (
-            pixelValue === georaster.noDataValue ||
-            pixelValue === null ||
-            pixelValue === undefined ||
-            pixelValue === 0
-          ) {
-            return null;
-          }
-
-          const isRiskLayer =
-            layer.id.includes("risk") ||
-            layer.metadata.name.toLowerCase().includes("risk");
-
-          if (isRiskLayer) {
-            const normalized =
-              (pixelValue - valueRange[0]) / (valueRange[1] - valueRange[0]);
-            const clampedNormalized = Math.max(0, Math.min(1, normalized));
-
-            if (clampedNormalized <= 0.33) {
-              const t = clampedNormalized / 0.33;
-              const r = Math.round(255 * t);
-              const g = Math.round(165 * t);
-              const b = 0;
-              const a = t * 0.8;
-              return `rgba(${r}, ${g}, ${b}, ${a})`;
-            } else if (clampedNormalized <= 0.66) {
-              const t = (clampedNormalized - 0.33) / 0.33;
-              const r = 255;
-              const g = Math.round(165 * (1 - t));
-              const b = 0;
-              const a = 0.8 + t * 0.15;
-              return `rgba(${r}, ${g}, ${b}, ${a})`;
-            } else {
-              const t = (clampedNormalized - 0.66) / 0.34;
-              const r = Math.round(255 * (1 - t * 0.4));
-              const g = 0;
-              const b = 0;
-              const a = 0.95;
-              return `rgba(${r}, ${g}, ${b}, ${a})`;
+        const cogLayer = new GeoRasterLayer({
+          georaster: georaster,
+          opacity: layer.opacity || 0.8,
+          pixelValuesToColorFn: function (pixelValues: number[]) {
+            const pixelValue = pixelValues[0];
+            if (
+              pixelValue === georaster.noDataValue ||
+              pixelValue === null ||
+              pixelValue === undefined ||
+              pixelValue === 0
+            ) {
+              return null;
             }
-          } else {
-            const normalized =
-              (pixelValue - valueRange[0]) / (valueRange[1] - valueRange[0]);
-            const clampedNormalized = Math.max(0, Math.min(1, normalized));
 
-            const colorIndex = Math.floor(
-              clampedNormalized * (colorScale.length - 1)
-            );
-            const color =
-              colorScale[colorIndex] || colorScale[colorScale.length - 1];
+            const isRiskLayer =
+              layer.id.includes("risk") ||
+              layer.metadata.name.toLowerCase().includes("risk");
 
-            return color;
-          }
-        },
-        resolution: 256,
-      });
+            if (isRiskLayer) {
+              const normalized =
+                (pixelValue - valueRange[0]) / (valueRange[1] - valueRange[0]);
+              const clampedNormalized = Math.max(0, Math.min(1, normalized));
 
-      cogLayerGroupRef.current.addLayer(cogLayer);
-      
-      if (cogLayerGroupRef.current) {
-        loadedLayersRef.current.set(layer.id, {
-          layer: cogLayer,
-          opacity: layer.opacity,
-          visible: layer.visible,
-          isCogLayer: true
+              if (clampedNormalized <= 0.33) {
+                const t = clampedNormalized / 0.33;
+                const r = Math.round(255 * t);
+                const g = Math.round(165 * t);
+                const b = 0;
+                const a = t * 0.8;
+                return `rgba(${r}, ${g}, ${b}, ${a})`;
+              } else if (clampedNormalized <= 0.66) {
+                const t = (clampedNormalized - 0.33) / 0.33;
+                const r = 255;
+                const g = Math.round(165 * (1 - t));
+                const b = 0;
+                const a = 0.8 + t * 0.15;
+                return `rgba(${r}, ${g}, ${b}, ${a})`;
+              } else {
+                const t = (clampedNormalized - 0.66) / 0.34;
+                const r = Math.round(255 * (1 - t * 0.4));
+                const g = 0;
+                const b = 0;
+                const a = 0.95;
+                return `rgba(${r}, ${g}, ${b}, ${a})`;
+              }
+            } else {
+              const normalized =
+                (pixelValue - valueRange[0]) / (valueRange[1] - valueRange[0]);
+              const clampedNormalized = Math.max(0, Math.min(1, normalized));
+
+              const colorIndex = Math.floor(
+                clampedNormalized * (colorScale.length - 1)
+              );
+              const color =
+                colorScale[colorIndex] || colorScale[colorScale.length - 1];
+
+              return color;
+            }
+          },
+          resolution: 256,
         });
+
+        cogLayerGroupRef.current.addLayer(cogLayer);
+
+        if (cogLayerGroupRef.current) {
+          loadedLayersRef.current.set(layer.id, {
+            layer: cogLayer,
+            opacity: layer.opacity,
+            visible: layer.visible,
+            isCogLayer: true,
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to load COG layer ${layer.id}:`, error);
       }
-    } catch (error) {
-      console.error(`Failed to load COG layer ${layer.id}:`, error);
-    }
-  }, [enableDataLayers]);
+    },
+    [enableDataLayers]
+  );
 
   const updateMapLayers = useCallback(() => {
     if (
@@ -579,7 +627,12 @@ export default function BaseLeafletMap({
     )
       return;
 
-    const currentLayerStates = new Map(layers.map(layer => [layer.id, { visible: layer.visible, opacity: layer.opacity }]));
+    const currentLayerStates = new Map(
+      layers.map((layer) => [
+        layer.id,
+        { visible: layer.visible, opacity: layer.opacity },
+      ])
+    );
     const loadedLayers = loadedLayersRef.current;
 
     // Remove layers that are no longer visible or no longer exist
@@ -590,10 +643,16 @@ export default function BaseLeafletMap({
           if (loadedLayer.isCogLayer && cogLayerGroupRef.current) {
             cogLayerGroupRef.current.removeLayer(loadedLayer.layer);
           } else {
-            if (vectorLayerGroupRef.current && vectorLayerGroupRef.current.hasLayer(loadedLayer.layer)) {
+            if (
+              vectorLayerGroupRef.current &&
+              vectorLayerGroupRef.current.hasLayer(loadedLayer.layer)
+            ) {
               vectorLayerGroupRef.current.removeLayer(loadedLayer.layer);
             }
-            if (layerGroupRef.current && layerGroupRef.current.hasLayer(loadedLayer.layer)) {
+            if (
+              layerGroupRef.current &&
+              layerGroupRef.current.hasLayer(loadedLayer.layer)
+            ) {
               layerGroupRef.current.removeLayer(loadedLayer.layer);
             }
             if (mapRef.current.hasLayer(loadedLayer.layer)) {
@@ -603,11 +662,21 @@ export default function BaseLeafletMap({
         } catch (error) {
           console.warn(`Error removing layer ${layerId}:`, error);
         }
-        
+
         loadedLayers.delete(layerId);
-      } else if (currentState.opacity !== loadedLayer.opacity || loadedLayer.visible !== currentState.visible) {
-        if ('setOpacity' in loadedLayer.layer && typeof (loadedLayer.layer as { setOpacity?: (opacity: number) => void }).setOpacity === 'function') {
-          (loadedLayer.layer as { setOpacity: (opacity: number) => void }).setOpacity(currentState.opacity);
+      } else if (
+        currentState.opacity !== loadedLayer.opacity ||
+        loadedLayer.visible !== currentState.visible
+      ) {
+        if (
+          "setOpacity" in loadedLayer.layer &&
+          typeof (
+            loadedLayer.layer as { setOpacity?: (opacity: number) => void }
+          ).setOpacity === "function"
+        ) {
+          (
+            loadedLayer.layer as { setOpacity: (opacity: number) => void }
+          ).setOpacity(currentState.opacity);
         }
         loadedLayer.opacity = currentState.opacity;
         loadedLayer.visible = currentState.visible;
@@ -616,22 +685,28 @@ export default function BaseLeafletMap({
 
     // Add new visible layers or layers that need to be reloaded
     const visibleLayers = layers.filter((layer) => layer.visible);
-    
+
     visibleLayers.forEach((layer) => {
       const loadedLayer = loadedLayers.get(layer.id);
-      
-      if (loadedLayer && loadedLayer.opacity === layer.opacity && loadedLayer.visible === layer.visible) {
+
+      if (
+        loadedLayer &&
+        loadedLayer.opacity === layer.opacity &&
+        loadedLayer.visible === layer.visible
+      ) {
         return;
       }
-      
+
       if (layer.metadata.dataType === "vector") {
         if (layer.metadata.format === "mbtiles") {
           if (L && VectorGrid) {
-            const cachedLayerName = dataCacheRef.current.get(`${layer.id}_layername`);
-            
+            const cachedLayerName = dataCacheRef.current.get(
+              `${layer.id}_layername`
+            );
+
             const createVectorTileLayer = (actualLayerName: string) => {
               const vectorTileLayer = L.vectorGrid.protobuf(
-                `/api/map-data/vector/${layer.id}/{z}/{x}/{y}`,
+                `/api/map-data/vector/${layer.id}/{z}/{x}/{y}.mvt`,
                 {
                   rendererFactory: L.canvas.tile,
                   vectorTileLayerStyles: {
@@ -660,11 +735,11 @@ export default function BaseLeafletMap({
               loadedLayersRef.current.set(layer.id, {
                 layer: vectorTileLayer,
                 opacity: layer.opacity,
-                visible: layer.visible
+                visible: layer.visible,
               });
             };
-            
-            if (cachedLayerName && cachedLayerName.type === 'vector') {
+
+            if (cachedLayerName && cachedLayerName.type === "vector") {
               createVectorTileLayer(cachedLayerName.data as string);
             } else {
               getActualLayerName(layer.id)
@@ -672,7 +747,7 @@ export default function BaseLeafletMap({
                   dataCacheRef.current.set(`${layer.id}_layername`, {
                     data: actualLayerName,
                     timestamp: Date.now(),
-                    type: 'vector'
+                    type: "vector",
                   });
                   createVectorTileLayer(actualLayerName);
                 })
@@ -700,11 +775,11 @@ export default function BaseLeafletMap({
             }
           );
           layerGroupRef.current?.addLayer(tileLayer);
-          
+
           loadedLayersRef.current.set(layer.id, {
             layer: tileLayer,
             opacity: layer.opacity,
-            visible: layer.visible
+            visible: layer.visible,
           });
         } else if (layer.metadata.format === "cog") {
           loadCogLayer(layer);
@@ -731,7 +806,14 @@ export default function BaseLeafletMap({
         [maxLat, maxLng],
       ]);
     }
-  }, [layers, autoFitBounds, loadCogLayer, getActualLayerName, loadVectorLayer, enableDataLayers]);
+  }, [
+    layers,
+    autoFitBounds,
+    loadCogLayer,
+    getActualLayerName,
+    loadVectorLayer,
+    enableDataLayers,
+  ]);
 
   useEffect(() => {
     if (enableDataLayers) {
@@ -746,4 +828,4 @@ export default function BaseLeafletMap({
       style={{ minHeight: "400px" }}
     />
   );
-} 
+}
