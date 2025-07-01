@@ -5,10 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { CitationAwareMarkdown } from "./citation-aware-markdown";
+import { useLanguage } from "@/contexts/language-context";
 
 interface InteractiveCalloutBlockProps {
   title: string;
   content: string;
+  expandedContent?: string;
   variant: "success" | "warning" | "info" | "error";
   interactive?: boolean;
   references?: Array<{
@@ -22,10 +24,12 @@ interface InteractiveCalloutBlockProps {
 export function InteractiveCalloutBlock({
   title,
   content,
+  expandedContent,
   variant,
   interactive = true,
   references,
 }: InteractiveCalloutBlockProps) {
+  const { language } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -34,38 +38,34 @@ export function InteractiveCalloutBlock({
       case "success":
         return {
           icon: CheckCircle,
-          bgColor:
-            "from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20",
-          borderColor: "border-green-200 dark:border-green-800",
+          bgColor: "from-green-50 to-emerald-50",
+          borderColor: "border-green-200",
           iconColor: "text-green-600",
-          titleColor: "text-green-800 dark:text-green-200",
+          titleColor: "text-green-800",
         };
       case "warning":
         return {
           icon: AlertTriangle,
-          bgColor:
-            "from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20",
-          borderColor: "border-yellow-200 dark:border-yellow-800",
+          bgColor: "from-yellow-50 to-orange-50",
+          borderColor: "border-yellow-200",
           iconColor: "text-yellow-600",
-          titleColor: "text-yellow-800 dark:text-yellow-200",
+          titleColor: "text-yellow-800",
         };
       case "error":
         return {
           icon: AlertCircle,
-          bgColor:
-            "from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20",
-          borderColor: "border-red-200 dark:border-red-800",
+          bgColor: "from-red-50 to-pink-50",
+          borderColor: "border-red-200",
           iconColor: "text-red-600",
-          titleColor: "text-red-800 dark:text-red-200",
+          titleColor: "text-red-800",
         };
       default:
         return {
           icon: Info,
-          bgColor:
-            "from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20",
-          borderColor: "border-blue-200 dark:border-blue-800",
+          bgColor: "from-blue-50 to-cyan-50",
+          borderColor: "border-blue-200",
           iconColor: "text-blue-600",
-          titleColor: "text-blue-800 dark:text-blue-200",
+          titleColor: "text-blue-800",
         };
     }
   };
@@ -109,7 +109,7 @@ export function InteractiveCalloutBlock({
                     : {}
                 }
                 transition={{ duration: 0.3 }}
-                className={`flex-shrink-0 p-2 rounded-full bg-white/50 dark:bg-gray-800/50 ${config.iconColor}`}
+                className={`flex-shrink-0 p-2 rounded-full bg-white/50 ${config.iconColor}`}
               >
                 <IconComponent className="h-5 w-5" />
               </motion.div>
@@ -142,7 +142,12 @@ export function InteractiveCalloutBlock({
                   transition={{ duration: 0.3 }}
                   className="text-sm text-muted-foreground leading-relaxed"
                 >
-                  <CitationAwareMarkdown content={content} references={references} />
+                  <CitationAwareMarkdown
+                    content={
+                      isExpanded && expandedContent ? expandedContent : content
+                    }
+                    references={references}
+                  />
                 </motion.div>
 
                 {interactive && (
@@ -152,7 +157,13 @@ export function InteractiveCalloutBlock({
                     transition={{ duration: 0.2 }}
                     className="mt-3 text-xs text-muted-foreground"
                   >
-                    {isExpanded ? "Click to collapse" : "Click to expand"}
+                    {isExpanded
+                      ? language === "de"
+                        ? "Klicken zum Einklappen"
+                        : "Click to collapse"
+                      : language === "de"
+                      ? "Klicken zum Ausklappen"
+                      : "Click to expand"}
                   </motion.div>
                 )}
               </div>
@@ -185,7 +196,7 @@ export function InteractiveCalloutBlock({
 
           {interactive && (
             <motion.div
-              className="absolute inset-0 bg-white/10 dark:bg-gray-800/10"
+              className="absolute inset-0 bg-white/10"
               initial={{ opacity: 0 }}
               animate={{ opacity: isHovered ? 1 : 0 }}
               transition={{ duration: 0.3 }}
@@ -197,14 +208,18 @@ export function InteractiveCalloutBlock({
 
       {references && references.length > 0 && (
         <div className="mt-4 pt-4 border-t border-muted">
-          <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">
+            {language === "de" ? "Referenzen" : "References"}
+          </h4>
           <div className="space-y-2">
             {references.map((ref) => (
-              <div 
-                key={ref.id} 
+              <div
+                key={ref.id}
                 className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => {
-                  const event = new CustomEvent('highlightReference', { detail: ref.id });
+                  const event = new CustomEvent("highlightReference", {
+                    detail: ref.id,
+                  });
                   window.dispatchEvent(event);
                 }}
               >

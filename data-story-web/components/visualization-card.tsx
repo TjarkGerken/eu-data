@@ -12,10 +12,10 @@ import { BarChart3, TrendingUp, Globe, Thermometer } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
 import ClimateImage from "@/components/climate-image";
 import { ImageCategory, ImageScenario } from "@/lib/blob-config";
+import { useState } from "react";
 
 interface VisualizationCardProps {
   title: string;
-  description: string;
   content: string;
   type: "chart" | "map" | "trend" | "gauge";
   references: string[];
@@ -34,7 +34,6 @@ const iconMap = {
 
 export function VisualizationCard({
   title,
-  description,
   content,
   type,
   references,
@@ -44,7 +43,9 @@ export function VisualizationCard({
   imageId,
 }: VisualizationCardProps) {
   const Icon = iconMap[type];
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const [captionEn, setCaptionEn] = useState<string | undefined>(undefined);
+  const [captionDe, setCaptionDe] = useState<string | undefined>(undefined);
 
   return (
     <Card className="w-full mb-8">
@@ -53,7 +54,6 @@ export function VisualizationCard({
           <Icon className="h-6 w-6 text-[#2d5a3d]" />
           <CardTitle className="text-2xl">{title}</CardTitle>
         </div>
-        <CardDescription className="text-base">{description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Visualization Area */}
@@ -67,12 +67,16 @@ export function VisualizationCard({
                 alt={title}
                 className="object-contain"
                 priority={false}
+                onMetadataLoaded={(metadata) => {
+                  setCaptionEn(metadata?.caption?.en);
+                  setCaptionDe(metadata?.caption?.de);
+                }}
               />
             </div>
           ) : imagePath ? (
             <div className="relative w-full h-full">
               <ClimateImage
-                category="combined"
+                category="risk"
                 alt={title}
                 className="object-contain"
                 priority={false}
@@ -90,6 +94,12 @@ export function VisualizationCard({
             </div>
           )}
         </div>
+
+        {captionEn && (
+          <CardDescription className="text-base">
+            {language === "de" ? captionDe || captionEn : captionEn}
+          </CardDescription>
+        )}
 
         {/* Content Text */}
         <div className="prose prose-lg max-w-none">

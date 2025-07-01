@@ -13,7 +13,6 @@ export interface MapLayerMetadata {
   bounds: [number, number, number, number];
   colorScale: string[];
   valueRange: [number, number];
-  description?: string;
   uploadedAt: string;
   fileSize: number;
 }
@@ -138,7 +137,6 @@ async function extractLayerMetadata(layer: {
       bounds: getDefaultBounds(layerType),
       colorScale: getDefaultColorScale(layerType),
       valueRange: getDefaultValueRange(layerType),
-      description: `${layerType} layer: ${layerId}`,
       uploadedAt:
         layer.created_at || layer.updated_at || new Date().toISOString(),
       fileSize: layer.metadata?.size || 0,

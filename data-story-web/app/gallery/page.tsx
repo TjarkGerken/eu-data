@@ -66,7 +66,9 @@ export default function GalleryPage() {
             url: img.url,
             category: img.metadata?.category || "unknown",
             scenario: img.metadata?.scenario,
-            description: img.metadata?.description,
+            caption: img.metadata?.description
+              ? { en: img.metadata.description, de: "" }
+              : undefined,
           };
         })
         .filter((img: ImageOption) => img.url && img.name !== "unknown");
@@ -87,7 +89,7 @@ export default function GalleryPage() {
       filtered = filtered.filter(
         (img) =>
           img.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          img.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          img.caption?.en?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           img.category.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -109,7 +111,11 @@ export default function GalleryPage() {
 
   const categories = Array.from(new Set(images.map((img) => img.category)));
   const scenarios = Array.from(
-    new Set(images.map((img) => img.scenario).filter((scenario): scenario is string => Boolean(scenario)))
+    new Set(
+      images
+        .map((img) => img.scenario)
+        .filter((scenario): scenario is string => Boolean(scenario))
+    )
   );
 
   if (loading) {
@@ -214,11 +220,11 @@ export default function GalleryPage() {
                     </Badge>
                   )}
                 </div>
-                {image.description && (
+                {image.caption?.en && (
                   <p className="text-xs text-gray-600 overflow-hidden text-ellipsis">
-                    {image.description.length > 80
-                      ? image.description.slice(0, 80) + "..."
-                      : image.description}
+                    {image.caption.en.length > 80
+                      ? image.caption.en.slice(0, 80) + "..."
+                      : image.caption.en}
                   </p>
                 )}
               </div>
@@ -294,13 +300,13 @@ export default function GalleryPage() {
                     </div>
                   )}
 
-                  {selectedImage.description && (
+                  {selectedImage.caption?.en && (
                     <div>
                       <Label className="text-sm font-medium text-gray-700">
                         Description
                       </Label>
                       <p className="mt-1 text-sm text-gray-600">
-                        {selectedImage.description}
+                        {selectedImage.caption.en}
                       </p>
                     </div>
                   )}
