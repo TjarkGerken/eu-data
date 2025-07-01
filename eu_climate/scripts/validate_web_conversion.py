@@ -80,6 +80,15 @@ class WebConversionValidator:
                 vector_pairs.append((gpkg_file, mbtiles_file))
                 self.logger.debug(f"Found vector pair: {gpkg_file.name}")
         
+        # Find SHP → MBTiles pairs from source directory
+        source_dir = self.output_dir.parent / "source"
+        if source_dir.exists():
+            for shp_file in source_dir.rglob("*.shp"):
+                mbtiles_file = self.output_dir / "source" / "web" / "mvt" / f"{shp_file.stem}.mbtiles"
+                if mbtiles_file.exists():
+                    vector_pairs.append((shp_file, mbtiles_file))
+                    self.logger.debug(f"Found shapefile vector pair: {shp_file.name}")
+        
         self.logger.info(f"Found {len(raster_pairs)} raster pairs and {len(vector_pairs)} vector pairs")
         return raster_pairs, vector_pairs
     
@@ -196,8 +205,9 @@ class WebConversionValidator:
         return result
     
     def validate_vector_conversion(self, original_path: Path, mbtiles_path: Path) -> Dict:
-        """Validate GPKG → MBTiles conversion accuracy."""
-        test_name = f"GPKG→MBTiles: {original_path.name}"
+        """Validate vector → MBTiles conversion accuracy (GPKG or SHP)."""
+        file_type = "SHP" if original_path.suffix.lower() == ".shp" else "GPKG"
+        test_name = f"{file_type}→MBTiles: {original_path.name}"
         result = {
             'test': test_name,
             'passed': True,

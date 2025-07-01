@@ -619,13 +619,16 @@ class RiskAssessment:
 
     def run_web_conversion(self, config: ProjectConfig) -> Dict[str, Any]:
         """
-        Convert existing .tif files to .cog and .gpkg files to .mbtiles for web delivery.
+        Convert existing files to web-optimized formats:
+        - .tif files to .cog (raster data)
+        - .gpkg files to .mbtiles (vector data from output)
+        - .shp files to .mbtiles (vector data from source)
         
-        This scans the output directory for existing files and creates web-optimized versions
-        without running any analysis. Useful for converting legacy outputs to modern web formats.
+        This scans both output and source directories for convertible files and creates 
+        web-optimized versions without running any analysis.
         
         Args:
-            config: Project configuration containing output paths
+            config: Project configuration containing output and data paths
             
         Returns:
             Dict with conversion results and statistics
@@ -648,10 +651,12 @@ class RiskAssessment:
         results = {
             'tif_to_cog': {'success': [], 'failed': []},
             'gpkg_to_mbtiles': {'success': [], 'failed': []},
+            'shp_to_mbtiles': {'success': [], 'failed': []},
             'summary': {}
         }
         
         output_dir = Path(config.output_dir)
+        source_dir = Path(config.data_dir)
         
         # Find all .tif files recursively in output directory
         tif_files = list(output_dir.rglob("*.tif"))
@@ -767,14 +772,60 @@ class RiskAssessment:
                 results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
                 logger.error(f"✗ Error converting {gpkg_file.name}: {e}")
         
+        # Find all .shp files recursively in source directory
+        shp_files = list(source_dir.rglob("*.shp"))
+        logger.info(f"Found {len(shp_files)} .shp files for MBTiles conversion")
+        
+        # Convert .shp files to .mbtiles
+        for shp_file in shp_files:
+            try:
+                # Create appropriate output directory structure
+                # Source files go to: output_dir/source/web/mvt/filename.mbtiles
+                source_web_dir = output_dir / "source" / "web" / "mvt"
+                source_web_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Set output path
+                mbtiles_path = source_web_dir / f"{shp_file.stem}.mbtiles"
+                
+                # Skip if MBTiles already exists and is newer than source
+                if mbtiles_path.exists() and mbtiles_path.stat().st_mtime > shp_file.stat().st_mtime:
+                    logger.debug(f"MBTiles already up-to-date: {mbtiles_path}")
+                    results['shp_to_mbtiles']['success'].append(str(shp_file))
+                    continue
+                
+                logger.info(f"Converting {shp_file.name} to MBTiles...")
+                
+                success = web_exporter.export_vector_as_mvt(
+                    input_path=shp_file,
+                    output_path=mbtiles_path,
+                    layer_name=shp_file.stem,
+                    min_zoom=0,
+                    max_zoom=12,  # Reduced max zoom for better performance
+                    overwrite=True
+                )
+                
+                if success:
+                    results['shp_to_mbtiles']['success'].append(str(shp_file))
+                    logger.info(f"✓ Successfully converted: {shp_file.name}")
+                else:
+                    results['shp_to_mbtiles']['failed'].append(str(shp_file))
+                    logger.error(f"✗ Failed to convert: {shp_file.name}")
+                    
+            except Exception as e:
+                results['shp_to_mbtiles']['failed'].append(str(shp_file))
+                logger.error(f"✗ Error converting {shp_file.name}: {e}")
+        
         # Generate summary
         results['summary'] = {
             'total_tif_files': len(tif_files),
             'successful_cog_conversions': len(results['tif_to_cog']['success']),
             'failed_cog_conversions': len(results['tif_to_cog']['failed']),
             'total_gpkg_files': len(gpkg_files),
-            'successful_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
-            'failed_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed'])
+            'successful_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
+            'failed_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed']),
+            'total_shp_files': len(shp_files),
+            'successful_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['success']),
+            'failed_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['failed'])
         }
         
         # Log summary
@@ -783,9 +834,11 @@ class RiskAssessment:
         logger.info("WEB CONVERSION SUMMARY")
         logger.info(f"{'='*60}")
         logger.info(f"TIF to COG conversions: {summary['successful_cog_conversions']}/{summary['total_tif_files']} successful")
-        logger.info(f"GPKG to MBTiles conversions: {summary['successful_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+        logger.info(f"GPKG to MBTiles conversions: {summary['successful_gpkg_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+        logger.info(f"SHP to MBTiles conversions: {summary['successful_shp_mbtiles_conversions']}/{summary['total_shp_files']} successful")
         
-        if summary['failed_cog_conversions'] > 0 or summary['failed_mbtiles_conversions'] > 0:
+        total_failed = summary['failed_cog_conversions'] + summary['failed_gpkg_mbtiles_conversions'] + summary['failed_shp_mbtiles_conversions']
+        if total_failed > 0:
             logger.warning(f"Some conversions failed. Check logs for details.")
         else:
             logger.info("All conversions completed successfully!")
@@ -796,11 +849,11 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     """
     Standalone web conversion function that doesn't require RiskAssessment initialization.
     
-    This scans the output directory for existing files and creates web-optimized versions
+    This scans both output and source directories for existing files and creates web-optimized versions
     without running any analysis. Useful for converting legacy outputs to modern web formats.
     
     Args:
-        config: Project configuration containing output paths
+        config: Project configuration containing output and data paths
         
     Returns:
         Dict with conversion results and statistics
@@ -823,10 +876,12 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     results = {
         'tif_to_cog': {'success': [], 'failed': []},
         'gpkg_to_mbtiles': {'success': [], 'failed': []},
+        'shp_to_mbtiles': {'success': [], 'failed': []},
         'summary': {}
     }
     
     output_dir = Path(config.output_dir)
+    source_dir = Path(config.data_dir)
     
     # Find all .tif files recursively in output directory
     tif_files = list(output_dir.rglob("*.tif"))
@@ -942,14 +997,60 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
             results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
             logger.error(f"✗ Error converting {gpkg_file.name}: {e}")
     
+    # Find all .shp files recursively in source directory
+    shp_files = list(source_dir.rglob("*.shp"))
+    logger.info(f"Found {len(shp_files)} .shp files for MBTiles conversion")
+    
+    # Convert .shp files to .mbtiles
+    for shp_file in shp_files:
+        try:
+            # Create appropriate output directory structure
+            # Source files go to: output_dir/source/web/mvt/filename.mbtiles
+            source_web_dir = output_dir / "source" / "web" / "mvt"
+            source_web_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Set output path
+            mbtiles_path = source_web_dir / f"{shp_file.stem}.mbtiles"
+            
+            # Skip if MBTiles already exists and is newer than source
+            if mbtiles_path.exists() and mbtiles_path.stat().st_mtime > shp_file.stat().st_mtime:
+                logger.debug(f"MBTiles already up-to-date: {mbtiles_path}")
+                results['shp_to_mbtiles']['success'].append(str(shp_file))
+                continue
+            
+            logger.info(f"Converting {shp_file.name} to MBTiles...")
+            
+            success = web_exporter.export_vector_as_mvt(
+                input_path=shp_file,
+                output_path=mbtiles_path,
+                layer_name=shp_file.stem,
+                min_zoom=0,
+                max_zoom=12,  # Reduced max zoom for better performance
+                overwrite=True
+            )
+            
+            if success:
+                results['shp_to_mbtiles']['success'].append(str(shp_file))
+                logger.info(f"✓ Successfully converted: {shp_file.name}")
+            else:
+                results['shp_to_mbtiles']['failed'].append(str(shp_file))
+                logger.error(f"✗ Failed to convert: {shp_file.name}")
+                
+        except Exception as e:
+            results['shp_to_mbtiles']['failed'].append(str(shp_file))
+            logger.error(f"✗ Error converting {shp_file.name}: {e}")
+    
     # Generate summary
     results['summary'] = {
         'total_tif_files': len(tif_files),
         'successful_cog_conversions': len(results['tif_to_cog']['success']),
         'failed_cog_conversions': len(results['tif_to_cog']['failed']),
         'total_gpkg_files': len(gpkg_files),
-        'successful_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
-        'failed_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed'])
+        'successful_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
+        'failed_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed']),
+        'total_shp_files': len(shp_files),
+        'successful_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['success']),
+        'failed_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['failed'])
     }
     
     # Log summary
@@ -958,9 +1059,11 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     logger.info("WEB CONVERSION SUMMARY")
     logger.info(f"{'='*60}")
     logger.info(f"TIF to COG conversions: {summary['successful_cog_conversions']}/{summary['total_tif_files']} successful")
-    logger.info(f"GPKG to MBTiles conversions: {summary['successful_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+    logger.info(f"GPKG to MBTiles conversions: {summary['successful_gpkg_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+    logger.info(f"SHP to MBTiles conversions: {summary['successful_shp_mbtiles_conversions']}/{summary['total_shp_files']} successful")
     
-    if summary['failed_cog_conversions'] > 0 or summary['failed_mbtiles_conversions'] > 0:
+    total_failed = summary['failed_cog_conversions'] + summary['failed_gpkg_mbtiles_conversions'] + summary['failed_shp_mbtiles_conversions']
+    if total_failed > 0:
         logger.warning(f"Some conversions failed. Check logs for details.")
     else:
         logger.info("All conversions completed successfully!")

@@ -115,8 +115,12 @@ async function extractLayerMetadata(layer: {
         dataType = "raster";
         format = "mbtiles";
       } else {
-        // For ambiguous cases, check layer type from determineLayerType
-        if (layerType === "clusters") {
+        // For ambiguous cases, decide based on layerType
+        if (
+          layerType === "clusters" ||
+          layerType === "nuts" ||
+          layerType === "port"
+        ) {
           dataType = "vector";
           format = "mbtiles";
         } else {
@@ -174,6 +178,8 @@ function determineLayerType(fileName: string): string {
   if (name.startsWith("relevance_") || name.includes("_relevance_"))
     return "relevance";
   if (name.includes("slr")) return "sea-level-rise";
+  if (name.startsWith("nuts") || name.includes("_nuts")) return "nuts";
+  if (name.startsWith("port") || name.includes("_port_")) return "port";
 
   console.log(
     `Could not determine specific layer type for: ${fileName}, defaulting to unknown`
@@ -189,6 +195,7 @@ function getDefaultColorScale(layerType: string): string[] {
     relevance: ["#ffffff", "#ffd700", "#ff8c00", "#ff4500"],
     clusters: ["#ffffff", "#4fc3f7", "#2196f3", "#0d47a1"],
     "sea-level-rise": ["#ffffff", "#81c784", "#4caf50", "#1b5e20"],
+    nuts: ["#ffffff", "#4fc3f7", "#2196f3", "#0d47a1"],
     unknown: ["#ffffff", "#ff6b6b", "#e53935", "#b71c1c"],
   };
   return (
@@ -207,6 +214,8 @@ function getDefaultBounds(layerType: string): [number, number, number, number] {
     relevance: euBounds,
     clusters: euBounds,
     "sea-level-rise": euBounds,
+    nuts: euBounds,
+    port: euBounds,
     unknown: [-180, -90, 180, 90] as [number, number, number, number],
   };
 
@@ -221,6 +230,8 @@ function getDefaultValueRange(layerType: string): [number, number] {
     relevance: [0, 100] as [number, number],
     clusters: [0, 500] as [number, number],
     "sea-level-rise": [0, 3] as [number, number],
+    nuts: [0, 500] as [number, number],
+    port: [0, 500] as [number, number],
     unknown: [0, 100] as [number, number],
   };
 
