@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { R2_CONFIG, R2_BUCKET_NAME, R2_PUBLIC_URL_BASE } from "@/lib/r2-config";
 import path from "path";
 import { promises as fs } from "fs";
+import os from "os";
 
 interface ProcessingResult {
   success: boolean;
@@ -14,7 +15,7 @@ interface ProcessingResult {
 const s3Client = new S3Client(R2_CONFIG);
 
 export async function POST(request: NextRequest) {
-  const tempDir = path.join(process.cwd(), "temp");
+  const tempDir = path.join(os.tmpdir(), "map-layers-upload");
   let tempInputPath: string | null = null;
 
   try {
