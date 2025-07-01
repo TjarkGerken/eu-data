@@ -3,6 +3,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { CitationAwareMarkdown } from "./citation-aware-markdown";
+import { useLanguage } from "@/contexts/language-context";
 
 interface CalloutBlockProps {
   title: string;
@@ -16,7 +17,14 @@ interface CalloutBlockProps {
   }>;
 }
 
-export function CalloutBlock({ title, content, variant, references }: CalloutBlockProps) {
+export function CalloutBlock({
+  title,
+  content,
+  variant,
+  references,
+}: CalloutBlockProps) {
+  const { language } = useLanguage();
+
   const variantStyles = {
     success: "border-green-200 bg-green-50 text-green-800",
     warning: "border-yellow-200 bg-yellow-50 text-yellow-800",
@@ -32,17 +40,21 @@ export function CalloutBlock({ title, content, variant, references }: CalloutBlo
           <CitationAwareMarkdown content={content} references={references} />
         </AlertDescription>
       </Alert>
-      
+
       {references && references.length > 0 && (
         <div className="mt-4 pt-4 border-t border-muted">
-          <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">
+            {language === "de" ? "Referenzen" : "References"}
+          </h4>
           <div className="space-y-2">
             {references.map((ref) => (
-              <div 
-                key={ref.id} 
+              <div
+                key={ref.id}
                 className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => {
-                  const event = new CustomEvent('highlightReference', { detail: ref.id });
+                  const event = new CustomEvent("highlightReference", {
+                    detail: ref.id,
+                  });
                   window.dispatchEvent(event);
                 }}
               >

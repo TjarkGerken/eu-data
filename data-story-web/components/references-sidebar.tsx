@@ -16,11 +16,10 @@ import { useGlobalCitation } from "@/contexts/global-citation-context";
 import { Reference } from "@/lib/types";
 
 const typeColors = {
-  journal: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-  report: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  dataset:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-  book: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
+  journal: "bg-blue-100 text-blue-800",
+  report: "bg-green-100 text-green-800",
+  dataset: "bg-purple-100 text-purple-800",
+  book: "bg-orange-100 text-orange-800",
 };
 
 interface ReferencesSidebarProps {
@@ -37,38 +36,45 @@ export function ReferencesSidebar({ references = [] }: ReferencesSidebarProps) {
     const handleHighlightReference = (event: CustomEvent) => {
       const refId = event.detail;
       setHighlightedRef(refId);
-      
+
       // Scroll to the highlighted reference
       const refElement = refRefs.current[refId];
       if (refElement) {
-        refElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
+        refElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
         });
       }
-      
+
       // Clear highlight after 3 seconds
       setTimeout(() => {
         setHighlightedRef(null);
       }, 3000);
     };
 
-    window.addEventListener('highlightReference', handleHighlightReference as EventListener);
-    
+    window.addEventListener(
+      "highlightReference",
+      handleHighlightReference as EventListener
+    );
+
     return () => {
-      window.removeEventListener('highlightReference', handleHighlightReference as EventListener);
+      window.removeEventListener(
+        "highlightReference",
+        handleHighlightReference as EventListener
+      );
     };
   }, []);
 
   // Use global citation data if available, otherwise fall back to provided references
-  const referencesToDisplay = globalCitationData?.orderedReferences || references;
-  
+  const referencesToDisplay =
+    globalCitationData?.orderedReferences || references;
+
   // Create references with citation numbers from global data
   const referencesWithNumbers = referencesToDisplay.map((ref) => {
     const citationNumber = globalCitationData?.citationMap.get(ref.id);
     return {
       ...ref,
-      citationNumber: citationNumber || null
+      citationNumber: citationNumber || null,
     } as Reference & { citationNumber: number | null };
   });
 
@@ -83,41 +89,50 @@ export function ReferencesSidebar({ references = [] }: ReferencesSidebarProps) {
       </CardHeader>
       <CardContent className="overflow-visible">
         <ScrollArea className="h-[600px] pr-4">
-          <div className="space-y-4 p-2" style={{ overflow: 'visible' }}>
+          <div className="space-y-4 p-2" style={{ overflow: "visible" }}>
             {referencesWithNumbers.map((ref) => (
               <div
                 key={ref.id}
-                ref={(el) => { refRefs.current[ref.id] = el; }}
+                ref={(el) => {
+                  refRefs.current[ref.id] = el;
+                }}
                 className={`border-l-2 pl-4 pb-4 mx-2 transition-all duration-300 transform-gpu ${
-                  highlightedRef === ref.id 
-                    ? 'border-[#2d5a3d] bg-[#2d5a3d]/5 shadow-lg scale-105 z-10' 
-                    : 'border-[#2d5a3d]/20'
+                  highlightedRef === ref.id
+                    ? "border-[#2d5a3d] bg-[#2d5a3d]/5 shadow-lg scale-105 z-10"
+                    : "border-[#2d5a3d]/20"
                 }`}
                 style={{
-                  transformOrigin: 'center center',
+                  transformOrigin: "center center",
                 }}
               >
                 <div className="flex items-start justify-between mb-2">
                   <Badge
                     variant="secondary"
-                    className={`text-xs ${typeColors[ref.type as keyof typeof typeColors] || typeColors.journal}`}
+                    className={`text-xs ${
+                      typeColors[ref.type as keyof typeof typeColors] ||
+                      typeColors.journal
+                    }`}
                   >
                     {ref.type}
                   </Badge>
                   {ref.citationNumber && (
-                    <span className={`text-xs font-mono transition-colors ${
-                      highlightedRef === ref.id 
-                        ? 'text-[#2d5a3d] font-semibold' 
-                        : 'text-muted-foreground'
-                    }`}>
+                    <span
+                      className={`text-xs font-mono transition-colors ${
+                        highlightedRef === ref.id
+                          ? "text-[#2d5a3d] font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
                       [{ref.citationNumber}]
                     </span>
                   )}
                 </div>
 
-                <h4 className={`text-sm font-medium leading-tight mb-1 transition-colors ${
-                  highlightedRef === ref.id ? 'text-[#2d5a3d]' : ''
-                }`}>
+                <h4
+                  className={`text-sm font-medium leading-tight mb-1 transition-colors ${
+                    highlightedRef === ref.id ? "text-[#2d5a3d]" : ""
+                  }`}
+                >
                   {ref.title}
                 </h4>
 

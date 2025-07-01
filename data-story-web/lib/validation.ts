@@ -45,8 +45,29 @@ const BLOCK_TYPES = [
 
 const CALLOUT_VARIANTS = ["success", "warning", "info", "error"];
 const VISUALIZATION_TYPES = ["map", "chart", "trend", "gauge"];
-const IMAGE_CATEGORIES = ["exposition", "hazard", "risk", "combined"];
-const IMAGE_SCENARIOS = ["current", "severe"];
+const IMAGE_CATEGORIES = [
+  "hazard",
+  "exposition",
+  "relevance",
+  "risk",
+  "risk-clusters",
+];
+const IMAGE_SCENARIOS = [
+  "current",
+  "conservative",
+  "moderate",
+  "severe",
+  "none",
+  "all",
+];
+const IMAGE_INDICATORS = [
+  "freight",
+  "hrst",
+  "gdp",
+  "population",
+  "combined",
+  "none",
+];
 
 const validateColorCode = (color: string): boolean => {
   return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
@@ -257,6 +278,19 @@ const validateBlockSpecificFields = (
         errors.push({
           field: "data.imageScenario",
           message: "Valid image scenario is required (current, severe)",
+        });
+      }
+      if (
+        data?.imageIndicators &&
+        (!Array.isArray(data.imageIndicators) ||
+          data.imageIndicators.some(
+            (ind: string) => !IMAGE_INDICATORS.includes(ind)
+          ))
+      ) {
+        errors.push({
+          field: "data.imageIndicators",
+          message:
+            "Valid economic indicators are required (freight, hrst, gdp, combined, none)",
         });
       }
       break;

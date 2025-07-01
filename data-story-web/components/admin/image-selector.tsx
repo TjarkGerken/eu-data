@@ -22,7 +22,15 @@ interface ClimateImage {
     id: string;
     category: string;
     scenario?: string;
-    description: string;
+    indicators?: string[];
+    alt?: {
+      en: string;
+      de: string;
+    };
+    caption?: {
+      en: string;
+      de: string;
+    };
     uploadedAt: Date;
     size: number;
   };
@@ -146,7 +154,11 @@ export default function ImageSelector({
               <div className="aspect-video relative bg-gray-100 rounded-lg overflow-hidden">
                 <NextImage
                   src={selectedImageData.url}
-                  alt={selectedImageData.metadata.description}
+                  alt={
+                    selectedImageData.metadata.caption?.en ||
+                    selectedImageData.metadata.alt?.en ||
+                    selectedImageData.metadata.id
+                  }
                   fill
                   className="object-cover"
                   onError={(e) => {
@@ -175,9 +187,9 @@ export default function ImageSelector({
                   <p className="font-medium text-sm">
                     {selectedImageData.metadata.id}
                   </p>
-                  {selectedImageData.metadata.description && (
+                  {selectedImageData.metadata.caption?.en && (
                     <p className="text-sm text-muted-foreground">
-                      {selectedImageData.metadata.description}
+                      {selectedImageData.metadata.caption.en}
                     </p>
                   )}
                 </div>

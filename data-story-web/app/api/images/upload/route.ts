@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const category = formData.get("category") as string;
     const scenario = formData.get("scenario") as string;
-    const description = formData.get("description") as string;
     const id = formData.get("id") as string;
+    const description = formData.get("description") as string;
 
-    if (!file || !category || !description || !id) {
+    if (!file || !category || !id) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
       id,
       category: category as ImageCategory,
       scenario: scenario === "" ? undefined : (scenario as ImageScenario),
-      description,
+      alt: { en: "", de: "" },
+      caption: { en: description || "", de: "" },
     });
 
     return NextResponse.json(result);

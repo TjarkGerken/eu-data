@@ -252,10 +252,14 @@ export default function ImageAdmin() {
                 <Card key={image.path} className="overflow-hidden">
                   <div className="aspect-video relative">
                     <ClimateImage
-                      category={image.metadata?.category || "combined"}
+                      category={image.metadata?.category || "risk"}
                       scenario={image.metadata?.scenario}
                       id={image.metadata?.id}
-                      alt={image.metadata?.description || "Climate image"}
+                      alt={
+                        image.metadata?.caption?.en ||
+                        image.metadata?.alt?.en ||
+                        "Climate image"
+                      }
                       className="object-cover"
                     />
                   </div>
@@ -270,7 +274,7 @@ export default function ImageAdmin() {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {image.metadata?.description}
+                        {image.metadata?.caption?.en || image.metadata?.alt?.en}
                       </p>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">
