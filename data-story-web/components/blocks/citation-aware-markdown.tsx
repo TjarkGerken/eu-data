@@ -37,10 +37,52 @@ export function CitationAwareMarkdown({ content, references = [] }: CitationAwar
         globalCitationData.readableIdMap
       );
       
+      // If global processing found citations, use it
+      if (processedData.citationReferences.size > 0) {
+        return {
+          processedContent: processedData.content,
+          citationMap: globalCitationData.citationMap,
+          orderedReferences: references,
+          citationReferences: processedData.citationReferences
+        };
+      }
+      
+      // Fallback: find citations that exist in this block's content and available references
+      const originalCitationMatches = [...content.matchAll(/\\cite\{([^}]+)\}/g)];
+      
+      if (originalCitationMatches.length > 0) {
+        const localCitationReferences = new Map<number, string>();
+        
+        // For each citation found in the original content, check if:
+        // 1. It has a number in the global citation map
+        // 2. The reference exists in our available references
+        originalCitationMatches.forEach(match => {
+          const refId = match[1];
+          
+          // Get the global citation number for this reference ID
+          const citationNumber = globalCitationData.citationMap.get(refId);
+          
+          // Check if this reference exists in our available references
+          const refExists = references.find(r => r?.id === refId);
+          
+          if (citationNumber && refExists) {
+            localCitationReferences.set(citationNumber, refId);
+          }
+        });
+        
+        return {
+          processedContent: processedData.content,
+          citationMap: globalCitationData.citationMap,
+          orderedReferences: references,
+          citationReferences: localCitationReferences
+        };
+      }
+      
+      // No citations found at all, return processed content without citations
       return {
         processedContent: processedData.content,
         citationMap: globalCitationData.citationMap,
-        orderedReferences: globalCitationData.orderedReferences,
+        orderedReferences: references,
         citationReferences: processedData.citationReferences
       };
     }
@@ -89,7 +131,7 @@ export function CitationAwareMarkdown({ content, references = [] }: CitationAwar
   };
 
   const createCitationButton = (citationNumber: number, referenceId: string) => {
-    const reference = processedData.orderedReferences.find(r => r?.id === referenceId);
+    const reference = references.find(r => r?.id === referenceId);
     return (
       <button
         key={`citation-${citationNumber}-${referenceId}`}
@@ -212,36 +254,40 @@ export function CitationAwareMarkdown({ content, references = [] }: CitationAwar
         {processedData.processedContent}
       </ReactMarkdown>
 
-      {processedData.orderedReferences.length > 0 && (
-        <div className="mt-8 pt-6 border-t border-muted">
-          <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
-          <div className="space-y-2">
-            {processedData.orderedReferences.map((ref) => {
-              if (!ref) return null;
-              const citationNumber = processedData.citationMap.get(ref.id);
-              return (
-                <div 
-                  key={ref.id} 
-                  className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors flex items-start gap-2"
-                  onClick={() => handleCitationClick(ref.id)}
-                >
-                  {citationNumber && (
-                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-5 text-xs bg-muted text-muted-foreground rounded font-mono">
-                      {citationNumber}
-                    </span>
+{processedData.citationReferences.size > 0 && (() => {
+        const referencesToShow = Array.from(processedData.citationReferences.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([citationNumber, referenceId]) => {
+            const ref = references.find(r => r?.id === referenceId);
+            return ref ? (
+              <div 
+                key={ref.id} 
+                className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors flex items-start gap-2"
+                onClick={() => handleCitationClick(ref.id)}
+              >
+                <span className="inline-flex items-center justify-center min-w-[1.5rem] h-5 text-xs bg-muted text-muted-foreground rounded font-mono">
+                  {citationNumber}
+                </span>
+                <div className="flex-1">
+                  <span className="font-medium">{ref.title}</span>
+                  {ref.authors && ref.authors.length > 0 && (
+                    <span className="ml-2">- {ref.authors.join(", ")}</span>
                   )}
-                  <div className="flex-1">
-                    <span className="font-medium">{ref.title}</span>
-                    {ref.authors && ref.authors.length > 0 && (
-                      <span className="ml-2">- {ref.authors.join(", ")}</span>
-                    )}
-                  </div>
                 </div>
-              );
-            })}
+              </div>
+            ) : null;
+          })
+          .filter(Boolean);
+
+        return referencesToShow.length > 0 ? (
+          <div className="mt-8 pt-6 border-t border-muted">
+            <h4 className="text-sm font-semibold text-muted-foreground mb-3">References</h4>
+            <div className="space-y-2">
+              {referencesToShow}
+            </div>
           </div>
-        </div>
-      )}
+        ) : null;
+      })()}
     </div>
   );
 } 
