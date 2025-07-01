@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Layers, Download, Settings } from "lucide-react";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
+import { WaveSlider } from "@/components/ui/wave-slider";
 import dynamic from "next/dynamic";
 
 const LeafletMap = dynamic(() => import("./map/leaflet-map"), {
@@ -34,6 +35,13 @@ interface InteractiveMapProps {
   showDownloadButtons?: boolean;
   // Pre-defined layer opacities
   predefinedOpacities?: Record<string, number>;
+  // Cluster groups for SLR scenarios
+  enableClusterGroups?: boolean;
+  clusterGroups?: Array<{
+    id: string;
+    name: string;
+    layerIds: string[];
+  }>;
 }
 
 interface LayerState {
@@ -58,6 +66,9 @@ export function InteractiveMap({
   showOpacityControls = true,
   showDownloadButtons = true,
   predefinedOpacities = {},
+  // Cluster groups for SLR scenarios
+  enableClusterGroups = false,
+  clusterGroups = [],
 }: InteractiveMapProps) {
   const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
     []
@@ -65,6 +76,9 @@ export function InteractiveMap({
   const [layerStates, setLayerStates] = useState<LayerState[]>([]);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
+  const [selectedScenario, setSelectedScenario] = useState<string>(
+    clusterGroups?.[0]?.id || ""
+  );
 
   const initializeLayerStates = useCallback(() => {
     if (!Array.isArray(availableLayers)) {
@@ -72,14 +86,40 @@ export function InteractiveMap({
       return;
     }
 
-    const states = availableLayers.map((layer) => ({
-      id: layer.id,
-      visible: selectedLayers.includes(layer.id),
-      opacity: predefinedOpacities[layer.id] ? predefinedOpacities[layer.id] / 100 : 0.8,
-      metadata: layer,
-    }));
+    const states = availableLayers.map((layer) => {
+      let isVisible = false;
+
+      if (enableClusterGroups && clusterGroups && clusterGroups.length > 0) {
+        // If cluster groups are enabled, show layers from the selected scenario
+        const currentGroup = clusterGroups.find(
+          (group) => group.id === selectedScenario
+        );
+        isVisible = currentGroup
+          ? currentGroup.layerIds.includes(layer.id)
+          : false;
+      } else {
+        // Original behavior: show layers from selectedLayers prop
+        isVisible = selectedLayers.includes(layer.id);
+      }
+
+      return {
+        id: layer.id,
+        visible: isVisible,
+        opacity: predefinedOpacities[layer.id]
+          ? predefinedOpacities[layer.id] / 100
+          : 0.8,
+        metadata: layer,
+      };
+    });
     setLayerStates(states);
-  }, [availableLayers, selectedLayers, predefinedOpacities]);
+  }, [
+    availableLayers,
+    selectedLayers,
+    predefinedOpacities,
+    enableClusterGroups,
+    clusterGroups,
+    selectedScenario,
+  ]);
 
   useEffect(() => {
     loadAvailableLayers();
@@ -123,6 +163,11 @@ export function InteractiveMap({
     if (!layer) return;
 
     window.open(`/api/map-data/download/${layerId}`, "_blank");
+  };
+
+  const handleScenarioChange = (scenarioId: string) => {
+    setSelectedScenario(scenarioId);
+    // Layer states will be updated automatically via the useEffect that depends on selectedScenario
   };
 
   const visibleLayers = layerStates.filter((layer) => layer.visible);
@@ -187,11 +232,11 @@ export function InteractiveMap({
               className="relative rounded-lg overflow-hidden border interactive-map-container"
               style={{ height }}
             >
-              <LeafletMap 
-                layers={layerStates} 
-                centerLat={centerLat} 
-                centerLng={centerLng} 
-                zoom={zoom} 
+              <LeafletMap
+                layers={layerStates}
+                centerLat={centerLat}
+                centerLng={centerLng}
+                zoom={zoom}
                 autoFitBounds={autoFitBounds}
               />
 
@@ -220,6 +265,20 @@ export function InteractiveMap({
             </div>
           </div>
 
+          {/* SLR Scenario Slider */}
+          {enableClusterGroups && clusterGroups && clusterGroups.length > 0 && (
+            <div className="w-full">
+              <WaveSlider
+                scenarios={clusterGroups.map((group) => ({
+                  id: group.id,
+                  name: group.name,
+                }))}
+                selectedScenario={selectedScenario}
+                onScenarioChange={handleScenarioChange}
+              />
+            </div>
+          )}
+
           {enableLayerControls && showControls && (
             <div className="w-full">
               <Card>
@@ -233,64 +292,64 @@ export function InteractiveMap({
                         key={layer.id}
                         className="space-y-3 p-3 bg-gray-50 rounded-lg"
                       >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {showLayerToggles && (
-                            <Switch
-                              checked={layer.visible}
-                              onCheckedChange={() =>
-                                toggleLayerVisibility(layer.id)
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {showLayerToggles && (
+                              <Switch
+                                checked={layer.visible}
+                                onCheckedChange={() =>
+                                  toggleLayerVisibility(layer.id)
+                                }
+                              />
+                            )}
+                            <Label className="text-sm font-medium">
+                              {layer.metadata.name}
+                            </Label>
+                          </div>
+                          <div className="flex gap-1">
+                            {showDownloadButtons && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => downloadLayerData(layer.id)}
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {layer.metadata.dataType}
+                          </Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            {layer.metadata.format}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Range: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
+                            {layer.metadata.valueRange[1].toFixed(2)}
+                          </span>
+                        </div>
+
+                        {layer.visible && showOpacityControls && (
+                          <div className="space-y-2">
+                            <Label className="text-xs">
+                              Opacity: {Math.round(layer.opacity * 100)}%
+                            </Label>
+                            <Slider
+                              value={[layer.opacity * 100]}
+                              onValueChange={([value]) =>
+                                updateLayerOpacity(layer.id, value)
                               }
+                              max={100}
+                              step={10}
+                              className="w-full"
                             />
-                          )}
-                          <Label className="text-sm font-medium">
-                            {layer.metadata.name}
-                          </Label>
-                        </div>
-                        <div className="flex gap-1">
-                          {showDownloadButtons && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => downloadLayerData(layer.id)}
-                            >
-                              <Download className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {layer.metadata.dataType}
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs">
-                          {layer.metadata.format}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Range: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
-                          {layer.metadata.valueRange[1].toFixed(2)}
-                        </span>
-                      </div>
-
-                      {layer.visible && showOpacityControls && (
-                        <div className="space-y-2">
-                          <Label className="text-xs">
-                            Opacity: {Math.round(layer.opacity * 100)}%
-                          </Label>
-                          <Slider
-                            value={[layer.opacity * 100]}
-                            onValueChange={([value]) =>
-                              updateLayerOpacity(layer.id, value)
-                            }
-                            max={100}
-                            step={10}
-                            className="w-full"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
                   </div>
                 </CardContent>
               </Card>
