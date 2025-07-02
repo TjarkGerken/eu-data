@@ -11,7 +11,6 @@ import { Layers, Download, Settings } from "lucide-react";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
 import { WaveSlider } from "@/components/ui/wave-slider";
 import { createGradientFromStops } from "@/lib/color-schemes";
-import { loadLayersWithStyleConfigs } from "../lib/map-style-service";
 import dynamic from "next/dynamic";
 
 const LeafletMap = dynamic(() => import("./map/leaflet-map"), {
@@ -128,7 +127,7 @@ export function InteractiveMap({
   }, []);
 
   useEffect(() => {
-    if (availableLayers && availableLayers.length > 0) {
+    if (availableLayers.length > 0) {
       initializeLayerStates();
     }
   }, [availableLayers, initializeLayerStates]);
@@ -136,8 +135,7 @@ export function InteractiveMap({
   const loadAvailableLayers = async () => {
     try {
       const layers = await mapTileService.getAvailableLayers();
-      const layersWithStyles = await loadLayersWithStyleConfigs(layers);
-      setAvailableLayers(layersWithStyles);
+      setAvailableLayers(layers);
     } catch (error) {
       console.error("Failed to load map layers:", error);
     } finally {

@@ -9,7 +9,7 @@ import { MapLayerMetadata } from "@/lib/map-tile-service";
 // Minimal interface for georaster object (library doesn't provide types)
 interface GeorasterObject {
   noDataValue: number | null;
-  [key: string]: unknown;
+  [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export interface TileLayerConfig {
@@ -45,8 +45,7 @@ interface BaseLeafletMapProps {
 const L = typeof window !== "undefined" ? require("leaflet") : null;
 
 // Import VectorGrid correctly - it extends L when required
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let VectorGrid: any = null;
+let VectorGrid: typeof L.VectorGrid | null = null;
 if (typeof window !== "undefined") {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("leaflet.vectorgrid");
@@ -75,22 +74,16 @@ export default function BaseLeafletMap({
     []
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const layerGroupRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const vectorLayerGroupRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cogLayerGroupRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const overlayLayerGroupRef = useRef<any>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const cogLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const overlayLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const loadedLayersRef = useRef<
     Map<
       string,
       {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        layer: any;
+        layer: L.Layer;
         opacity: number;
         visible: boolean;
         isCogLayer?: boolean;
@@ -213,6 +206,8 @@ export default function BaseLeafletMap({
 
     // Cleanup function
     return () => {
+      const loadedLayers = loadedLayersRef.current;
+
       if (mapRef.current) {
         try {
           mapRef.current.remove();
@@ -224,9 +219,7 @@ export default function BaseLeafletMap({
         vectorLayerGroupRef.current = null;
         cogLayerGroupRef.current = null;
         overlayLayerGroupRef.current = null;
-        if (loadedLayersRef.current) {
-          loadedLayersRef.current.clear();
-        }
+        loadedLayers.clear();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -327,18 +320,17 @@ export default function BaseLeafletMap({
                 };
               } else {
                 // Fallback to original styling
-              const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
-              return {
-                fillColor: fillColor,
-                weight: 2,
-                color: "#ffffff",
-                opacity: layer.opacity,
-                fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
-              };
+                const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
+                return {
+                  fillColor: fillColor,
+                  weight: 2,
+                  color: "#ffffff",
+                  opacity: layer.opacity,
+                  fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
+                };
               }
             },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onEachFeature: (feature: GeoJSON.Feature, geoLayer: any) => {
+            onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
               if (feature.properties) {
                 const formatNumber = (value: number): string => {
                   if (typeof value !== "number" || isNaN(value))
@@ -565,7 +557,7 @@ export default function BaseLeafletMap({
 
         // Get custom color scheme if available
         const rasterScheme = layer.metadata.styleConfig?.rasterScheme;
-
+        
         const cogLayer = new GeoRasterLayer({
           georaster: georaster,
           opacity: layer.opacity || 0.8,
@@ -619,11 +611,6 @@ export default function BaseLeafletMap({
                 return `rgba(${r}, ${g}, ${b}, ${a})`;
               }
             } else {
-              // Ensure colorScale exists and has length
-              if (!colorScale || !Array.isArray(colorScale) || colorScale.length === 0) {
-                return "#ff6b6b"; // Default color
-              }
-
               const normalized =
                 (pixelValue - valueRange[0]) / (valueRange[1] - valueRange[0]);
               const clampedNormalized = Math.max(0, Math.min(1, normalized));
@@ -745,8 +732,6 @@ export default function BaseLeafletMap({
             );
 
             const createVectorTileLayer = (actualLayerName: string) => {
-              if (!L || !L.vectorGrid) return;
-              
               const vectorTileLayer = L.vectorGrid.protobuf(
                 `/api/map-data/vector/${layer.id}/{z}/{x}/{y}.mvt`,
                 {
@@ -766,11 +751,11 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                      weight: 2,
-                      color: "#1e40af",
-                      opacity: 0.9,
-                      fillColor: "#1e3a8a",
-                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                          weight: 2,
+                          color: "#1e40af",
+                          opacity: 0.9,
+                          fillColor: "#1e3a8a",
+                          fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                         };
                       }
                     })(),
@@ -788,11 +773,11 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                      weight: 2,
-                      color: "#1e40af",
-                      opacity: 0.9,
-                      fillColor: "#1e3a8a",
-                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                          weight: 2,
+                          color: "#1e40af",
+                          opacity: 0.9,
+                          fillColor: "#1e3a8a",
+                          fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                         };
                       }
                     })(),
@@ -838,7 +823,7 @@ export default function BaseLeafletMap({
           loadVectorLayer(layer);
         }
       } else if (layer.metadata.dataType === "raster") {
-        if (layer.metadata.format === "mbtiles" && L) {
+        if (layer.metadata.format === "mbtiles") {
           const tileLayer = L.tileLayer(
             `/api/map-tiles/${layer.id}/{z}/{x}/{y}.png`,
             {
