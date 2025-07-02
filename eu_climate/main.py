@@ -79,6 +79,7 @@ Examples:
   python -m main --freight-only              # Run only freight relevance layer (with Zeevart data)
   python -m main --relevance-absolute        # Run only absolute relevance layer (preserves original values)
   python -m main --risk                      # Run only risk layer analysis
+  python -m main --population-relevance      # Generate population relevance layer (2025 GHS data)
   python -m main --population                # Run only population risk layer analysis
   python -m main --hazard --exposition       # Run hazard and exposition layers
   python -m main --all                       # Run all layers (default behavior)
@@ -123,6 +124,10 @@ Examples:
     layer_group.add_argument('--population', 
                            action='store_true',
                            help='Process Population Risk Layer (population-based risk assessment)')
+    
+    layer_group.add_argument('--population-relevance', 
+                           action='store_true',
+                           help='Generate Population Relevance Layer (2025 GHS population data with corrected resolution handling)')
     
     layer_group.add_argument('--clusters', 
                            action='store_true',
@@ -212,18 +217,7 @@ Examples:
         args.web_conversion = False
         args.all = False
         args.no_upload = True  # Disable upload when downloading
-    elif args.web_conversion:
-        # If --web-conversion flag is set, disable all other processing and only run web conversion
-        args.hazard = False
-        args.exposition = False
-        args.relevance = False
-        args.relevance_absolute = False
-        args.risk = False
-        args.population = False
-        args.clusters = False
-        args.economic_impact = False
-        args.all = False
-    elif not any([args.hazard, args.exposition, args.relevance, args.relevance_absolute, args.risk, args.population, args.clusters, args.economic_impact, args.web_conversion, args.all, args.freight_only]):
+    elif not any([args.hazard, args.exposition, args.relevance, args.relevance_absolute, args.risk, args.population, args.population_relevance, args.clusters, args.economic_impact, args.web_conversion, args.all, args.freight_only]):
         # If no specific layers are chosen, default to --all
         logger.info("No specific layers selected, defaulting to --all")
         args.all = True
@@ -238,7 +232,7 @@ Examples:
         args.population = True
         args.clusters = True
         args.economic_impact = True
-    
+        
     return args
 
 class RiskAssessment:
@@ -487,6 +481,35 @@ class RiskAssessment:
             logger.error(f"Could not execute risk layer analysis: {e}")
             raise e
 
+    def run_population_relevance_layer_analysis(self, config: ProjectConfig) -> Path:
+        """
+        Run the Population Relevance Layer generation using 2025 GHS population data.
+        
+        Args:
+            config: Project configuration object containing paths and settings.
+            
+        Returns:
+            Path to the generated population relevance layer TIF file
+        """
+        logger.info("\n" + "="*40)
+        logger.info("POPULATION RELEVANCE LAYER GENERATION")
+        logger.info("="*40)
+        
+        try:
+            # Import the population relevance layer generator
+            from eu_climate.scripts.population_relevance_layer import PopulationRelevanceLayer
+            
+            # Create and run the population relevance layer generator
+            population_relevance = PopulationRelevanceLayer(config)
+            output_path = population_relevance.generate_population_relevance_layer()
+            
+            logger.info(f"Population relevance layer generation completed: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"Error in population relevance layer generation: {str(e)}")
+            raise e
+
     def run_population_risk_layer_analysis(self, config: ProjectConfig) -> Dict[str, np.ndarray]:
         """
         Run the Population Risk Layer analysis for the EU Climate Risk Assessment System.
@@ -573,7 +596,7 @@ class RiskAssessment:
         try:
             impact_analyzer = EconomicImpactAnalyzer(config)
             
-            impact_metrics = impact_analyzer.run_complete_impact_analysis(
+            impact_metrics = impact_analyzer.run_economic_impact_analysis(
                 create_visualizations=True,
                 export_results=True
             )
@@ -596,13 +619,16 @@ class RiskAssessment:
 
     def run_web_conversion(self, config: ProjectConfig) -> Dict[str, Any]:
         """
-        Convert existing .tif files to .cog and .gpkg files to .mbtiles for web delivery.
+        Convert existing files to web-optimized formats:
+        - .tif files to .cog (raster data)
+        - .gpkg files to .mbtiles (vector data from output)
+        - .shp files to .mbtiles (vector data from source)
         
-        This scans the output directory for existing files and creates web-optimized versions
-        without running any analysis. Useful for converting legacy outputs to modern web formats.
+        This scans both output and source directories for convertible files and creates 
+        web-optimized versions without running any analysis.
         
         Args:
-            config: Project configuration containing output paths
+            config: Project configuration containing output and data paths
             
         Returns:
             Dict with conversion results and statistics
@@ -625,10 +651,12 @@ class RiskAssessment:
         results = {
             'tif_to_cog': {'success': [], 'failed': []},
             'gpkg_to_mbtiles': {'success': [], 'failed': []},
+            'shp_to_mbtiles': {'success': [], 'failed': []},
             'summary': {}
         }
         
         output_dir = Path(config.output_dir)
+        source_dir = Path(config.data_dir)
         
         # Find all .tif files recursively in output directory
         tif_files = list(output_dir.rglob("*.tif"))
@@ -744,14 +772,60 @@ class RiskAssessment:
                 results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
                 logger.error(f"✗ Error converting {gpkg_file.name}: {e}")
         
+        # Find all .shp files recursively in source directory
+        shp_files = list(source_dir.rglob("*.shp"))
+        logger.info(f"Found {len(shp_files)} .shp files for MBTiles conversion")
+        
+        # Convert .shp files to .mbtiles
+        for shp_file in shp_files:
+            try:
+                # Create appropriate output directory structure
+                # Source files go to: output_dir/source/web/mvt/filename.mbtiles
+                source_web_dir = output_dir / "source" / "web" / "mvt"
+                source_web_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Set output path
+                mbtiles_path = source_web_dir / f"{shp_file.stem}.mbtiles"
+                
+                # Skip if MBTiles already exists and is newer than source
+                if mbtiles_path.exists() and mbtiles_path.stat().st_mtime > shp_file.stat().st_mtime:
+                    logger.debug(f"MBTiles already up-to-date: {mbtiles_path}")
+                    results['shp_to_mbtiles']['success'].append(str(shp_file))
+                    continue
+                
+                logger.info(f"Converting {shp_file.name} to MBTiles...")
+                
+                success = web_exporter.export_vector_as_mvt(
+                    input_path=shp_file,
+                    output_path=mbtiles_path,
+                    layer_name=shp_file.stem,
+                    min_zoom=0,
+                    max_zoom=12,  # Reduced max zoom for better performance
+                    overwrite=True
+                )
+                
+                if success:
+                    results['shp_to_mbtiles']['success'].append(str(shp_file))
+                    logger.info(f"✓ Successfully converted: {shp_file.name}")
+                else:
+                    results['shp_to_mbtiles']['failed'].append(str(shp_file))
+                    logger.error(f"✗ Failed to convert: {shp_file.name}")
+                    
+            except Exception as e:
+                results['shp_to_mbtiles']['failed'].append(str(shp_file))
+                logger.error(f"✗ Error converting {shp_file.name}: {e}")
+        
         # Generate summary
         results['summary'] = {
             'total_tif_files': len(tif_files),
             'successful_cog_conversions': len(results['tif_to_cog']['success']),
             'failed_cog_conversions': len(results['tif_to_cog']['failed']),
             'total_gpkg_files': len(gpkg_files),
-            'successful_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
-            'failed_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed'])
+            'successful_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
+            'failed_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed']),
+            'total_shp_files': len(shp_files),
+            'successful_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['success']),
+            'failed_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['failed'])
         }
         
         # Log summary
@@ -760,9 +834,11 @@ class RiskAssessment:
         logger.info("WEB CONVERSION SUMMARY")
         logger.info(f"{'='*60}")
         logger.info(f"TIF to COG conversions: {summary['successful_cog_conversions']}/{summary['total_tif_files']} successful")
-        logger.info(f"GPKG to MBTiles conversions: {summary['successful_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+        logger.info(f"GPKG to MBTiles conversions: {summary['successful_gpkg_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+        logger.info(f"SHP to MBTiles conversions: {summary['successful_shp_mbtiles_conversions']}/{summary['total_shp_files']} successful")
         
-        if summary['failed_cog_conversions'] > 0 or summary['failed_mbtiles_conversions'] > 0:
+        total_failed = summary['failed_cog_conversions'] + summary['failed_gpkg_mbtiles_conversions'] + summary['failed_shp_mbtiles_conversions']
+        if total_failed > 0:
             logger.warning(f"Some conversions failed. Check logs for details.")
         else:
             logger.info("All conversions completed successfully!")
@@ -773,11 +849,11 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     """
     Standalone web conversion function that doesn't require RiskAssessment initialization.
     
-    This scans the output directory for existing files and creates web-optimized versions
+    This scans both output and source directories for existing files and creates web-optimized versions
     without running any analysis. Useful for converting legacy outputs to modern web formats.
     
     Args:
-        config: Project configuration containing output paths
+        config: Project configuration containing output and data paths
         
     Returns:
         Dict with conversion results and statistics
@@ -800,10 +876,12 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     results = {
         'tif_to_cog': {'success': [], 'failed': []},
         'gpkg_to_mbtiles': {'success': [], 'failed': []},
+        'shp_to_mbtiles': {'success': [], 'failed': []},
         'summary': {}
     }
     
     output_dir = Path(config.output_dir)
+    source_dir = Path(config.data_dir)
     
     # Find all .tif files recursively in output directory
     tif_files = list(output_dir.rglob("*.tif"))
@@ -919,14 +997,60 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
             results['gpkg_to_mbtiles']['failed'].append(str(gpkg_file))
             logger.error(f"✗ Error converting {gpkg_file.name}: {e}")
     
+    # Find all .shp files recursively in source directory
+    shp_files = list(source_dir.rglob("*.shp"))
+    logger.info(f"Found {len(shp_files)} .shp files for MBTiles conversion")
+    
+    # Convert .shp files to .mbtiles
+    for shp_file in shp_files:
+        try:
+            # Create appropriate output directory structure
+            # Source files go to: output_dir/source/web/mvt/filename.mbtiles
+            source_web_dir = output_dir / "source" / "web" / "mvt"
+            source_web_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Set output path
+            mbtiles_path = source_web_dir / f"{shp_file.stem}.mbtiles"
+            
+            # Skip if MBTiles already exists and is newer than source
+            if mbtiles_path.exists() and mbtiles_path.stat().st_mtime > shp_file.stat().st_mtime:
+                logger.debug(f"MBTiles already up-to-date: {mbtiles_path}")
+                results['shp_to_mbtiles']['success'].append(str(shp_file))
+                continue
+            
+            logger.info(f"Converting {shp_file.name} to MBTiles...")
+            
+            success = web_exporter.export_vector_as_mvt(
+                input_path=shp_file,
+                output_path=mbtiles_path,
+                layer_name=shp_file.stem,
+                min_zoom=0,
+                max_zoom=12,  # Reduced max zoom for better performance
+                overwrite=True
+            )
+            
+            if success:
+                results['shp_to_mbtiles']['success'].append(str(shp_file))
+                logger.info(f"✓ Successfully converted: {shp_file.name}")
+            else:
+                results['shp_to_mbtiles']['failed'].append(str(shp_file))
+                logger.error(f"✗ Failed to convert: {shp_file.name}")
+                
+        except Exception as e:
+            results['shp_to_mbtiles']['failed'].append(str(shp_file))
+            logger.error(f"✗ Error converting {shp_file.name}: {e}")
+    
     # Generate summary
     results['summary'] = {
         'total_tif_files': len(tif_files),
         'successful_cog_conversions': len(results['tif_to_cog']['success']),
         'failed_cog_conversions': len(results['tif_to_cog']['failed']),
         'total_gpkg_files': len(gpkg_files),
-        'successful_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
-        'failed_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed'])
+        'successful_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['success']),
+        'failed_gpkg_mbtiles_conversions': len(results['gpkg_to_mbtiles']['failed']),
+        'total_shp_files': len(shp_files),
+        'successful_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['success']),
+        'failed_shp_mbtiles_conversions': len(results['shp_to_mbtiles']['failed'])
     }
     
     # Log summary
@@ -935,9 +1059,11 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     logger.info("WEB CONVERSION SUMMARY")
     logger.info(f"{'='*60}")
     logger.info(f"TIF to COG conversions: {summary['successful_cog_conversions']}/{summary['total_tif_files']} successful")
-    logger.info(f"GPKG to MBTiles conversions: {summary['successful_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+    logger.info(f"GPKG to MBTiles conversions: {summary['successful_gpkg_mbtiles_conversions']}/{summary['total_gpkg_files']} successful")
+    logger.info(f"SHP to MBTiles conversions: {summary['successful_shp_mbtiles_conversions']}/{summary['total_shp_files']} successful")
     
-    if summary['failed_cog_conversions'] > 0 or summary['failed_mbtiles_conversions'] > 0:
+    total_failed = summary['failed_cog_conversions'] + summary['failed_gpkg_mbtiles_conversions'] + summary['failed_shp_mbtiles_conversions']
+    if total_failed > 0:
         logger.warning(f"Some conversions failed. Check logs for details.")
     else:
         logger.info("All conversions completed successfully!")
@@ -983,6 +1109,8 @@ def main():
             selected_layers.append("Risk")
         if args.population:
             selected_layers.append("Population Risk")
+        if args.population_relevance:
+            selected_layers.append("Population Relevance")
         if args.clusters:
             selected_layers.append("Clusters")
         if args.economic_impact:
@@ -1146,6 +1274,13 @@ def main():
             logger.info(f"{'='*50}")
             risk_scenarios = risk_assessment.run_risk_layer_analysis(config)
             logger.info(f"Risk analysis completed with {len(risk_scenarios)} scenarios")
+        
+        if args.population_relevance:
+            logger.info(f"\n{'='*50}")
+            logger.info("EXECUTING POPULATION RELEVANCE LAYER GENERATION")
+            logger.info(f"{'='*50}")
+            population_relevance_output = risk_assessment.run_population_relevance_layer_analysis(config)
+            logger.info(f"Population relevance layer generation completed: {population_relevance_output}")
         
         if args.population:
             logger.info(f"\n{'='*50}")
