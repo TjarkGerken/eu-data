@@ -20,7 +20,7 @@ export interface TileLayerConfig {
   opacity?: number;
 }
 
-import { createLeafletColorFunction } from '@/lib/color-schemes';
+import { createLeafletColorFunction } from "@/lib/color-schemes";
 
 interface LayerState {
   id: string;
@@ -308,26 +308,33 @@ export default function BaseLeafletMap({
             style: () => {
               // Use custom style configuration if available
               const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
-              
+
               if (vectorStyle) {
                 return {
-                  fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
+                  fillColor:
+                    vectorStyle.fillColor === "transparent"
+                      ? "transparent"
+                      : vectorStyle.fillColor,
                   weight: vectorStyle.borderWidth,
                   color: vectorStyle.borderColor,
                   opacity: vectorStyle.borderOpacity,
-                  fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
+                  fill: vectorStyle.fillColor !== "transparent",
+                  fillOpacity:
+                    vectorStyle.fillColor === "transparent"
+                      ? 0
+                      : vectorStyle.fillOpacity,
                   dashArray: vectorStyle.borderDashArray,
                 };
               } else {
                 // Fallback to original styling
-              const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
-              return {
-                fillColor: fillColor,
-                weight: 2,
-                color: "#ffffff",
-                opacity: layer.opacity,
-                fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
-              };
+                const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
+                return {
+                  fillColor: fillColor,
+                  weight: 2,
+                  color: "#ffffff",
+                  opacity: layer.opacity,
+                  fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
+                };
               }
             },
             onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
@@ -575,7 +582,10 @@ export default function BaseLeafletMap({
 
             // Use custom color scheme if available
             if (rasterScheme) {
-              const colorFunction = createLeafletColorFunction(rasterScheme, valueRange);
+              const colorFunction = createLeafletColorFunction(
+                rasterScheme,
+                valueRange
+              );
               return colorFunction(pixelValue);
             }
 
@@ -714,9 +724,7 @@ export default function BaseLeafletMap({
         try {
           if (loadedLayer.isCogLayer && cogLayerGroupRef.current) {
             cogLayerGroupRef.current.removeLayer(loadedLayer.layer);
-          } else if (
-            vectorLayerGroupRef.current?.hasLayer(loadedLayer.layer)
-          ) {
+          } else if (vectorLayerGroupRef.current?.hasLayer(loadedLayer.layer)) {
             vectorLayerGroupRef.current.removeLayer(loadedLayer.layer);
           } else if (layerGroupRef.current?.hasLayer(loadedLayer.layer)) {
             layerGroupRef.current.removeLayer(loadedLayer.layer);
@@ -746,46 +754,64 @@ export default function BaseLeafletMap({
                   rendererFactory: L.canvas.tile,
                   vectorTileLayerStyles: {
                     [actualLayerName]: (() => {
-                      const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
-                      
+                      const vectorStyle =
+                        layer.metadata.styleConfig?.vectorStyle;
+
                       if (vectorStyle) {
                         return {
                           weight: vectorStyle.borderWidth,
                           color: vectorStyle.borderColor,
                           opacity: vectorStyle.borderOpacity,
-                          fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
-                          fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
+                          fill: vectorStyle.fillColor !== "transparent",
+                          fillColor:
+                            vectorStyle.fillColor === "transparent"
+                              ? "transparent"
+                              : vectorStyle.fillColor,
+                          fillOpacity:
+                            vectorStyle.fillColor === "transparent"
+                              ? 0
+                              : vectorStyle.fillOpacity,
                           dashArray: vectorStyle.borderDashArray,
                         };
                       } else {
                         return {
-                      weight: 2,
-                      color: "#1e40af",
-                      opacity: 0.9,
-                      fillColor: "#1e3a8a",
-                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                          weight: 2,
+                          color: "#1e40af",
+                          opacity: 0.9,
+                          fill: true,
+                          fillColor: "#1e3a8a",
+                          fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                         };
                       }
                     })(),
                     [layer.id]: (() => {
-                      const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
-                      
+                      const vectorStyle =
+                        layer.metadata.styleConfig?.vectorStyle;
+
                       if (vectorStyle) {
                         return {
                           weight: vectorStyle.borderWidth,
                           color: vectorStyle.borderColor,
                           opacity: vectorStyle.borderOpacity,
-                          fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
-                          fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
+                          fill: vectorStyle.fillColor !== "transparent",
+                          fillColor:
+                            vectorStyle.fillColor === "transparent"
+                              ? "transparent"
+                              : vectorStyle.fillColor,
+                          fillOpacity:
+                            vectorStyle.fillColor === "transparent"
+                              ? 0
+                              : vectorStyle.fillOpacity,
                           dashArray: vectorStyle.borderDashArray,
                         };
                       } else {
                         return {
-                      weight: 2,
-                      color: "#1e40af",
-                      opacity: 0.9,
-                      fillColor: "#1e3a8a",
-                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                          weight: 2,
+                          color: "#1e40af",
+                          opacity: 0.9,
+                          fill: true,
+                          fillColor: "#1e3a8a",
+                          fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                         };
                       }
                     })(),
