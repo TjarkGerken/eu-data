@@ -470,6 +470,22 @@ export const getDefaultBlockData = (blockType: string): any => {
       return {
         events: [{ year: 2024, title: "", description: "" }],
       };
+    case "interactive-map":
+      return {
+        selectedLayers: [],
+        height: "600px",
+        centerLat: 52.1326,
+        centerLng: 5.2913,
+        zoom: 8,
+        autoFitBounds: false,
+        enableLayerControls: true,
+        showLayerToggles: true,
+        showOpacityControls: true,
+        showDownloadButtons: true,
+        predefinedOpacities: {},
+        enableClusterGroups: false,
+        clusterGroups: [],
+      };
     default:
       return {};
   }

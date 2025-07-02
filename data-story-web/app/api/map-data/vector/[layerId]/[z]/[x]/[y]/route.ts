@@ -24,9 +24,12 @@ export async function GET(
     const resolvedParams = await params;
     const { layerId, z, x, y } = resolvedParams;
 
+    // Remove any common vector-tile extensions from Y (e.g. .mvt, .pbf)
+    const cleanedY = y.replace(/\.(mvt|pbf|json)$/i, "");
+
     const zoom = parseInt(z);
     const tileX = parseInt(x);
-    const tileY = parseInt(y);
+    const tileY = parseInt(cleanedY);
 
     if (isNaN(zoom) || isNaN(tileX) || isNaN(tileY)) {
       return NextResponse.json(
@@ -74,16 +77,21 @@ export async function GET(
       );
     }
 
-    // Return the tile as protobuf/MVT
+    const headers: Record<string, string> = {
+      "Content-Type": "application/x-protobuf",
+      "Cache-Control": "public, max-age=31536000",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET",
+      "Access-Control-Allow-Headers": "*",
+    };
+
+    // Add Content-Encoding header only if data starts with gzip magic bytes
+    if (tileData.length >= 2 && tileData[0] === 0x1f && tileData[1] === 0x8b) {
+      headers["Content-Encoding"] = "gzip";
+    }
+
     return new NextResponse(tileData, {
-      headers: {
-        "Content-Type": "application/x-protobuf",
-        "Content-Encoding": "gzip",
-        "Cache-Control": "public, max-age=31536000",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET",
-        "Access-Control-Allow-Headers": "*",
-      },
+      headers,
     });
   } catch (error) {
     console.error("Error serving vector tile:", error);

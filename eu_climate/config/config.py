@@ -16,8 +16,8 @@ except ImportError:
         cubic = 'cubic'
         average = 'average'
 import yaml
-from eu_climate.utils.utils import setup_logging
-# from eu_climate.utils.data_loading import get_config
+from utils.utils import setup_logging
+# from utils.data_loading import get_config
 
 # Set up logging for the config module
 logger = setup_logging(__name__)
@@ -65,7 +65,7 @@ class ProjectConfig:
         
         # Set up paths
         self.workspace_root = Path(os.getcwd())
-        self.huggingface_folder = self.workspace_root / "eu_climate" / self.config['data_paths']['local_data_dir']
+        self.huggingface_folder = self.workspace_root / self.config['data_paths']['local_data_dir']
         self.data_dir =  self.huggingface_folder / self.config['data_paths']['source_data_dir']
         self.output_dir = self.huggingface_folder / self.config['data_paths']['local_output_dir']
         
@@ -79,6 +79,12 @@ class ProjectConfig:
         self.smoothing_sigma = self.config['processing']['smoothing_sigma']
         self.target_crs = self.config['processing']['target_crs']
         self.target_resolution = self.config['processing']['target_resolution']
+        
+        # Store GHS native resolution parameters (latitude-dependent)
+        self.ghs_native_resolution_arcsec = self.config['processing']['ghs_native_resolution_arcsec']
+        self.ghs_native_resolution_meters_equator = self.config['processing']['ghs_native_resolution_meters_equator']
+        self.ghs_native_resolution_meters_netherlands = self.config['processing']['ghs_native_resolution_meters_netherlands']
+        self.ghs_latitude_resolution_meters = self.config['processing']['ghs_latitude_resolution_meters']
         
         # Store risk assessment parameters
         self.n_risk_classes = self.config['risk_assessment']['n_risk_classes']
@@ -194,8 +200,13 @@ class ProjectConfig:
     
     @property
     def population_path(self) -> Path:
-        """Get path to population density file."""
-        return self.data_dir / self.config['file_paths']['population_file']
+        """Get path to population density file (2025 GHS data with corrected resolution)."""
+        return self.data_dir / self.config['file_paths']['population_2025_file']
+    
+    @property
+    def population_2025_path(self) -> Path:
+        """Get path to 2025 population density file (3 arcsecond resolution)."""
+        return self.data_dir / self.config['file_paths']['population_2025_file']
     
     @property
     def ghs_built_c_path(self) -> Path:
@@ -322,7 +333,7 @@ class ProjectConfig:
             (self.dem_path, "DEM"),
             (self.ghs_built_c_path, "GHS Built C"),
             (self.ghs_built_v_path, "GHS Built V"),
-            (self.population_path, "Population Density"),
+            (self.population_2025_path, "Population Density (2025)"),
             (self.electricity_consumption_path, "Electricity Consumption"),
             (self.vierkant_stats_path, "Vierkant Stats"),
             (self.river_polygons_path, "River Polygons"),

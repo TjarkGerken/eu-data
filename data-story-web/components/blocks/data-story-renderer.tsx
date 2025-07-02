@@ -154,6 +154,8 @@ export function DataStoryRenderer({
             showOpacityControls={block.showOpacityControls !== false}
             showDownloadButtons={block.showDownloadButtons !== false}
             predefinedOpacities={block.predefinedOpacities || {}}
+            enableClusterGroups={block.enableClusterGroups || false}
+            clusterGroups={block.clusterGroups || []}
           />
         );
 

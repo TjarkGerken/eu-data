@@ -24,9 +24,9 @@ import geopandas as gpd
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from eu_climate.config.config import ProjectConfig
-from eu_climate.utils.web_exports import WebOptimizedExporter
-from eu_climate.utils.utils import setup_logging
+from config.config import ProjectConfig
+from utils.web_exports import WebOptimizedExporter
+from utils.utils import setup_logging
 
 logger = setup_logging(__name__)
 
