@@ -16,7 +16,7 @@ except ImportError:
         cubic = 'cubic'
         average = 'average'
 import yaml
-from utils.utils import setup_logging
+from eu_climate.utils.utils import setup_logging
 # from utils.data_loading import get_config
 
 # Set up logging for the config module
@@ -64,7 +64,11 @@ class ProjectConfig:
         self.config = self.get_config()
         
         # Set up paths
-        self.workspace_root = Path(os.getcwd())
+        # Use the eu_climate package directory as the root so that all
+        # data-related folders live inside <repo>/eu_climate/ rather than at
+        # repository root. This guarantees consistent paths regardless of the
+        # current working directory when the code is executed.
+        self.workspace_root = Path(__file__).resolve().parent.parent
         self.huggingface_folder = self.workspace_root / self.config['data_paths']['local_data_dir']
         self.data_dir =  self.huggingface_folder / self.config['data_paths']['source_data_dir']
         self.output_dir = self.huggingface_folder / self.config['data_paths']['local_output_dir']

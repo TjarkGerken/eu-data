@@ -34,7 +34,15 @@ class WebConversionValidator:
     """Validates accuracy of web-optimized geospatial file conversions."""
     
     def __init__(self, output_dir: Optional[Path] = None, verbose: bool = False):
-        self.output_dir = output_dir or Path("data/.output")
+        if output_dir is not None:
+            self.output_dir = output_dir
+        else:
+            try:
+                from eu_climate.config.config import ProjectConfig
+                self.output_dir = ProjectConfig().output_dir
+            except Exception:
+                # Fallback to original relative path if config cannot be loaded
+                self.output_dir = Path("data/.output")
         self.verbose = verbose
         self.setup_logging()
         

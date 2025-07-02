@@ -19,7 +19,7 @@ sys.path.insert(0, str(code_dir))
 import logging
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, upload_folder
-from utils.data_loading import get_config, validate_env_vars
+from eu_climate.utils.data_loading import get_config, validate_env_vars
 
 # Set up logging
 logging.basicConfig(
@@ -134,9 +134,10 @@ def main():
     logger.debug(f"Token: {str(api_token[:4])}... (masked)")
     repo_id = config.config['huggingface_repo']
     
-    # Get directories to upload
-    data_dir = Path(config.config['data_paths']['local_data_dir'])
-    output_dir = Path(config.config['data_paths']['local_output_dir'])
+    # Use absolute paths resolved by ProjectConfig so that uploads work
+    # regardless of the current working directory.
+    data_dir = config.data_dir
+    output_dir = config.output_dir
     
     # Upload directories
     success = True

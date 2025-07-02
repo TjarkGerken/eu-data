@@ -15,3 +15,5 @@
 /**/temp_download
 **/node_modules/** */
 **/node_modules/**
+**/__pycache__**
+/**/.gemini/** */

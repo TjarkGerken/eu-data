@@ -85,7 +85,7 @@ def download_data() -> bool:
                 
                 files_to_delete = []
                 for file_path in repo_files:
-                    if file_path.startswith('data/') or file_path.startswith('output/'):
+                    if file_path.startswith('data/'):
                         files_to_delete.append(file_path)
                 
                 if files_to_delete:
@@ -127,6 +127,7 @@ def download_data() -> bool:
         
         required_items_checks = [
             (config.data_dir, "source data directory"),
+            (config.output_dir, "output directory"),
             (config.huggingface_folder / "README.md", "README.md file"),
             (config.huggingface_folder / ".gitattributes", ".gitattributes file")
         ]

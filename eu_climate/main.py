@@ -860,7 +860,6 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     """
     from eu_climate.utils.web_exports import WebOptimizedExporter
     from pathlib import Path
-    import glob
     
     logger.info("Starting web conversion of existing files")
     
@@ -881,11 +880,12 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
     }
     
     output_dir = Path(config.output_dir)
+    logger.error(output_dir)
     source_dir = Path(config.data_dir)
     
     # Find all .tif files recursively in output directory
-    tif_files = list(output_dir.rglob("*.tif"))
-    logger.info(f"Found {len(tif_files)} .tif files for COG conversion")
+    tif_files = list(output_dir.rglob("*.tif")) + list(output_dir.rglob("*.tiff"))
+    logger.info(f"Found {len(tif_files)} .tif and .tiff files for COG conversion")
     
     # Convert .tif files to .cog
     for tif_file in tif_files:
