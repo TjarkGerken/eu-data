@@ -61,7 +61,30 @@ export class MapTileService {
       );
     }
     const data = await response.json();
-    return Array.isArray(data) ? data : data.layers || [];
+    const layers: MapLayerMetadata[] = Array.isArray(data)
+      ? data
+      : data.layers || [];
+
+    // Concurrently fetch style configurations for all layers
+    const layersWithStyles = await Promise.all(
+      layers.map(async (layer) => {
+        try {
+          const styleResponse = await fetch(`/api/map-layers/${layer.id}/style`);
+          if (styleResponse.ok) {
+            const styleConfig = await styleResponse.json();
+            // Avoid assigning empty or invalid style configs
+            if (styleConfig && Object.keys(styleConfig).length > 0) {
+              return { ...layer, styleConfig };
+            }
+          }
+        } catch (error) {
+          console.warn(`Could not fetch style for layer ${layer.id}:`, error);
+        }
+        return layer;
+      })
+    );
+
+    return layersWithStyles;
   }
 
   async uploadLayer(

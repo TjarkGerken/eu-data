@@ -1,14 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { LayerStyleConfig } from "./map-types";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Supabase URL or anonymous key is not defined");
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { Json, supabase } from "./supabase";
 
 /**
  * Service for managing layer style configurations in Supabase.
@@ -19,7 +10,9 @@ export const styleService = {
    * @param layerId The ID of the layer.
    * @returns The style configuration or null if not found.
    */
-  async getLayerStyle(layerId: string): Promise<LayerStyleConfig | null> {
+  async getLayerStyle(
+    layerId: string,
+  ): Promise<LayerStyleConfig | null> {
     const { data, error } = await supabase
       .from("layer_styles")
       .select("style_config")
@@ -34,7 +27,7 @@ export const styleService = {
       throw error;
     }
 
-    return data?.style_config as LayerStyleConfig;
+    return data?.style_config as unknown as LayerStyleConfig;
   },
 
   /**
@@ -45,12 +38,12 @@ export const styleService = {
    */
   async updateLayerStyle(
     layerId: string,
-    styleConfig: LayerStyleConfig
+    styleConfig: LayerStyleConfig,
   ): Promise<LayerStyleConfig> {
     const { data, error } = await supabase
       .from("layer_styles")
       .upsert(
-        { layer_id: layerId, style_config: styleConfig },
+        { layer_id: layerId, style_config: styleConfig as unknown as Json },
         { onConflict: "layer_id" }
       )
       .select()
@@ -61,7 +54,7 @@ export const styleService = {
       throw error;
     }
 
-    return data.style_config as LayerStyleConfig;
+    return data.style_config as unknown as LayerStyleConfig;
   },
 
   /**
@@ -82,9 +75,27 @@ export const styleService = {
     const styleMap = new Map<string, LayerStyleConfig>();
     if (data) {
       for (const row of data) {
-        styleMap.set(row.layer_id, row.style_config as LayerStyleConfig);
+        styleMap.set(row.layer_id, row.style_config as unknown as LayerStyleConfig);
       }
     }
     return styleMap;
+  },
+
+  /**
+   * Deletes the style configuration for a specific layer.
+   * @param layerId The ID of the layer.
+   */
+  async deleteLayerStyle(
+    layerId: string,
+      ): Promise<void> {
+    const { error } = await supabase
+      .from("layer_styles")
+      .delete()
+      .eq("layer_id", layerId);
+
+    if (error) {
+      console.error("Error deleting layer style:", error);
+      throw error;
+    }
   },
 }; 
