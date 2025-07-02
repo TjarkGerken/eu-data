@@ -311,11 +311,17 @@ export default function BaseLeafletMap({
               
               if (vectorStyle) {
                 return {
-                  fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
+                  fillColor:
+                    vectorStyle.fillColor === "transparent"
+                      ? "transparent"
+                      : vectorStyle.fillColor,
                   weight: vectorStyle.borderWidth,
                   color: vectorStyle.borderColor,
-                  opacity: vectorStyle.borderOpacity,
-                  fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
+                  opacity: layer.opacity * vectorStyle.borderOpacity,
+                  fillOpacity:
+                    vectorStyle.fillColor === "transparent"
+                      ? 0
+                      : layer.opacity * vectorStyle.fillOpacity,
                   dashArray: vectorStyle.borderDashArray,
                 };
               } else {
@@ -745,49 +751,40 @@ export default function BaseLeafletMap({
                 {
                   rendererFactory: L.canvas.tile,
                   vectorTileLayerStyles: {
-                    [actualLayerName]: (() => {
-                      const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
-                      
-                      if (vectorStyle) {
+                    ...(() => {
+                      const styleFn = (layerId: string) => {
+                        const vectorStyle =
+                          layer.metadata.styleConfig?.vectorStyle;
+
+                        if (vectorStyle) {
+                          return {
+                            weight: vectorStyle.borderWidth,
+                            color: vectorStyle.borderColor,
+                            opacity: layer.opacity * vectorStyle.borderOpacity,
+                            fillColor:
+                              vectorStyle.fillColor === "transparent"
+                                ? "transparent"
+                                : vectorStyle.fillColor,
+                            fillOpacity:
+                              vectorStyle.fillColor === "transparent"
+                                ? 0
+                                : layer.opacity * vectorStyle.fillOpacity,
+                            dashArray: vectorStyle.borderDashArray,
+                          };
+                        }
+                        // Fallback style
                         return {
-                          weight: vectorStyle.borderWidth,
-                          color: vectorStyle.borderColor,
-                          opacity: vectorStyle.borderOpacity,
-                          fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
-                          fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
-                          dashArray: vectorStyle.borderDashArray,
+                          weight: 2,
+                          color: "#1e40af",
+                          opacity: 0.9,
+                          fillColor: "#1e3a8a",
+                          fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                         };
-                      } else {
-                        return {
-                      weight: 2,
-                      color: "#1e40af",
-                      opacity: 0.9,
-                      fillColor: "#1e3a8a",
-                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
-                        };
-                      }
-                    })(),
-                    [layer.id]: (() => {
-                      const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
-                      
-                      if (vectorStyle) {
-                        return {
-                          weight: vectorStyle.borderWidth,
-                          color: vectorStyle.borderColor,
-                          opacity: vectorStyle.borderOpacity,
-                          fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
-                          fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
-                          dashArray: vectorStyle.borderDashArray,
-                        };
-                      } else {
-                        return {
-                      weight: 2,
-                      color: "#1e40af",
-                      opacity: 0.9,
-                      fillColor: "#1e3a8a",
-                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
-                        };
-                      }
+                      };
+                      return {
+                        [actualLayerName]: styleFn(actualLayerName),
+                        [layer.id]: styleFn(layer.id),
+                      };
                     })(),
                   },
                   maxZoom: 18,
