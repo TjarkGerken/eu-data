@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -28,8 +29,14 @@ import {
   MapLayerMetadata,
   LayerUploadResult,
 } from "@/lib/map-tile-service";
+import { styleService } from "@/lib/style-service";
 import { useToast } from "@/hooks/use-toast";
-import { LayerStyleConfig, RasterColorScheme, VectorStyle } from "@/lib/map-types";
+import {
+  LayerStyleConfig,
+  RasterColorScheme,
+  VectorStyle,
+  DEFAULT_VECTOR_STYLES,
+} from "@/lib/map-types";
 import { getDefaultSchemeForLayerType } from "@/lib/color-schemes";
 import { RasterStyleEditor } from "./raster-style-editor";
 import { VectorStyleEditor } from "./vector-style-editor";
@@ -45,12 +52,19 @@ export default function LayerManager() {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [showStyleDialog, setShowStyleDialog] = useState(false);
   const [selectedLayerForStyling, setSelectedLayerForStyling] = useState<MapLayerMetadata | null>(null);
+  const [editableStyle, setEditableStyle] = useState<LayerStyleConfig | null>(null);
   const { toast } = useToast();
 
   const loadLayers = useCallback(async () => {
     try {
+      setLoading(true);
       const availableLayers = await mapTileService.getAvailableLayers();
-      setLayers(availableLayers);
+      const styleMap = await styleService.getAllLayerStyles();
+      const layersWithStyles = availableLayers.map((layer) => ({
+        ...layer,
+        styleConfig: styleMap.get(layer.id) || layer.styleConfig,
+      }));
+      setLayers(layersWithStyles);
     } catch (error) {
       console.error("Failed to load layers:", error);
       toast({
@@ -171,72 +185,70 @@ export default function LayerManager() {
 
   const handleOpenStyleDialog = (layer: MapLayerMetadata) => {
     setSelectedLayerForStyling(layer);
+    if (layer.styleConfig) {
+      setEditableStyle(layer.styleConfig);
+    } else {
+      if (layer.dataType === "raster") {
+        const defaultScheme = getDefaultSchemeForLayerType(layer.dataType);
+        setEditableStyle({
+          id: layer.id,
+          type: "raster",
+          rasterScheme: defaultScheme,
+          lastModified: new Date().toISOString(),
+        });
+      } else if (layer.dataType === "vector") {
+        setEditableStyle({
+          id: layer.id,
+          type: "vector",
+          vectorStyle: DEFAULT_VECTOR_STYLES.default,
+          lastModified: new Date().toISOString(),
+        });
+      }
+    }
     setShowStyleDialog(true);
   };
 
-  const handleStyleChange = async (styleConfig: LayerStyleConfig) => {
-    if (!selectedLayerForStyling) return;
+  const handleSaveStyle = async () => {
+    if (!selectedLayerForStyling || !editableStyle) return;
 
     try {
-      // Save to backend API
-      const response = await fetch(`/api/map-layers/${selectedLayerForStyling.id}/style`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(styleConfig),
-      });
+      const response = await fetch(
+        `/api/map-layers/${selectedLayerForStyling.id}/style`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(editableStyle),
+        }
+      );
 
       if (!response.ok) {
-        throw new Error('Failed to save style configuration');
+        throw new Error("Failed to save style configuration");
       }
 
-      // Update local state
-      const updatedLayers = layers.map(layer => 
-        layer.id === selectedLayerForStyling.id 
-          ? { ...layer, styleConfig }
+      const updatedStyle = await response.json();
+
+      const updatedLayers = layers.map((layer) =>
+        layer.id === selectedLayerForStyling.id
+          ? { ...layer, styleConfig: updatedStyle }
           : layer
       );
       setLayers(updatedLayers);
 
       toast({
         title: "Success",
-        description: "Layer style updated successfully",
+        description: "Layer style saved successfully",
       });
+      setShowStyleDialog(false);
     } catch (error) {
-      console.error('Error updating layer style:', error);
+      console.error("Error saving layer style:", error);
       toast({
         title: "Error",
-        description: "Failed to update layer style",
+        description: "Failed to save layer style",
         variant: "destructive",
       });
     }
-  };
-
-  const handleRasterSchemeChange = (scheme: RasterColorScheme) => {
-    if (!selectedLayerForStyling) return;
-    
-    const styleConfig: LayerStyleConfig = {
-      id: selectedLayerForStyling.id,
-      type: 'raster',
-      rasterScheme: scheme,
-      lastModified: new Date().toISOString()
-    };
-    
-    handleStyleChange(styleConfig);
-  };
-
-  const handleVectorStyleChange = (vectorStyle: VectorStyle) => {
-    if (!selectedLayerForStyling) return;
-    
-    const styleConfig: LayerStyleConfig = {
-      id: selectedLayerForStyling.id,
-      type: 'vector',
-      vectorStyle: vectorStyle,
-      lastModified: new Date().toISOString()
-    };
-    
-    handleStyleChange(styleConfig);
   };
 
   if (loading) {
@@ -369,52 +381,57 @@ export default function LayerManager() {
 
         {/* Style Configuration Dialog */}
         <Dialog open={showStyleDialog} onOpenChange={setShowStyleDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                Configure Layer Style - {selectedLayerForStyling?.name}
+                Style Layer: {selectedLayerForStyling?.name}
               </DialogTitle>
             </DialogHeader>
-            
-            {selectedLayerForStyling && (
-              <div className="space-y-4">
-                {selectedLayerForStyling.dataType === "raster" ? (
+            <div className="py-4">
+              {editableStyle?.type === "raster" &&
+                selectedLayerForStyling && (
                   <RasterStyleEditor
                     layerName={selectedLayerForStyling.name}
-                    layerType={selectedLayerForStyling.id}
-                    currentScheme={
-                      selectedLayerForStyling.styleConfig?.rasterScheme || 
-                      getDefaultSchemeForLayerType(selectedLayerForStyling.id)
+                    layerType={selectedLayerForStyling.dataType}
+                    currentScheme={editableStyle.rasterScheme}
+                    onSchemeChange={(scheme: RasterColorScheme) =>
+                      setEditableStyle((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              rasterScheme: scheme,
+                              type: "raster",
+                            }
+                          : null
+                      )
                     }
-                    onSchemeChange={handleRasterSchemeChange}
-                    onReset={() => {
-                      const defaultScheme = getDefaultSchemeForLayerType(selectedLayerForStyling.id);
-                      handleRasterSchemeChange(defaultScheme);
-                    }}
-                  />
-                ) : (
-                  <VectorStyleEditor
-                    layerName={selectedLayerForStyling.name}
-                    layerType={selectedLayerForStyling.id}
-                    currentStyle={selectedLayerForStyling.styleConfig?.vectorStyle}
-                    onStyleChange={handleVectorStyleChange}
-                    onReset={() => {
-                      // Will be handled by the VectorStyleEditor component
-                    }}
                   />
                 )}
-                
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowStyleDialog(false)}
-                    className="flex-1"
-                  >
-                    Close
-                  </Button>
-                </div>
-              </div>
-            )}
+              {editableStyle?.type === "vector" &&
+                selectedLayerForStyling && (
+                  <VectorStyleEditor
+                    layerName={selectedLayerForStyling.name}
+                    layerType={selectedLayerForStyling.dataType}
+                    currentStyle={editableStyle.vectorStyle}
+                    onStyleChange={(style: VectorStyle) =>
+                      setEditableStyle((prev) =>
+                        prev
+                          ? { ...prev, vectorStyle: style, type: "vector" }
+                          : null
+                      )
+                    }
+                  />
+                )}
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => setShowStyleDialog(false)}
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveStyle}>Save Styling</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
