@@ -277,7 +277,7 @@ async function analyzeMBTilesCoverage(
       try {
         const stmt = db.prepare(query);
         sampleTiles = stmt.all() as Array<Record<string, number>>;
-        if (sampleTiles.length > 0) {
+        if (sampleTiles && sampleTiles.length > 0) {
           break;
         }
       } catch (error) {

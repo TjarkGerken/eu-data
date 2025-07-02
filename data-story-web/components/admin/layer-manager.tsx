@@ -22,13 +22,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, Trash2, FileImage, Map, Loader2 } from "lucide-react";
+import { Upload, Trash2, FileImage, Map, Loader2, Palette } from "lucide-react";
 import {
   mapTileService,
   MapLayerMetadata,
   LayerUploadResult,
 } from "@/lib/map-tile-service";
 import { useToast } from "@/hooks/use-toast";
+import { LayerStyleConfig, RasterColorScheme, VectorStyle } from "@/lib/map-types";
+import { getDefaultSchemeForLayerType } from "@/lib/color-schemes";
+import { loadLayersWithStyleConfigs, saveLayerStyleConfig } from "../../lib/map-style-service";
+import { RasterStyleEditor } from "./raster-style-editor";
 
 export default function LayerManager() {
   const [layers, setLayers] = useState<MapLayerMetadata[]>([]);
@@ -39,12 +43,15 @@ export default function LayerManager() {
   const [layerName, setLayerName] = useState("");
   const [layerType, setLayerType] = useState<string>("");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [showStyleDialog, setShowStyleDialog] = useState(false);
+  const [selectedLayerForStyling, setSelectedLayerForStyling] = useState<MapLayerMetadata | null>(null);
   const { toast } = useToast();
 
   const loadLayers = useCallback(async () => {
     try {
       const availableLayers = await mapTileService.getAvailableLayers();
-      setLayers(availableLayers);
+      const layersWithStyles = await loadLayersWithStyleConfigs(availableLayers);
+      setLayers(layersWithStyles);
     } catch (error) {
       console.error("Failed to load layers:", error);
       toast({
@@ -161,6 +168,69 @@ export default function LayerManager() {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const handleOpenStyleDialog = (layer: MapLayerMetadata) => {
+    setSelectedLayerForStyling(layer);
+    setShowStyleDialog(true);
+  };
+
+  const handleStyleChange = async (styleConfig: LayerStyleConfig) => {
+    if (!selectedLayerForStyling) return;
+
+    try {
+      const success = await saveLayerStyleConfig(selectedLayerForStyling.id, styleConfig);
+
+      if (!success) {
+        throw new Error('Failed to save style configuration');
+      }
+
+      // Update local state
+      const updatedLayers = layers.map(layer => 
+        layer.id === selectedLayerForStyling.id 
+          ? { ...layer, styleConfig }
+          : layer
+      );
+      setLayers(updatedLayers);
+
+      toast({
+        title: "Success",
+        description: "Layer style updated successfully",
+      });
+    } catch (error) {
+      console.error('Error updating layer style:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update layer style",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRasterSchemeChange = (scheme: RasterColorScheme) => {
+    if (!selectedLayerForStyling) return;
+    
+    const styleConfig: LayerStyleConfig = {
+      id: selectedLayerForStyling.id,
+      type: 'raster',
+      rasterScheme: scheme,
+      lastModified: new Date().toISOString()
+    };
+    
+    handleStyleChange(styleConfig);
+  };
+
+  const handleVectorStyleChange = (vectorStyle: VectorStyle) => {
+    if (!selectedLayerForStyling) return;
+    
+    const styleConfig: LayerStyleConfig = {
+      id: selectedLayerForStyling.id,
+      type: 'vector',
+      vectorStyle: vectorStyle,
+      lastModified: new Date().toISOString()
+    };
+    
+    handleStyleChange(styleConfig);
   };
 
   if (loading) {
@@ -290,6 +360,49 @@ export default function LayerManager() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Style Configuration Dialog */}
+        <Dialog open={showStyleDialog} onOpenChange={setShowStyleDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Configure Layer Style - {selectedLayerForStyling?.name}
+              </DialogTitle>
+            </DialogHeader>
+            
+            {selectedLayerForStyling && (
+              <div className="space-y-4">
+                {selectedLayerForStyling.dataType === "raster" ? (
+                  <RasterStyleEditor
+                    layerName={selectedLayerForStyling.name}
+                    layerType={selectedLayerForStyling.id}
+                    currentScheme={
+                      selectedLayerForStyling.styleConfig?.rasterScheme || 
+                      getDefaultSchemeForLayerType(selectedLayerForStyling.id)
+                    }
+                    onSchemeChange={handleRasterSchemeChange}
+                    onReset={() => {
+                      const defaultScheme = getDefaultSchemeForLayerType(selectedLayerForStyling.id);
+                      handleRasterSchemeChange(defaultScheme);
+                    }}
+                  />
+                ) : (
+                  <div>Vector styling temporarily disabled</div>
+                )}
+                
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowStyleDialog(false)}
+                    className="flex-1"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -333,6 +446,18 @@ export default function LayerManager() {
               )}
 
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenStyleDialog(layer)}
+                  className="flex-1"
+                >
+                  <Palette className="w-3 h-3 mr-1" />
+                  Style
+                  {layer.styleConfig && (
+                    <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full"></span>
+                  )}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

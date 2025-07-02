@@ -21,6 +21,7 @@ import { Trash2, Layers, Settings, Plus } from "lucide-react";
 import { getFieldError, type ValidationError } from "@/lib/validation";
 import { Switch } from "@/components/ui/switch";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
+import { loadLayersWithStyleConfigs } from "../../lib/map-style-service";
 import LayerManager from "./layer-manager";
 
 interface BlockTypeFieldsProps {
@@ -104,7 +105,9 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
   const loadLayers = async () => {
     try {
       const layers = await mapTileService.getAvailableLayers();
-      setAvailableLayers(Array.isArray(layers) ? layers : []);
+      const layersArray = Array.isArray(layers) ? layers : [];
+      const layersWithStyles = await loadLayersWithStyleConfigs(layersArray);
+      setAvailableLayers(layersWithStyles);
     } catch (error) {
       console.error("Failed to load layers:", error);
       setAvailableLayers([]);
@@ -292,7 +295,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
         )}
       </div>
 
-      {data?.selectedLayers && data.selectedLayers.length > 0 && (
+      {data?.selectedLayers && Array.isArray(data.selectedLayers) && data.selectedLayers.length > 0 && (
         <div className="space-y-2">
           <Label>Selected Layers ({data.selectedLayers.length})</Label>
           <div className="flex flex-wrap gap-2">
@@ -357,7 +360,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
           </div>
         </div>
 
-        {data?.selectedLayers && data.selectedLayers.length > 0 && (
+        {data?.selectedLayers && Array.isArray(data.selectedLayers) && data.selectedLayers.length > 0 && (
           <div className="mt-4">
             <h5 className="text-sm font-medium mb-2">
               Pre-defined Layer Opacities
@@ -883,8 +886,13 @@ export function BlockTypeFields({
     }
   };
   const updateDataField = (path: string, value: unknown) => {
+    if (!path) return; // Guard against undefined/empty path
+    
     const newData = { ...data };
     const pathParts = path.split(".");
+    
+    if (pathParts.length === 0) return; // Guard against empty path parts
+    
     let current: Record<string, unknown> = newData;
 
     for (let i = 0; i < pathParts.length - 1; i++) {
@@ -925,6 +933,8 @@ export function BlockTypeFields({
     obj: Record<string, unknown>,
     path: string
   ): unknown => {
+    if (!path) return undefined; // Guard against undefined/empty path
+    
     return path.split(".").reduce((current: unknown, key: string) => {
       return current && typeof current === "object" && !Array.isArray(current)
         ? (current as Record<string, unknown>)[key]
