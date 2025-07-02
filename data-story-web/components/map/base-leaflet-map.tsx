@@ -320,14 +320,14 @@ export default function BaseLeafletMap({
                 };
               } else {
                 // Fallback to original styling
-                const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
-                return {
-                  fillColor: fillColor,
-                  weight: 2,
-                  color: "#ffffff",
-                  opacity: layer.opacity,
-                  fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
-                };
+              const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
+              return {
+                fillColor: fillColor,
+                weight: 2,
+                color: "#ffffff",
+                opacity: layer.opacity,
+                fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
+              };
               }
             },
             onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
@@ -557,7 +557,7 @@ export default function BaseLeafletMap({
 
         // Get custom color scheme if available
         const rasterScheme = layer.metadata.styleConfig?.rasterScheme;
-        
+
         const cogLayer = new GeoRasterLayer({
           georaster: georaster,
           opacity: layer.opacity || 0.8,
@@ -751,11 +751,11 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                          weight: 2,
-                          color: "#1e40af",
-                          opacity: 0.9,
-                          fillColor: "#1e3a8a",
-                          fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                      weight: 2,
+                      color: "#1e40af",
+                      opacity: 0.9,
+                      fillColor: "#1e3a8a",
+                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                         };
                       }
                     })(),
@@ -773,11 +773,11 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                          weight: 2,
-                          color: "#1e40af",
-                          opacity: 0.9,
-                          fillColor: "#1e3a8a",
-                          fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
+                      weight: 2,
+                      color: "#1e40af",
+                      opacity: 0.9,
+                      fillColor: "#1e3a8a",
+                      fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
                         };
                       }
                     })(),

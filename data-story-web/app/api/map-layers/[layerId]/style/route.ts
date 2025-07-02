@@ -1,67 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
+import { styleService } from '@/lib/style-service';
 import type { LayerStyleConfig } from "@/lib/map-types";
 
 const layerStyles = new Map<string, LayerStyleConfig>();
 
 export async function GET(
-  _req: NextRequest,
-  context: { params: Promise<{ layerId: string }> }
+  request: Request,
+  { params }: { params: { layerId: string } }
 ) {
   try {
-    const { layerId } = await context.params;
-    const styleConfig = layerStyles.get(layerId);
-    
+    const styleConfig = await styleService.getLayerStyle(params.layerId);
     if (!styleConfig) {
-      return NextResponse.json(
-        { error: "Style configuration not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Style not found' }, { status: 404 });
     }
-    
     return NextResponse.json(styleConfig);
   } catch (error) {
-    console.error("Error fetching layer style:", error);
+    console.error(`Error fetching style for layer ${params.layerId}:`, error);
     return NextResponse.json(
-      { error: "Failed to fetch layer style" },
+      { error: 'Internal Server Error' },
       { status: 500 }
     );
   }
 }
 
 export async function PUT(
-  request: NextRequest,
-  context: { params: Promise<{ layerId: string }> }
+  request: Request,
+  { params }: { params: { layerId: string } }
 ) {
   try {
-    const { layerId } = await context.params;
-    const styleConfig: LayerStyleConfig = await request.json();
-    
-    if (!styleConfig || !styleConfig.id || !styleConfig.type) {
-      return NextResponse.json(
-        { error: "Invalid style configuration" },
-        { status: 400 }
-      );
-    }
-
-    if (styleConfig.id !== layerId) {
-      return NextResponse.json(
-        { error: "Style configuration ID does not match layer ID" },
-        { status: 400 }
-      );
-    }
-
-    styleConfig.lastModified = new Date().toISOString();
-
-    layerStyles.set(layerId, styleConfig);
-
-    return NextResponse.json({
-      message: "Layer style updated successfully",
-      styleConfig,
-    });
+    const body: LayerStyleConfig = await request.json();
+    const updatedStyle = await styleService.updateLayerStyle(
+      params.layerId,
+      body
+    );
+    return NextResponse.json(updatedStyle);
   } catch (error) {
-    console.error("Error updating layer style:", error);
+    console.error(`Error updating style for layer ${params.layerId}:`, error);
     return NextResponse.json(
-      { error: "Failed to update layer style" },
+      { error: 'Internal Server Error' },
       { status: 500 }
     );
   }
