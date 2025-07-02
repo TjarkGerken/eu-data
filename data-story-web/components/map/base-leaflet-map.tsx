@@ -6,6 +6,7 @@ import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import "leaflet-defaulticon-compatibility";
 import { MapLayerMetadata } from "@/lib/map-tile-service";
 import type { LayerStyleConfig } from "@/lib/map-types";
+import { createLeafletColorFunction } from "@/lib/color-schemes";
 
 // Minimal interface for georaster object (library doesn't provide types)
 interface GeorasterObject {
@@ -19,8 +20,6 @@ export interface TileLayerConfig {
   maxZoom?: number;
   opacity?: number;
 }
-
-import { createLeafletColorFunction } from "@/lib/color-schemes";
 
 interface LayerState {
   id: string;
@@ -315,7 +314,8 @@ export default function BaseLeafletMap({
                     vectorStyle.fillColor === "transparent"
                       ? "transparent"
                       : vectorStyle.fillColor,
-                  weight: vectorStyle.borderWidth,
+                  stroke: false,
+                  weight: 0,
                   color: vectorStyle.borderColor,
                   opacity: vectorStyle.borderOpacity,
                   fill: vectorStyle.fillColor !== "transparent",
@@ -330,7 +330,8 @@ export default function BaseLeafletMap({
                 const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
                 return {
                   fillColor: fillColor,
-                  weight: 2,
+                  stroke: false,
+                  weight: 0,
                   color: "#ffffff",
                   opacity: layer.opacity,
                   fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
@@ -676,7 +677,10 @@ export default function BaseLeafletMap({
 
     // Remove layers that are no longer visible or no longer exist
     for (const [layerId, loadedLayer] of loadedLayers.entries()) {
-      const currentState = currentLayerStates.get(layerId);
+      const baseId = layerId.endsWith("_outline")
+        ? layerId.slice(0, -"_outline".length)
+        : layerId;
+      const currentState = currentLayerStates.get(baseId);
       if (!currentState || !currentState.visible) {
         try {
           if (loadedLayer.isCogLayer && cogLayerGroupRef.current) {
@@ -759,7 +763,8 @@ export default function BaseLeafletMap({
 
                       if (vectorStyle) {
                         return {
-                          weight: vectorStyle.borderWidth,
+                          stroke: false,
+                          weight: 0,
                           color: vectorStyle.borderColor,
                           opacity: vectorStyle.borderOpacity,
                           fill: vectorStyle.fillColor !== "transparent",
@@ -775,9 +780,10 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                          weight: 2,
+                          stroke: false,
+                          weight: 0,
                           color: "#1e40af",
-                          opacity: 0.9,
+                          opacity: 0.0,
                           fill: true,
                           fillColor: "#1e3a8a",
                           fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
@@ -790,7 +796,8 @@ export default function BaseLeafletMap({
 
                       if (vectorStyle) {
                         return {
-                          weight: vectorStyle.borderWidth,
+                          stroke: false,
+                          weight: 0,
                           color: vectorStyle.borderColor,
                           opacity: vectorStyle.borderOpacity,
                           fill: vectorStyle.fillColor !== "transparent",
@@ -806,9 +813,10 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                          weight: 2,
+                          stroke: false,
+                          weight: 0,
                           color: "#1e40af",
-                          opacity: 0.9,
+                          opacity: 0.0,
                           fill: true,
                           fillColor: "#1e3a8a",
                           fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
@@ -823,6 +831,80 @@ export default function BaseLeafletMap({
               );
 
               vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
+
+              // -------- Outline Layer --------
+              // Fetch (or retrieve cached) dissolved outline GeoJSON and add it as a non-tiled layer
+              const outlineCacheKey = `${layer.id}_outline_geojson`;
+              const cachedOutline = dataCacheRef.current.get(outlineCacheKey);
+
+              const addOutlineFromGeoJson = (
+                geoJson: GeoJSON.FeatureCollection
+              ) => {
+                if (!vectorLayerGroupRef.current) return;
+
+                // Remove previous outline if present
+                const existing = loadedLayersRef.current.get(
+                  `${layer.id}_outline`
+                );
+                if (
+                  existing &&
+                  vectorLayerGroupRef.current.hasLayer(existing.layer)
+                ) {
+                  vectorLayerGroupRef.current.removeLayer(existing.layer);
+                  loadedLayersRef.current.delete(`${layer.id}_outline`);
+                }
+
+                const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
+                const outlineStyle = {
+                  weight: vectorStyle?.borderWidth || 2,
+                  color: vectorStyle?.borderColor || "#000000",
+                  opacity: vectorStyle?.borderOpacity ?? 1,
+                  fill: false,
+                } as L.PathOptions;
+
+                const outlineLayer = L.geoJSON(geoJson, {
+                  style: () => outlineStyle,
+                  pane: "overlayPane",
+                });
+
+                vectorLayerGroupRef.current.addLayer(outlineLayer);
+
+                loadedLayersRef.current.set(`${layer.id}_outline`, {
+                  layer: outlineLayer,
+                  opacity: 1,
+                  visible: layer.visible,
+                  styleConfig: layer.metadata.styleConfig,
+                });
+              };
+
+              const fetchOutlineIfNeeded = async () => {
+                try {
+                  let geoJson: GeoJSON.FeatureCollection | null = null;
+                  if (cachedOutline && cachedOutline.type === "vector") {
+                    geoJson = cachedOutline.data as GeoJSON.FeatureCollection;
+                  } else {
+                    const res = await fetch(
+                      `/api/map-data/vector/${layer.id}?outline=1`
+                    );
+                    if (res.ok) {
+                      geoJson = (await res.json()) as GeoJSON.FeatureCollection;
+                      dataCacheRef.current.set(outlineCacheKey, {
+                        data: geoJson,
+                        timestamp: Date.now(),
+                        type: "vector",
+                      });
+                    }
+                  }
+
+                  if (geoJson) {
+                    addOutlineFromGeoJson(geoJson);
+                  }
+                } catch (error) {
+                  console.warn("Failed to load outline for", layer.id, error);
+                }
+              };
+
+              fetchOutlineIfNeeded();
               loadedLayersRef.current.set(layer.id, {
                 layer: vectorTileLayer,
                 opacity: layer.opacity,

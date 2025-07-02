@@ -183,10 +183,29 @@ class WebOptimizedExporter:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         try:
-            # Use rio-cogeo for proper COG creation
+            # Prefer rio-cogeo; fall back to gdal_translate if not available
             if not COG_TRANSLATE_AVAILABLE:
-                logger.error("rio-cogeo not available for COG creation")
-                return False
+                logger.warning("rio-cogeo not available – falling back to gdal_translate for COG creation")
+                gdal_cmd = [
+                    "gdal_translate",
+                    "-of", "COG",
+                    "-co", "COMPRESS=LZW",
+                    "-co", "TILED=YES",
+                    "-co", "BLOCKSIZE=512",
+                    str(input_path),
+                    str(output_path),
+                ]
+
+                try:
+                    subprocess.run(gdal_cmd, check=True, capture_output=True)
+                    logger.info(f"Successfully created COG with gdal_translate: {output_path}")
+                    return True
+                except FileNotFoundError:
+                    logger.error("gdal_translate not found in PATH – install GDAL or rio-cogeo to enable COG conversion")
+                    return False
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"gdal_translate failed: {e.stderr}")
+                    return False
             
             # Select appropriate COG profile
             profile_name = self.web_config.get('cog_profile', 'lzw')

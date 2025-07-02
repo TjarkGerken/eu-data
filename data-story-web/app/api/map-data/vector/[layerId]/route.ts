@@ -39,6 +39,15 @@ export async function GET(
     }
 
     try {
+      // If the client explicitly asks for an outline, short-circuit normal logic
+      if (request.nextUrl.searchParams.get("outline") === "1") {
+        const outline = await getLayerOutline(layerId);
+        if (outline) {
+          return NextResponse.json(outline);
+        }
+        // fall through to normal handling if outline generation failed
+      }
+
       const command = new GetObjectCommand({
         Bucket: R2_BUCKET_NAME,
         Key: `map-layers/${actualFileName}`,
@@ -416,4 +425,81 @@ function getTileBounds(x: number, y: number, z: number) {
     (Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))) * 180) / Math.PI;
 
   return { west, east, north, south };
+}
+
+// Dynamic turf import helper to avoid bundling turf in edge environment until needed
+async function dissolvePolygons(
+  featureCollection: GeoJSON.FeatureCollection
+): Promise<GeoJSON.FeatureCollection> {
+  try {
+    // Lazy-load turf only when we actually need it
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { default: dissolve } = await import("@turf/dissolve");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = dissolve(featureCollection as any);
+
+    // turf/dissolve sometimes returns a FeatureCollection and sometimes a single Feature
+    if (result.type === "FeatureCollection") {
+      return result as GeoJSON.FeatureCollection;
+    }
+
+    // If it is a single Feature, wrap it into a FeatureCollection
+    return {
+      type: "FeatureCollection",
+      features: [result as unknown as GeoJSON.Feature],
+    } as GeoJSON.FeatureCollection;
+  } catch (error) {
+    console.error("Turf dissolve failed", error);
+    // Fallback: return original
+    return featureCollection;
+  }
+}
+
+// Generate a dissolved outline for the given layer. Returns null on failure.
+async function getLayerOutline(
+  layerId: string
+): Promise<GeoJSON.FeatureCollection | null> {
+  try {
+    // Locate the file first
+    const actualFileName = await findFileByLayerId(layerId);
+    if (!actualFileName) return null;
+
+    const command = new GetObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: `map-layers/${actualFileName}`,
+    });
+
+    const response = await s3Client.send(command);
+    if (!response.Body) return null;
+
+    const arrayBuffer = await response.Body.transformToByteArray();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if (actualFileName.endsWith(".geojson")) {
+      const geoJson = JSON.parse(
+        buffer.toString()
+      ) as GeoJSON.FeatureCollection;
+      return await dissolvePolygons(geoJson);
+    }
+
+    if (actualFileName.endsWith(".mbtiles")) {
+      // For MBTiles we approximate the outline using metadata bounds
+      const coverage = await analyzeMBTilesCoverage(
+        buffer,
+        layerId,
+        actualFileName
+      );
+      const fc: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: coverage.features,
+      } as GeoJSON.FeatureCollection;
+      return await dissolvePolygons(fc);
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to generate outline", error);
+    return null;
+  }
 }
