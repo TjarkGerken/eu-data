@@ -1,16 +1,14 @@
-// Simple in-memory style API route for layer style configuration
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import type { LayerStyleConfig } from "@/lib/map-types";
 
-// Simple in-memory style store (replace with DB in production)
 const layerStyles = new Map<string, LayerStyleConfig>();
 
 export async function GET(
-  _req: Request,
-  context: { params: { layerId: string } }
+  _req: NextRequest,
+  context: { params: Promise<{ layerId: string }> }
 ) {
   try {
-    const { layerId } = context.params;
+    const { layerId } = await context.params;
     const styleConfig = layerStyles.get(layerId);
     
     if (!styleConfig) {
@@ -31,38 +29,34 @@ export async function GET(
 }
 
 export async function PUT(
-  request: Request,
-  context: { params: { layerId: string } }
+  request: NextRequest,
+  context: { params: Promise<{ layerId: string }> }
 ) {
   try {
-    const { layerId } = context.params;
+    const { layerId } = await context.params;
     const styleConfig: LayerStyleConfig = await request.json();
     
-    // Validate the style config
     if (!styleConfig || !styleConfig.id || !styleConfig.type) {
       return NextResponse.json(
         { error: "Invalid style configuration" },
         { status: 400 }
       );
     }
-    
-    // Ensure the ID matches
+
     if (styleConfig.id !== layerId) {
       return NextResponse.json(
         { error: "Style configuration ID does not match layer ID" },
         { status: 400 }
       );
     }
-    
-    // Update timestamp
+
     styleConfig.lastModified = new Date().toISOString();
-    
-    // Store the style configuration
+
     layerStyles.set(layerId, styleConfig);
-    
+
     return NextResponse.json({
       message: "Layer style updated successfully",
-      styleConfig
+      styleConfig,
     });
   } catch (error) {
     console.error("Error updating layer style:", error);
@@ -74,17 +68,15 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _req: Request,
-  context: { params: { layerId: string } }
+  _req: NextRequest,
+  context: { params: Promise<{ layerId: string }> }
 ) {
   try {
-    const { layerId } = context.params;
+    const { layerId } = await context.params;
     
     if (layerStyles.has(layerId)) {
       layerStyles.delete(layerId);
-      return NextResponse.json({
-        message: "Layer style deleted successfully"
-      });
+      return NextResponse.json({ message: "Layer style deleted successfully" });
     } else {
       return NextResponse.json(
         { error: "Style configuration not found" },
