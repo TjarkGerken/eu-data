@@ -6,6 +6,7 @@ import type { Json } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -138,9 +139,12 @@ export default function ContentBlockEditor() {
 
         if (error) throw error;
 
-        // Ensure data field is properly parsed
+        // Ensure data field is properly parsed and convert nulls to undefined
         const blocks = (data || []).map((block) => ({
           ...block,
+          title: block.title ?? undefined,
+          content: block.content ?? undefined,
+          language: block.language ?? undefined,
           data: block.data || {},
         }));
 
@@ -787,21 +791,76 @@ export default function ContentBlockEditor() {
     updateBlock: (updatedBlock: ContentBlock) => void,
     language: "en" | "de"
   ) => {
-    if (!block) return null;
+    if (!block) {
+      return (
+        <div className="text-center text-gray-500 py-10">
+          <p>No content for {language}.</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2"
+            onClick={() => {
+              /* Logic to create a new block based on the other language or a template */
+            }}
+          >
+            Create from template
+          </Button>
+        </div>
+      );
+    }
+
+    const updateField = (field: "title" | "content", value: string) => {
+      updateBlock({ ...block, [field]: value });
+    };
+
+    const hasDataFields =
+      block.block_type &&
+      Object.keys(getDefaultBlockData(block.block_type)).length > 0;
 
     return (
-      <BlockTypeFields
-        blockType={block.block_type}
-        data={block.data}
-        onDataChange={(newData) => updateBlock({ ...block, data: newData })}
-        validationErrors={[]}
-        title={block.title}
-        content={block.content}
-        onTitleChange={(title) => updateBlock({ ...block, title })}
-        onContentChange={(content) => updateBlock({ ...block, content })}
-        language={language}
-        mode="language-specific"
-      />
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-semibold capitalize">
+            {language} Content
+          </h4>
+          <Badge variant={block.id ? "secondary" : "outline"}>
+            {block.id ? "Saved" : "New"}
+          </Badge>
+        </div>
+        <div>
+          <Label htmlFor={`title-${language}`}>Title</Label>
+          <Input
+            id={`title-${language}`}
+            value={block.title || ''}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField("title", e.target.value)}
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`content-${language}`}>Content (Markdown)</Label>
+          <Textarea
+            id={`content-${language}`}
+            value={block.content || ''}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateField("content", e.target.value)}
+            className="mt-1 min-h-[150px]"
+          />
+        </div>
+
+        {hasDataFields && (
+          <div>
+            <Label>Block Specific Data</Label>
+            <BlockTypeFields
+              blockType={block.block_type}
+              data={block.data}
+              onDataChange={(newData) => {
+                updateSharedField([], newData);
+              }}
+              validationErrors={[]}
+              mode="language-specific"
+            />
+          </div>
+        )}
+      </div>
     );
   };
 

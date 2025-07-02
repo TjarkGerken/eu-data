@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
 import { MapLayerMetadata } from "@/lib/map-tile-service";
+import type { LayerStyleConfig } from "@/lib/map-types";
 
 // Minimal interface for georaster object (library doesn't provide types)
 interface GeorasterObject {
@@ -87,6 +88,7 @@ export default function BaseLeafletMap({
         opacity: number;
         visible: boolean;
         isCogLayer?: boolean;
+        styleConfig?: LayerStyleConfig;
       }
     >
   >(new Map());
@@ -204,10 +206,9 @@ export default function BaseLeafletMap({
       overlayLayerGroupRef.current = overlayLayerGroup;
     }
 
+    const currentLoadedLayers = loadedLayersRef.current;
     // Cleanup function
     return () => {
-      const loadedLayers = loadedLayersRef.current;
-
       if (mapRef.current) {
         try {
           mapRef.current.remove();
@@ -219,10 +220,9 @@ export default function BaseLeafletMap({
         vectorLayerGroupRef.current = null;
         cogLayerGroupRef.current = null;
         overlayLayerGroupRef.current = null;
-        loadedLayers.clear();
+        currentLoadedLayers.clear();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapId, centerLat, centerLng, zoom, baseTileLayer, overlayTileLayers]);
 
   // Separate effect for updating map view when coordinates/zoom change
@@ -504,6 +504,7 @@ export default function BaseLeafletMap({
               layer: geoJSONLayer,
               opacity: layer.opacity,
               visible: layer.visible,
+              styleConfig: layer.metadata.styleConfig,
             });
           }
         } else {
@@ -635,6 +636,7 @@ export default function BaseLeafletMap({
             opacity: layer.opacity,
             visible: layer.visible,
             isCogLayer: true,
+            styleConfig: layer.metadata.styleConfig,
           });
         }
       } catch (error) {
@@ -691,36 +693,42 @@ export default function BaseLeafletMap({
         }
 
         loadedLayers.delete(layerId);
-      } else if (
-        currentState.opacity !== loadedLayer.opacity ||
-        loadedLayer.visible !== currentState.visible
-      ) {
-        if (
-          "setOpacity" in loadedLayer.layer &&
-          typeof (
-            loadedLayer.layer as { setOpacity?: (opacity: number) => void }
-          ).setOpacity === "function"
-        ) {
-          (
-            loadedLayer.layer as { setOpacity: (opacity: number) => void }
-          ).setOpacity(currentState.opacity);
-        }
-        loadedLayer.opacity = currentState.opacity;
-        loadedLayer.visible = currentState.visible;
       }
     }
 
-    // Add new visible layers or layers that need to be reloaded
+    // Add new visible layers or update existing ones
     const visibleLayers = layers.filter((layer) => layer.visible);
 
     visibleLayers.forEach((layer) => {
       const loadedLayer = loadedLayers.get(layer.id);
+      const styleChanged =
+        loadedLayer &&
+        JSON.stringify(loadedLayer.styleConfig) !==
+          JSON.stringify(layer.metadata.styleConfig);
 
+      // If layer is loaded, but style or opacity has changed, remove it to be re-added
       if (
         loadedLayer &&
-        loadedLayer.opacity === layer.opacity &&
-        loadedLayer.visible === layer.visible
+        (styleChanged || loadedLayer.opacity !== layer.opacity)
       ) {
+        try {
+          if (loadedLayer.isCogLayer && cogLayerGroupRef.current) {
+            cogLayerGroupRef.current.removeLayer(loadedLayer.layer);
+          } else if (
+            vectorLayerGroupRef.current?.hasLayer(loadedLayer.layer)
+          ) {
+            vectorLayerGroupRef.current.removeLayer(loadedLayer.layer);
+          } else if (layerGroupRef.current?.hasLayer(loadedLayer.layer)) {
+            layerGroupRef.current.removeLayer(loadedLayer.layer);
+          } else if (mapRef.current?.hasLayer(loadedLayer.layer)) {
+            mapRef.current.removeLayer(loadedLayer.layer);
+          }
+        } catch (error) {
+          console.warn(`Error removing layer ${layer.id} for update:`, error);
+        }
+        loadedLayers.delete(layer.id);
+      } else if (loadedLayer) {
+        // If no significant changes, no need to do anything
         return;
       }
 
@@ -793,6 +801,7 @@ export default function BaseLeafletMap({
                 layer: vectorTileLayer,
                 opacity: layer.opacity,
                 visible: layer.visible,
+                styleConfig: layer.metadata.styleConfig,
               });
             };
 
@@ -837,6 +846,7 @@ export default function BaseLeafletMap({
             layer: tileLayer,
             opacity: layer.opacity,
             visible: layer.visible,
+            styleConfig: layer.metadata.styleConfig,
           });
         } else if (layer.metadata.format === "cog") {
           loadCogLayer(layer);
