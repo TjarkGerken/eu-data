@@ -19,7 +19,7 @@ import {
   createGradientFromStops,
   getDefaultSchemeForLayerType
 } from "@/lib/color-schemes";
-import { RasterColorScheme } from "@/lib/map-types";
+import { RasterColorScheme, ColorStop } from "@/lib/map-types";
 import { Palette, Eye, RotateCcw } from "lucide-react";
 
 interface RasterStyleEditorProps {
@@ -66,7 +66,7 @@ export function RasterStyleEditor({
         }}
       />
       <div className="flex flex-wrap gap-1">
-        {scheme.colors.map((stop, index) => (
+        {scheme.colors.map((stop: ColorStop, index: number) => (
           <div
             key={index}
             className="w-4 h-4 rounded-sm border border-gray-300"

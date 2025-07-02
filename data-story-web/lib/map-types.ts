@@ -1,58 +1,59 @@
-/**
+/*
  * Enhanced Map Layer Types for Customizable Styling
  * Based on EU Climate Risk Assessment color schemes
  */
 
+// ---- Core Color Types ----
 export interface ColorStop {
-  position: number; // 0-1
-  color: string; // hex color
+  /** Position within gradient (0-1) */
+  position: number;
+  /** Hex color code */
+  color: string;
 }
 
+// ---- Raster Layer Color Scheme ----
 export interface RasterColorScheme {
+  /** Unique ID */
   id: string;
+  /** Internal name */
   name: string;
+  /** Display name for UI */
   displayName: string;
+  /** Description for UI */
   description: string;
+  /** Array of color stops */
   colors: ColorStop[];
+  /** Category for filtering */
   category: 'risk' | 'relevance' | 'exposition' | 'economic' | 'hazard' | 'custom';
 }
 
+// ---- Vector Layer Style ----
 export interface VectorStyle {
   fillColor: string;
   fillOpacity: number;
   borderColor: string;
   borderWidth: number;
   borderOpacity: number;
-  borderDashArray?: string; // for dashed lines: "5,5" for dashed, undefined for solid
+  /** Leaflet dash array string, e.g. "5,5" */
+  borderDashArray?: string;
 }
 
+// ---- Layer Style Configuration ----
 export interface LayerStyleConfig {
   id: string;
   type: 'raster' | 'vector';
   rasterScheme?: RasterColorScheme;
   vectorStyle?: VectorStyle;
-  customRasterColors?: ColorStop[]; // for fully custom schemes
+  /** For user-defined gradients */
+  customRasterColors?: ColorStop[];
   lastModified?: string;
 }
 
-// Enhanced layer state with styling
-export interface StyledLayerState {
-  id: string;
-  visible: boolean;
-  opacity: number;
-  metadata: {
-    name: string;
-    dataType: string;
-    format: string;
-    [key: string]: unknown;
-  }; // Simplified metadata to avoid circular imports
-  styleConfig?: LayerStyleConfig;
-}
+/* ------------------------------------
+ * Constants / Defaults
+ * ----------------------------------*/
 
-// Color scheme categories for UI organization
-export type ColorSchemeCategory = 'risk' | 'relevance' | 'exposition' | 'economic' | 'hazard' | 'custom';
-
-// Predefined color scheme IDs
+// Color scheme IDs for easy reference in code & UI
 export const SCHEME_IDS = {
   RISK_DEFAULT: 'risk-white-yellow-orange-red',
   RELEVANCE_DEFAULT: 'relevance-white-green-darkgreen',
@@ -61,8 +62,10 @@ export const SCHEME_IDS = {
   HAZARD_DEFAULT: 'hazard-white-orange-red-darkred',
 } as const;
 
-// Default vector styles by layer type
-export const DEFAULT_VECTOR_STYLES = {
+export type SchemeId = typeof SCHEME_IDS[keyof typeof SCHEME_IDS];
+
+// Default vector styles by semantic layer type (used when no custom style provided)
+export const DEFAULT_VECTOR_STYLES: Record<string, VectorStyle> = {
   clusters: {
     fillColor: '#4fc3f7',
     fillOpacity: 0.6,
@@ -71,7 +74,7 @@ export const DEFAULT_VECTOR_STYLES = {
     borderOpacity: 0.9,
   },
   ports: {
-    fillColor: '#9c27b0', // violet
+    fillColor: '#9c27b0',
     fillOpacity: 0.7,
     borderColor: '#000000',
     borderWidth: 1,
@@ -90,5 +93,10 @@ export const DEFAULT_VECTOR_STYLES = {
     borderColor: '#ffffff',
     borderWidth: 2,
     borderOpacity: 0.9,
-  }
-} as const; 
+  },
+};
+
+export type ColorSchemeCategory = RasterColorScheme['category'];
+
+// Ensure file recognized as a module
+export {}; 

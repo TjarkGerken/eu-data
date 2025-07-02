@@ -31,8 +31,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { LayerStyleConfig, RasterColorScheme, VectorStyle } from "@/lib/map-types";
 import { getDefaultSchemeForLayerType } from "@/lib/color-schemes";
-import { loadLayersWithStyleConfigs, saveLayerStyleConfig } from "../../lib/map-style-service";
 import { RasterStyleEditor } from "./raster-style-editor";
+import { VectorStyleEditor } from "./vector-style-editor";
 
 export default function LayerManager() {
   const [layers, setLayers] = useState<MapLayerMetadata[]>([]);
@@ -50,8 +50,7 @@ export default function LayerManager() {
   const loadLayers = useCallback(async () => {
     try {
       const availableLayers = await mapTileService.getAvailableLayers();
-      const layersWithStyles = await loadLayersWithStyleConfigs(availableLayers);
-      setLayers(layersWithStyles);
+      setLayers(availableLayers);
     } catch (error) {
       console.error("Failed to load layers:", error);
       toast({
@@ -179,9 +178,16 @@ export default function LayerManager() {
     if (!selectedLayerForStyling) return;
 
     try {
-      const success = await saveLayerStyleConfig(selectedLayerForStyling.id, styleConfig);
+      // Save to backend API
+      const response = await fetch(`/api/map-layers/${selectedLayerForStyling.id}/style`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(styleConfig),
+      });
 
-      if (!success) {
+      if (!response.ok) {
         throw new Error('Failed to save style configuration');
       }
 
@@ -387,7 +393,15 @@ export default function LayerManager() {
                     }}
                   />
                 ) : (
-                  <div>Vector styling temporarily disabled</div>
+                  <VectorStyleEditor
+                    layerName={selectedLayerForStyling.name}
+                    layerType={selectedLayerForStyling.id}
+                    currentStyle={selectedLayerForStyling.styleConfig?.vectorStyle}
+                    onStyleChange={handleVectorStyleChange}
+                    onReset={() => {
+                      // Will be handled by the VectorStyleEditor component
+                    }}
+                  />
                 )}
                 
                 <div className="flex gap-2 pt-4 border-t">
@@ -454,9 +468,6 @@ export default function LayerManager() {
                 >
                   <Palette className="w-3 h-3 mr-1" />
                   Style
-                  {layer.styleConfig && (
-                    <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full"></span>
-                  )}
                 </Button>
                 <Button
                   variant="outline"

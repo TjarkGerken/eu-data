@@ -1,16 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import { LayerStyleConfig } from "@/lib/map-types";
+// Simple in-memory style API route for layer style configuration
+import { NextResponse } from "next/server";
+import type { LayerStyleConfig } from "@/lib/map-types";
 
-// In a real implementation, this would be stored in a database
-// For now, we'll use in-memory storage (will reset on server restart)
+// Simple in-memory style store (replace with DB in production)
 const layerStyles = new Map<string, LayerStyleConfig>();
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  _req: Request,
+  context: { params: { layerId: string } }
 ) {
   try {
-    const { layerId } = await params;
+    const { layerId } = context.params;
     const styleConfig = layerStyles.get(layerId);
     
     if (!styleConfig) {
@@ -31,11 +31,11 @@ export async function GET(
 }
 
 export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  request: Request,
+  context: { params: { layerId: string } }
 ) {
   try {
-    const { layerId } = await params;
+    const { layerId } = context.params;
     const styleConfig: LayerStyleConfig = await request.json();
     
     // Validate the style config
@@ -74,11 +74,11 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  _req: Request,
+  context: { params: { layerId: string } }
 ) {
   try {
-    const { layerId } = await params;
+    const { layerId } = context.params;
     
     if (layerStyles.has(layerId)) {
       layerStyles.delete(layerId);

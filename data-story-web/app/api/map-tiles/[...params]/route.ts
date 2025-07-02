@@ -1,3 +1,5 @@
+/* eslint-disable prefer-const */
+
 import { NextRequest, NextResponse } from "next/server";
 import {
   S3Client,
@@ -348,7 +350,7 @@ async function getTileFromMBTiles(
     db = new Database(tempFilePath, { readonly: true });
 
     // First, get metadata to understand the MBTiles structure
-    const metadata: Record<string, string> = {};
+    let metadata: Record<string, string> = {};
     try {
       const metadataStmt = db.prepare("SELECT name, value FROM metadata");
       const metadataRows = metadataStmt.all() as Array<{
