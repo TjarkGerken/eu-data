@@ -9,7 +9,7 @@ import { MapLayerMetadata } from "@/lib/map-tile-service";
 // Minimal interface for georaster object (library doesn't provide types)
 interface GeorasterObject {
   noDataValue: number | null;
-  [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  [key: string]: unknown;
 }
 
 export interface TileLayerConfig {
@@ -18,6 +18,8 @@ export interface TileLayerConfig {
   maxZoom?: number;
   opacity?: number;
 }
+
+import { createLeafletColorFunction } from '@/lib/color-schemes';
 
 interface LayerState {
   id: string;
@@ -43,7 +45,8 @@ interface BaseLeafletMapProps {
 const L = typeof window !== "undefined" ? require("leaflet") : null;
 
 // Import VectorGrid correctly - it extends L when required
-let VectorGrid: typeof L.VectorGrid | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let VectorGrid: any = null;
 if (typeof window !== "undefined") {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("leaflet.vectorgrid");
@@ -72,16 +75,22 @@ export default function BaseLeafletMap({
     []
   );
 
-  const mapRef = useRef<L.Map | null>(null);
-  const layerGroupRef = useRef<L.LayerGroup | null>(null);
-  const vectorLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const cogLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const overlayLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const layerGroupRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vectorLayerGroupRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cogLayerGroupRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const overlayLayerGroupRef = useRef<any>(null);
   const loadedLayersRef = useRef<
     Map<
       string,
       {
-        layer: L.Layer;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        layer: any;
         opacity: number;
         visible: boolean;
         isCogLayer?: boolean;
@@ -204,8 +213,6 @@ export default function BaseLeafletMap({
 
     // Cleanup function
     return () => {
-      const loadedLayers = loadedLayersRef.current;
-
       if (mapRef.current) {
         try {
           mapRef.current.remove();
@@ -217,7 +224,9 @@ export default function BaseLeafletMap({
         vectorLayerGroupRef.current = null;
         cogLayerGroupRef.current = null;
         overlayLayerGroupRef.current = null;
-        loadedLayers.clear();
+        if (loadedLayersRef.current) {
+          loadedLayersRef.current.clear();
+        }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -304,6 +313,20 @@ export default function BaseLeafletMap({
         ) {
           const geoJSONLayer = L.geoJSON(vectorData, {
             style: () => {
+              // Use custom style configuration if available
+              const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
+              
+              if (vectorStyle) {
+                return {
+                  fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
+                  weight: vectorStyle.borderWidth,
+                  color: vectorStyle.borderColor,
+                  opacity: vectorStyle.borderOpacity,
+                  fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
+                  dashArray: vectorStyle.borderDashArray,
+                };
+              } else {
+                // Fallback to original styling
               const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
               return {
                 fillColor: fillColor,
@@ -312,8 +335,10 @@ export default function BaseLeafletMap({
                 opacity: layer.opacity,
                 fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
               };
+              }
             },
-            onEachFeature: (feature: GeoJSON.Feature, geoLayer: L.Layer) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onEachFeature: (feature: GeoJSON.Feature, geoLayer: any) => {
               if (feature.properties) {
                 const formatNumber = (value: number): string => {
                   if (typeof value !== "number" || isNaN(value))
@@ -538,6 +563,9 @@ export default function BaseLeafletMap({
         const colorScale = layer.metadata.colorScale;
         const valueRange = layer.metadata.valueRange;
 
+        // Get custom color scheme if available
+        const rasterScheme = layer.metadata.styleConfig?.rasterScheme;
+
         const cogLayer = new GeoRasterLayer({
           georaster: georaster,
           opacity: layer.opacity || 0.8,
@@ -552,6 +580,13 @@ export default function BaseLeafletMap({
               return null;
             }
 
+            // Use custom color scheme if available
+            if (rasterScheme) {
+              const colorFunction = createLeafletColorFunction(rasterScheme, valueRange);
+              return colorFunction(pixelValue);
+            }
+
+            // Fallback to original logic
             const isRiskLayer =
               layer.id.includes("risk") ||
               layer.metadata.name.toLowerCase().includes("risk");
@@ -584,6 +619,11 @@ export default function BaseLeafletMap({
                 return `rgba(${r}, ${g}, ${b}, ${a})`;
               }
             } else {
+              // Ensure colorScale exists and has length
+              if (!colorScale || !Array.isArray(colorScale) || colorScale.length === 0) {
+                return "#ff6b6b"; // Default color
+              }
+
               const normalized =
                 (pixelValue - valueRange[0]) / (valueRange[1] - valueRange[0]);
               const clampedNormalized = Math.max(0, Math.min(1, normalized));
@@ -705,25 +745,57 @@ export default function BaseLeafletMap({
             );
 
             const createVectorTileLayer = (actualLayerName: string) => {
+              if (!L || !L.vectorGrid) return;
+              
               const vectorTileLayer = L.vectorGrid.protobuf(
                 `/api/map-data/vector/${layer.id}/{z}/{x}/{y}.mvt`,
                 {
                   rendererFactory: L.canvas.tile,
                   vectorTileLayerStyles: {
-                    [actualLayerName]: {
+                    [actualLayerName]: (() => {
+                      const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
+                      
+                      if (vectorStyle) {
+                        return {
+                          weight: vectorStyle.borderWidth,
+                          color: vectorStyle.borderColor,
+                          opacity: vectorStyle.borderOpacity,
+                          fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
+                          fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
+                          dashArray: vectorStyle.borderDashArray,
+                        };
+                      } else {
+                        return {
                       weight: 2,
                       color: "#1e40af",
                       opacity: 0.9,
                       fillColor: "#1e3a8a",
                       fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
-                    },
-                    [layer.id]: {
+                        };
+                      }
+                    })(),
+                    [layer.id]: (() => {
+                      const vectorStyle = layer.metadata.styleConfig?.vectorStyle;
+                      
+                      if (vectorStyle) {
+                        return {
+                          weight: vectorStyle.borderWidth,
+                          color: vectorStyle.borderColor,
+                          opacity: vectorStyle.borderOpacity,
+                          fillColor: vectorStyle.fillColor === "transparent" ? "transparent" : vectorStyle.fillColor,
+                          fillOpacity: vectorStyle.fillColor === "transparent" ? 0 : vectorStyle.fillOpacity,
+                          dashArray: vectorStyle.borderDashArray,
+                        };
+                      } else {
+                        return {
                       weight: 2,
                       color: "#1e40af",
                       opacity: 0.9,
                       fillColor: "#1e3a8a",
                       fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
-                    },
+                        };
+                      }
+                    })(),
                   },
                   maxZoom: 18,
                   pane: "overlayPane",
@@ -766,7 +838,7 @@ export default function BaseLeafletMap({
           loadVectorLayer(layer);
         }
       } else if (layer.metadata.dataType === "raster") {
-        if (layer.metadata.format === "mbtiles") {
+        if (layer.metadata.format === "mbtiles" && L) {
           const tileLayer = L.tileLayer(
             `/api/map-tiles/${layer.id}/{z}/{x}/{y}.png`,
             {

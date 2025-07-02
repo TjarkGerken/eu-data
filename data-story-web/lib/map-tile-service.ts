@@ -6,6 +6,8 @@ export interface TileConfiguration {
   format: "png" | "webp" | "jpg";
 }
 
+import { LayerStyleConfig } from './map-types';
+
 export interface MapLayerMetadata {
   id: string;
   name: string;
@@ -17,6 +19,7 @@ export interface MapLayerMetadata {
   description?: string;
   uploadedAt: string;
   fileSize: number;
+  styleConfig?: LayerStyleConfig;
 }
 
 export interface LayerUploadResult {

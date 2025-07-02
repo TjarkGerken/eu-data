@@ -13,6 +13,43 @@ import { join } from "path";
 
 const s3Client = new S3Client(R2_CONFIG);
 
+interface TileStatistics {
+  total_tiles?: number;
+  zoom_levels?: number[];
+  zoom_distribution?: Record<number, number>;
+  tile_bounds_by_zoom?: Record<number, {
+    min_x: number;
+    max_x: number;
+    min_y: number;
+    max_y: number;
+  }>;
+  schema?: string;
+  error?: string;
+}
+
+interface SampleTile {
+  zoom_level: number;
+  tile_column: number;
+  tile_row: number;
+  size: number;
+}
+
+interface BoundsAnalysis {
+  status: string;
+  message?: string;
+  bounds?: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+    width: number;
+    height: number;
+  };
+  comparison_to_netherlands?: {
+    overlaps: boolean;
+  };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ layerId: string }> }
@@ -114,7 +151,17 @@ async function analyzeMBTiles(
   mbtileBuffer: Buffer,
   layerId: string,
   fileName: string
-): Promise<any> {
+): Promise<{
+  layer_id: string;
+  file_name: string;
+  file_size_mb: string;
+  metadata: Record<string, string>;
+  database_schema: { tables: string[] };
+  tile_statistics: TileStatistics;
+  sample_tiles: SampleTile[];
+  bounds_analysis: BoundsAnalysis;
+  recommendations: string[];
+}> {
   let tempFilePath: string | null = null;
   let db: Database.Database | null = null;
 
@@ -146,7 +193,7 @@ async function analyzeMBTiles(
       .all() as Array<{ name: string }>;
 
     // Get tile statistics
-    let tileStats: any = {};
+    let tileStats: TileStatistics = {};
 
     // Try tiles table first
     try {
@@ -206,7 +253,7 @@ async function analyzeMBTiles(
     }
 
     // Sample a few tiles to check their format
-    let sampleTiles: any[] = [];
+    let sampleTiles: SampleTile[] = [];
     try {
       const sampleStmt = db.prepare(`
         SELECT zoom_level, tile_column, tile_row, length(tile_data) as size 
@@ -332,11 +379,11 @@ function analyzeBounds(metadata: Record<string, string>) {
 
 function generateRecommendations(
   metadata: Record<string, string>,
-  tileStats: any
-) {
+  tileStats: TileStatistics
+): string[] {
   const recommendations: string[] = [];
 
-  if (tileStats.total_tiles < 100) {
+  if (tileStats.total_tiles && tileStats.total_tiles < 100) {
     recommendations.push(
       "Very low tile count suggests incomplete MBTiles generation"
     );

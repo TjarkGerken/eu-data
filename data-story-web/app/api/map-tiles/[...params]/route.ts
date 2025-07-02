@@ -348,7 +348,7 @@ async function getTileFromMBTiles(
     db = new Database(tempFilePath, { readonly: true });
 
     // First, get metadata to understand the MBTiles structure
-    let metadata: Record<string, string> = {};
+    const metadata: Record<string, string> = {};
     try {
       const metadataStmt = db.prepare("SELECT name, value FROM metadata");
       const metadataRows = metadataStmt.all() as Array<{

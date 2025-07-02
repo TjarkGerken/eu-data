@@ -77,9 +77,9 @@ export function ClimateDashboardBlock({
       ? "Echtzeitübersicht der wichtigsten Klimaindikatoren"
       : "Real-time overview of key climate indicators";
 
-  const successCount = metrics.filter((m) => m.status === "success").length;
-  const warningCount = metrics.filter((m) => m.status === "warning").length;
-  const dangerCount = metrics.filter((m) => m.status === "danger").length;
+  const successCount = (metrics || []).filter((m) => m.status === "success").length;
+  const warningCount = (metrics || []).filter((m) => m.status === "warning").length;
+  const dangerCount = (metrics || []).filter((m) => m.status === "danger").length;
 
   return (
     <div className="my-16 p-8 bg-gradient-to-br from-gray-50 to-slate-100 rounded-lg">
@@ -93,7 +93,7 @@ export function ClimateDashboardBlock({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {metrics.map((metric, index) => {
+        {(metrics || []).map((metric, index) => {
           const StatusIcon = getStatusIcon(metric.status);
           const TrendIcon = getTrendIcon(metric.trend);
 
