@@ -26,6 +26,7 @@ interface LayerState {
   visible: boolean;
   opacity: number;
   metadata: MapLayerMetadata;
+  zIndex?: number; // Layer rendering order
 }
 
 interface BaseLeafletMapProps {
@@ -314,8 +315,8 @@ export default function BaseLeafletMap({
                     vectorStyle.fillColor === "transparent"
                       ? "transparent"
                       : vectorStyle.fillColor,
-                  stroke: false,
-                  weight: 0,
+                  stroke: vectorStyle.borderWidth > 0,
+                  weight: vectorStyle.borderWidth || 0,
                   color: vectorStyle.borderColor,
                   opacity: vectorStyle.borderOpacity,
                   fill: vectorStyle.fillColor !== "transparent",
@@ -330,10 +331,10 @@ export default function BaseLeafletMap({
                 const fillColor = layer.metadata.colorScale[1] || "#ff6b6b";
                 return {
                   fillColor: fillColor,
-                  stroke: false,
-                  weight: 0,
+                  stroke: true,
+                  weight: 1,
                   color: "#ffffff",
-                  opacity: layer.opacity,
+                  opacity: layer.opacity * 0.8,
                   fillOpacity: Math.max(layer.opacity * 0.6, 0.4),
                 };
               }
@@ -713,7 +714,14 @@ export default function BaseLeafletMap({
     // Add new visible layers or update existing ones
     const visibleLayers = layers.filter((layer) => layer.visible);
 
-    visibleLayers.forEach((layer) => {
+    // Sort layers by z-index to ensure proper rendering order (lower z-index renders first/behind)
+    const sortedVisibleLayers = visibleLayers.sort((a, b) => {
+      const aZIndex = a.zIndex ?? a.metadata.zIndex ?? 50; // Default to middle value if no z-index
+      const bZIndex = b.zIndex ?? b.metadata.zIndex ?? 50;
+      return aZIndex - bZIndex;
+    });
+
+    sortedVisibleLayers.forEach((layer) => {
       const loadedLayer = loadedLayers.get(layer.id);
       const styleChanged =
         loadedLayer &&
@@ -780,10 +788,10 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                          stroke: false,
-                          weight: 0,
+                          stroke: true,
+                          weight: 1,
                           color: "#1e40af",
-                          opacity: 0.0,
+                          opacity: 0.7,
                           fill: true,
                           fillColor: "#1e3a8a",
                           fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
@@ -796,8 +804,8 @@ export default function BaseLeafletMap({
 
                       if (vectorStyle) {
                         return {
-                          stroke: false,
-                          weight: 0,
+                          stroke: vectorStyle.borderWidth > 0,
+                          weight: vectorStyle.borderWidth || 0,
                           color: vectorStyle.borderColor,
                           opacity: vectorStyle.borderOpacity,
                           fill: vectorStyle.fillColor !== "transparent",
@@ -813,10 +821,10 @@ export default function BaseLeafletMap({
                         };
                       } else {
                         return {
-                          stroke: false,
-                          weight: 0,
+                          stroke: true,
+                          weight: 1,
                           color: "#1e40af",
-                          opacity: 0.0,
+                          opacity: 0.7,
                           fill: true,
                           fillColor: "#1e3a8a",
                           fillOpacity: Math.max(layer.opacity * 0.7, 0.3),
@@ -963,8 +971,10 @@ export default function BaseLeafletMap({
     });
 
     // Auto-fit bounds if enabled
-    if (autoFitBounds && visibleLayers.length > 0) {
-      const allBounds = visibleLayers.map((layer) => layer.metadata.bounds);
+    if (autoFitBounds && sortedVisibleLayers.length > 0) {
+      const allBounds = sortedVisibleLayers.map(
+        (layer) => layer.metadata.bounds
+      );
       const combinedBounds = allBounds.reduce((acc, bounds) => {
         const [minLng, minLat, maxLng, maxLat] = bounds;
         return [

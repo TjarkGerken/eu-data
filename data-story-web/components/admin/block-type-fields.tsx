@@ -246,48 +246,51 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2">
-            {availableLayers.map((layer) => {
-              const isSelected = (data?.selectedLayers || []).includes(
-                layer.id
-              );
-              return (
-                <Card
-                  key={layer.id}
-                  className={`cursor-pointer transition-colors ${
-                    isSelected
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-muted-foreground/50"
-                  }`}
-                  onClick={() => toggleLayer(layer.id)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Layers className="h-4 w-4" />
-                        <div>
-                          <div className="font-medium text-sm">
-                            {layer.name}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {layer.dataType} • {layer.format}
+            {availableLayers
+              .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)) // Sort by z-index for consistent display
+              .map((layer) => {
+                const isSelected = (data?.selectedLayers || []).includes(
+                  layer.id
+                );
+                return (
+                  <Card
+                    key={layer.id}
+                    className={`cursor-pointer transition-colors ${
+                      isSelected
+                        ? "border-primary bg-primary/5"
+                        : "hover:border-muted-foreground/50"
+                    }`}
+                    onClick={() => toggleLayer(layer.id)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Layers className="h-4 w-4" />
+                          <div>
+                            <div className="font-medium text-sm">
+                              {layer.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {layer.dataType} • {layer.format} • z-index:{" "}
+                              {layer.zIndex || 50}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isSelected && (
-                          <Badge variant="default" className="text-xs">
-                            Selected
+                        <div className="flex items-center gap-2">
+                          {isSelected && (
+                            <Badge variant="default" className="text-xs">
+                              Selected
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-xs">
+                            {layer.dataType}
                           </Badge>
-                        )}
-                        <Badge variant="outline" className="text-xs">
-                          {layer.dataType}
-                        </Badge>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </CardContent>
+                  </Card>
+                );
+              })}
           </div>
         )}
       </div>

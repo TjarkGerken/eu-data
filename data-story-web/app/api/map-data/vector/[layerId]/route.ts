@@ -427,17 +427,157 @@ function getTileBounds(x: number, y: number, z: number) {
   return { west, east, north, south };
 }
 
+// Extract actual vector features from MBTiles for better outline generation
+async function extractVectorFeaturesFromMBTiles(
+  mbtileBuffer: Buffer,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _layerId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _fileName: string
+): Promise<GeoJSON.FeatureCollection | null> {
+  let tempFilePath: string | null = null;
+
+  try {
+    // Write MBTiles buffer to temporary file
+    tempFilePath = join(tmpdir(), `temp_vector_${Date.now()}.mbtiles`);
+    writeFileSync(tempFilePath, mbtileBuffer);
+
+    // Open MBTiles database
+    const db = new Database(tempFilePath, { readonly: true });
+
+    // Try to get actual vector tile data from a few sample tiles
+    const sampleQueries = [
+      "SELECT tile_data, zoom_level, tile_column, tile_row FROM tiles WHERE zoom_level <= 8 LIMIT 5",
+      "SELECT tile_data, z, x, y FROM tiles WHERE z <= 8 LIMIT 5",
+      "SELECT tile_data, zoom_level, tile_column, tile_row FROM map WHERE zoom_level <= 8 LIMIT 5",
+    ];
+
+    let tileRows: Array<{
+      tile_data: Buffer;
+      zoom_level?: number;
+      tile_column?: number;
+      tile_row?: number;
+      z?: number;
+      x?: number;
+      y?: number;
+    }> = [];
+
+    for (const query of sampleQueries) {
+      try {
+        const stmt = db.prepare(query);
+        tileRows = stmt.all() as Array<{
+          tile_data: Buffer;
+          zoom_level?: number;
+          tile_column?: number;
+          tile_row?: number;
+          z?: number;
+          x?: number;
+          y?: number;
+        }>;
+        if (tileRows && tileRows.length > 0) {
+          break;
+        }
+      } catch (error) {
+        console.log(
+          "Vector tile query failed:",
+          query,
+          (error as Error).message
+        );
+      }
+    }
+
+    db.close();
+
+    if (tileRows.length === 0) {
+      return null;
+    }
+
+    // Decode vector tiles and extract features
+    const { VectorTile } = await import("@mapbox/vector-tile");
+    const { default: Protobuf } = await import("pbf");
+
+    const allFeatures: GeoJSON.Feature[] = [];
+
+    for (const tileRow of tileRows) {
+      try {
+        const tile = new VectorTile(new Protobuf(tileRow.tile_data));
+
+        // Get layer names from the tile
+        const layerNames = Object.keys(tile.layers);
+
+        for (const layerName of layerNames) {
+          const layer = tile.layers[layerName];
+
+          // Extract features from this layer
+          for (let i = 0; i < layer.length; i++) {
+            const feature = layer.feature(i);
+            const geom = feature.toGeoJSON(
+              tileRow.tile_column || tileRow.x || 0,
+              tileRow.tile_row || tileRow.y || 0,
+              tileRow.zoom_level || tileRow.z || 0
+            );
+
+            if (geom && geom.geometry) {
+              allFeatures.push(geom as GeoJSON.Feature);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to decode vector tile:", error);
+      }
+    }
+
+    if (allFeatures.length === 0) {
+      return null;
+    }
+
+    return {
+      type: "FeatureCollection",
+      features: allFeatures,
+    } as GeoJSON.FeatureCollection;
+  } catch (error) {
+    console.error("Error extracting vector features from MBTiles:", error);
+    return null;
+  } finally {
+    // Clean up temporary file
+    if (tempFilePath) {
+      try {
+        unlinkSync(tempFilePath);
+      } catch (cleanupError) {
+        console.warn("Failed to clean up temporary vector file:", cleanupError);
+      }
+    }
+  }
+}
+
 // Dynamic turf import helper to avoid bundling turf in edge environment until needed
 async function dissolvePolygons(
   featureCollection: GeoJSON.FeatureCollection
 ): Promise<GeoJSON.FeatureCollection> {
   try {
+    // Filter to only polygon/multipolygon features for dissolve
+    const polygonFeatures = featureCollection.features.filter(
+      (feature) =>
+        feature.geometry?.type === "Polygon" ||
+        feature.geometry?.type === "MultiPolygon"
+    );
+
+    if (polygonFeatures.length === 0) {
+      return featureCollection; // Return original if no polygons to dissolve
+    }
+
+    const polygonCollection = {
+      type: "FeatureCollection" as const,
+      features: polygonFeatures,
+    };
+
     // Lazy-load turf only when we actually need it
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { default: dissolve } = await import("@turf/dissolve");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = dissolve(featureCollection as any);
+    // Type assertion since we've filtered to only polygons
+    const result = dissolve(
+      polygonCollection as GeoJSON.FeatureCollection<GeoJSON.Polygon>
+    );
 
     // turf/dissolve sometimes returns a FeatureCollection and sometimes a single Feature
     if (result.type === "FeatureCollection") {
@@ -484,17 +624,27 @@ async function getLayerOutline(
     }
 
     if (actualFileName.endsWith(".mbtiles")) {
-      // For MBTiles we approximate the outline using metadata bounds
-      const coverage = await analyzeMBTilesCoverage(
+      // For MBTiles, extract actual vector data from a few tiles for outline generation
+      const vectorFeatures = await extractVectorFeaturesFromMBTiles(
         buffer,
         layerId,
         actualFileName
       );
-      const fc: GeoJSON.FeatureCollection = {
-        type: "FeatureCollection",
-        features: coverage.features,
-      } as GeoJSON.FeatureCollection;
-      return await dissolvePolygons(fc);
+      if (vectorFeatures && vectorFeatures.features.length > 0) {
+        return await dissolvePolygons(vectorFeatures);
+      } else {
+        // Fallback to coverage approximation if no vector features found
+        const coverage = await analyzeMBTilesCoverage(
+          buffer,
+          layerId,
+          actualFileName
+        );
+        const fc: GeoJSON.FeatureCollection = {
+          type: "FeatureCollection",
+          features: coverage.features,
+        } as GeoJSON.FeatureCollection;
+        return await dissolvePolygons(fc);
+      }
     }
 
     return null;

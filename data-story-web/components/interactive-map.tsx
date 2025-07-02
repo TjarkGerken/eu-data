@@ -50,6 +50,7 @@ interface LayerState {
   visible: boolean;
   opacity: number;
   metadata: MapLayerMetadata;
+  zIndex?: number; // Layer rendering order - optional since some layers may not have explicit z-index
 }
 
 export function InteractiveMap({
@@ -110,6 +111,7 @@ export function InteractiveMap({
           ? predefinedOpacities[layer.id] / 100
           : 0.8,
         metadata: layer,
+        zIndex: layer.zIndex,
       };
     });
     setLayerStates(states);
@@ -253,8 +255,12 @@ export function InteractiveMap({
                         className="w-4 h-3 rounded border"
                         style={{
                           background: layer.metadata.styleConfig?.rasterScheme
-                            ? createGradientFromStops(layer.metadata.styleConfig.rasterScheme.colors)
-                            : `linear-gradient(to right, ${layer.metadata.colorScale.join(", ")})`,
+                            ? createGradientFromStops(
+                                layer.metadata.styleConfig.rasterScheme.colors
+                              )
+                            : `linear-gradient(to right, ${layer.metadata.colorScale.join(
+                                ", "
+                              )})`,
                           opacity: layer.opacity,
                         }}
                       />
@@ -288,69 +294,80 @@ export function InteractiveMap({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {layerStates.map((layer) => (
-                      <div
-                        key={layer.id}
-                        className="space-y-3 p-3 bg-gray-50 rounded-lg"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {showLayerToggles && (
-                              <Switch
-                                checked={layer.visible}
-                                onCheckedChange={() =>
-                                  toggleLayerVisibility(layer.id)
+                    {layerStates
+                      .sort((a, b) => {
+                        // Sort by z-index for consistent display order
+                        const aZIndex = a.zIndex ?? a.metadata.zIndex ?? 50;
+                        const bZIndex = b.zIndex ?? b.metadata.zIndex ?? 50;
+                        return aZIndex - bZIndex;
+                      })
+                      .map((layer) => (
+                        <div
+                          key={layer.id}
+                          className="space-y-3 p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {showLayerToggles && (
+                                <Switch
+                                  checked={layer.visible}
+                                  onCheckedChange={() =>
+                                    toggleLayerVisibility(layer.id)
+                                  }
+                                />
+                              )}
+                              <Label className="text-sm font-medium">
+                                {layer.metadata.name}
+                              </Label>
+                            </div>
+                            <div className="flex gap-1">
+                              {showDownloadButtons && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => downloadLayerData(layer.id)}
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {layer.metadata.dataType}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              {layer.metadata.format}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              z-index:{" "}
+                              {layer.zIndex ?? layer.metadata.zIndex ?? 50}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Range: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
+                              {layer.metadata.valueRange[1].toFixed(2)}
+                            </span>
+                          </div>
+
+                          {layer.visible && showOpacityControls && (
+                            <div className="space-y-2">
+                              <Label className="text-xs">
+                                Opacity: {Math.round(layer.opacity * 100)}%
+                              </Label>
+                              <Slider
+                                value={[layer.opacity * 100]}
+                                onValueChange={([value]) =>
+                                  updateLayerOpacity(layer.id, value)
                                 }
+                                max={100}
+                                step={10}
+                                className="w-full"
                               />
-                            )}
-                            <Label className="text-sm font-medium">
-                              {layer.metadata.name}
-                            </Label>
-                          </div>
-                          <div className="flex gap-1">
-                            {showDownloadButtons && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => downloadLayerData(layer.id)}
-                              >
-                                <Download className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {layer.metadata.dataType}
-                          </Badge>
-                          <Badge variant="secondary" className="text-xs">
-                            {layer.metadata.format}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            Range: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
-                            {layer.metadata.valueRange[1].toFixed(2)}
-                          </span>
-                        </div>
-
-                        {layer.visible && showOpacityControls && (
-                          <div className="space-y-2">
-                            <Label className="text-xs">
-                              Opacity: {Math.round(layer.opacity * 100)}%
-                            </Label>
-                            <Slider
-                              value={[layer.opacity * 100]}
-                              onValueChange={([value]) =>
-                                updateLayerOpacity(layer.id, value)
-                              }
-                              max={100}
-                              step={10}
-                              className="w-full"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </CardContent>
               </Card>

@@ -23,11 +23,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, Trash2, FileImage, Map, Loader2, Palette } from "lucide-react";
+import {
+  Upload,
+  Trash2,
+  FileImage,
+  Map,
+  Loader2,
+  Palette,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
+  Layers,
+} from "lucide-react";
 import {
   mapTileService,
   MapLayerMetadata,
   LayerUploadResult,
+  getDefaultZIndex,
 } from "@/lib/map-tile-service";
 import { styleService } from "@/lib/style-service";
 import { useToast } from "@/hooks/use-toast";
@@ -51,8 +63,12 @@ export default function LayerManager() {
   const [layerType, setLayerType] = useState<string>("");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [showStyleDialog, setShowStyleDialog] = useState(false);
-  const [selectedLayerForStyling, setSelectedLayerForStyling] = useState<MapLayerMetadata | null>(null);
-  const [editableStyle, setEditableStyle] = useState<LayerStyleConfig | null>(null);
+  const [selectedLayerForStyling, setSelectedLayerForStyling] =
+    useState<MapLayerMetadata | null>(null);
+  const [editableStyle, setEditableStyle] = useState<LayerStyleConfig | null>(
+    null
+  );
+  const [isReordering, setIsReordering] = useState(false);
   const { toast } = useToast();
 
   const loadLayers = useCallback(async () => {
@@ -173,6 +189,64 @@ export default function LayerManager() {
     setLayerName("");
     setLayerType("");
     setUploadProgress(0);
+  };
+
+  const moveLayerUp = (index: number) => {
+    if (index === 0) return;
+    const newLayers = [...layers];
+    [newLayers[index - 1], newLayers[index]] = [
+      newLayers[index],
+      newLayers[index - 1],
+    ];
+
+    // Update z-index values to reflect new order
+    newLayers.forEach((layer, idx) => {
+      layer.zIndex = (idx + 1) * 10; // Space them out by 10 to allow for insertions
+    });
+
+    setLayers(newLayers);
+  };
+
+  const moveLayerDown = (index: number) => {
+    if (index === layers.length - 1) return;
+    const newLayers = [...layers];
+    [newLayers[index], newLayers[index + 1]] = [
+      newLayers[index + 1],
+      newLayers[index],
+    ];
+
+    // Update z-index values to reflect new order
+    newLayers.forEach((layer, idx) => {
+      layer.zIndex = (idx + 1) * 10; // Space them out by 10 to allow for insertions
+    });
+
+    setLayers(newLayers);
+  };
+
+  const saveLayerOrder = async () => {
+    setIsReordering(true);
+    try {
+      const orderUpdates = layers.map((layer, index) => ({
+        id: layer.id,
+        zIndex: (index + 1) * 10,
+      }));
+
+      await mapTileService.updateLayersOrder(orderUpdates);
+
+      toast({
+        title: "Success",
+        description: "Layer order saved successfully",
+      });
+    } catch (error) {
+      console.error("Failed to save layer order:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save layer order",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReordering(false);
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -388,40 +462,38 @@ export default function LayerManager() {
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              {editableStyle?.type === "raster" &&
-                selectedLayerForStyling && (
-                  <RasterStyleEditor
-                    layerName={selectedLayerForStyling.name}
-                    layerType={selectedLayerForStyling.dataType}
-                    currentScheme={editableStyle.rasterScheme}
-                    onSchemeChange={(scheme: RasterColorScheme) =>
-                      setEditableStyle((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              rasterScheme: scheme,
-                              type: "raster",
-                            }
-                          : null
-                      )
-                    }
-                  />
-                )}
-              {editableStyle?.type === "vector" &&
-                selectedLayerForStyling && (
-                  <VectorStyleEditor
-                    layerName={selectedLayerForStyling.name}
-                    layerType={selectedLayerForStyling.dataType}
-                    currentStyle={editableStyle.vectorStyle}
-                    onStyleChange={(style: VectorStyle) =>
-                      setEditableStyle((prev) =>
-                        prev
-                          ? { ...prev, vectorStyle: style, type: "vector" }
-                          : null
-                      )
-                    }
-                  />
-                )}
+              {editableStyle?.type === "raster" && selectedLayerForStyling && (
+                <RasterStyleEditor
+                  layerName={selectedLayerForStyling.name}
+                  layerType={selectedLayerForStyling.dataType}
+                  currentScheme={editableStyle.rasterScheme}
+                  onSchemeChange={(scheme: RasterColorScheme) =>
+                    setEditableStyle((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            rasterScheme: scheme,
+                            type: "raster",
+                          }
+                        : null
+                    )
+                  }
+                />
+              )}
+              {editableStyle?.type === "vector" && selectedLayerForStyling && (
+                <VectorStyleEditor
+                  layerName={selectedLayerForStyling.name}
+                  layerType={selectedLayerForStyling.dataType}
+                  currentStyle={editableStyle.vectorStyle}
+                  onStyleChange={(style: VectorStyle) =>
+                    setEditableStyle((prev) =>
+                      prev
+                        ? { ...prev, vectorStyle: style, type: "vector" }
+                        : null
+                    )
+                  }
+                />
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -436,69 +508,130 @@ export default function LayerManager() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {layers.map((layer) => (
-          <Card key={layer.id} className="relative">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  {layer.dataType === "raster" ? (
-                    <FileImage className="w-4 h-4" />
-                  ) : (
-                    <Map className="w-4 h-4" />
-                  )}
-                  {layer.name}
-                </CardTitle>
-                <Badge
-                  variant={
-                    layer.dataType === "raster" ? "default" : "secondary"
-                  }
-                >
-                  {layer.format.toUpperCase()}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="text-sm text-muted-foreground">
-                <p>
-                  <strong>Type:</strong> {layer.dataType}
-                </p>
-                <p>
-                  <strong>Size:</strong> {formatFileSize(layer.fileSize)}
-                </p>
-                <p>
-                  <strong>Uploaded:</strong>{" "}
-                  {new Date(layer.uploadedAt).toLocaleDateString()}
-                </p>
-              </div>
+      {layers.length > 0 && (
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+          <div className="flex items-center gap-2">
+            <Layers className="h-5 w-5" />
+            <h3 className="text-lg font-semibold">Layer Rendering Order</h3>
+            <p className="text-sm text-muted-foreground">
+              (Lower z-index renders first/behind)
+            </p>
+          </div>
+          <Button
+            onClick={saveLayerOrder}
+            disabled={isReordering}
+            variant="outline"
+          >
+            {isReordering ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Order"
+            )}
+          </Button>
+        </div>
+      )}
 
-              {layer.description && (
-                <p className="text-sm">{layer.description}</p>
-              )}
+      <div className="grid grid-cols-1 gap-4">
+        {layers
+          .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+          .map((layer, index) => (
+            <Card key={layer.id} className="relative">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveLayerUp(index)}
+                        disabled={index === 0}
+                        className="h-6 w-6 p-0"
+                      >
+                        <ChevronUp className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveLayerDown(index)}
+                        disabled={index === layers.length - 1}
+                        className="h-6 w-6 p-0"
+                      >
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        {layer.dataType === "raster" ? (
+                          <FileImage className="w-4 h-4" />
+                        ) : (
+                          <Map className="w-4 h-4" />
+                        )}
+                        {layer.name}
+                      </CardTitle>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">
+                          z-index: {layer.zIndex ?? getDefaultZIndex(layer)}
+                        </Badge>
+                        <Badge
+                          variant={
+                            layer.dataType === "raster"
+                              ? "default"
+                              : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {layer.format.toUpperCase()}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    <strong>Type:</strong> {layer.dataType}
+                  </p>
+                  <p>
+                    <strong>Size:</strong> {formatFileSize(layer.fileSize)}
+                  </p>
+                  <p>
+                    <strong>Uploaded:</strong>{" "}
+                    {new Date(layer.uploadedAt).toLocaleDateString()}
+                  </p>
+                </div>
 
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleOpenStyleDialog(layer)}
-                  className="flex-1"
-                >
-                  <Palette className="w-3 h-3 mr-1" />
-                  Style
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDelete(layer.id)}
-                  className="flex-1"
-                >
-                  <Trash2 className="w-3 h-3 mr-1" />
-                  Delete
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                {layer.description && (
+                  <p className="text-sm">{layer.description}</p>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenStyleDialog(layer)}
+                    className="flex-1"
+                  >
+                    <Palette className="w-3 h-3 mr-1" />
+                    Style
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(layer.id)}
+                    className="flex-1"
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
       </div>
 
       {layers.length === 0 && (
