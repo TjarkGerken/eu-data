@@ -30,10 +30,12 @@ class SeaLevelScenario:
     def get_default_scenarios(cls) -> List['SeaLevelScenario']:
         """Returns the default set of sea level rise scenarios."""
         return [
-            cls("Current", 0.0, "Current sea level - todays scenario"),
-            cls("Conservative", 1.0, "1m sea level rise - conservative scenario"),
-            cls("Moderate", 2.0, "2m sea level rise - moderate scenario"),
-            cls("Severe", 3.0, "3m sea level rise - severe scenario")
+            cls("Current", 0.0, "Current sea level - todays scenario (2025)"),
+            cls("Conservative", 1.0, "1m sea level rise - conservative scenario (2100)"),
+            cls("Moderate", 2.0, "2m sea level rise - moderate scenario (2100)"),
+            cls("Severe", 3.0, "3m sea level rise - severe scenario (2100)"),
+            cls("Very Severe", 10.0, "10m sea level rise - very severe scenario (2300)"),
+            cls("Extreme", 15.0, "15m sea level rise - extreme scenario (2300)"),
         ]
 
 class HazardLayer:

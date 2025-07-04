@@ -355,10 +355,12 @@ class RiskAssessment:
             logger.warning(f"Could not apply caching to hazard layer: {e}")
 
         slr_scenarios = [
-            SeaLevelScenario("Current", 0.0, "Current sea level - todays scenario"),
-            SeaLevelScenario("Conservative", 1.0, "1m sea level rise - conservative scenario"),
-            SeaLevelScenario("Moderate", 2.0, "2m sea level rise - moderate scenario"),
-            SeaLevelScenario("Severe", 3.0, "3m sea level rise - severe scenario")
+            SeaLevelScenario("Current", 0.0, "Current sea level - todays scenario (2025)"),
+            SeaLevelScenario("Conservative", 1.0, "1m sea level rise - conservative scenario (2100)"),
+            SeaLevelScenario("Moderate", 2.0, "2m sea level rise - moderate scenario (2100)"),
+            SeaLevelScenario("Severe", 3.0, "3m sea level rise - severe scenario (2100)"),
+            SeaLevelScenario("Very Severe", 10.0, "10m sea level rise - very severe scenario (2300)"),
+            SeaLevelScenario("Extreme", 15.0, "15m sea level rise - extreme scenario (2300)"),
         ]
         
         flood_extents = hazard_layer.process_scenarios(slr_scenarios)
