@@ -364,4 +364,8 @@ export interface ImageOption {
   category: string;
   scenario?: string;
   caption?: { en: string; de: string };
+  alt?: { en: string; de: string };
+  indicators?: string[];
+  uploadedAt?: string;
+  size?: number;
 }

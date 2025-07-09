@@ -203,34 +203,51 @@ export class CloudflareR2Manager {
         return [];
       }
 
-      return response.Contents.filter(
-        (object) => object.Key && !object.Key.endsWith(".json")
-      ).map((object) => {
-        const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
-        const pathParts = object.Key!.split("/");
-        const fileName = pathParts[pathParts.length - 1];
-        const fileNameWithoutExt = fileName.split(".")[0];
+      return await Promise.all(
+        response.Contents.filter(
+          (object) => object.Key && !object.Key.endsWith(".json")
+        ).map(async (object) => {
+          const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
+          const pathParts = object.Key!.split("/");
+          const fileName = pathParts[pathParts.length - 1];
+          const fileNameWithoutExt = fileName.split(".")[0];
 
-        return {
-          url: publicUrl,
-          path: object.Key!,
-          metadata: {
-            id: fileNameWithoutExt,
-            category: category,
-            scenario:
-              pathParts[2] && pathParts[2] !== "default"
-                ? (pathParts[2] as ImageScenario)
-                : undefined,
-            alt: { en: "", de: "" },
-            caption: {
-              en: `Climate visualization: ${fileNameWithoutExt}`,
-              de: "",
+          // Attempt to fetch metadata JSON for richer information
+          let meta: ImageMetadata | undefined;
+          try {
+            meta = await this.getMetadata(fileNameWithoutExt);
+          } catch {
+            /* ignore */
+          }
+
+          return {
+            url: publicUrl,
+            path: object.Key!,
+            metadata: {
+              id: fileNameWithoutExt,
+              category:
+                (meta?.category as ImageCategory) ||
+                category,
+              scenario:
+                (meta?.scenario as ImageScenario) ||
+                (pathParts[2] && pathParts[2] !== "default"
+                  ? (pathParts[2] as ImageScenario)
+                  : undefined),
+              indicators: meta?.indicators || [],
+              alt: (meta?.alt as { en: string; de: string }) || {
+                en: "",
+                de: "",
+              },
+              caption: (meta?.caption as { en: string; de: string }) || {
+                en: `Climate visualization: ${fileNameWithoutExt}`,
+                de: "",
+              },
+              uploadedAt: object.LastModified || new Date(),
+              size: object.Size || 0,
             },
-            uploadedAt: object.LastModified || new Date(),
-            size: object.Size || 0,
-          },
-        };
-      });
+          };
+        })
+      );
     } catch (error) {
       console.error(`Failed to get images for category ${category}:`, error);
       return [];

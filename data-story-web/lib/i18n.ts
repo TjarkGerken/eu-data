@@ -5,6 +5,7 @@ export interface Translation {
   dataStories: string;
   story: string;
   visualizations: string;
+  gallery: string;
   bibliography: string;
 
   // Video Section
@@ -84,6 +85,7 @@ export const translations: Record<Language, Translation> = {
     dataStories: "Data Stories",
     story: "Story",
     visualizations: "Visualizations",
+    gallery: "Gallery",
     bibliography: "Bibliography",
 
     // Video Section
@@ -187,6 +189,7 @@ export const translations: Record<Language, Translation> = {
     dataStories: "Datengeschichten",
     story: "Geschichte",
     visualizations: "Visualisierungen",
+    gallery: "Galerie",
     bibliography: "Bibliographie",
 
     // Video Section

@@ -67,6 +67,7 @@ export function VisualizationCard({
                 alt={title}
                 className="object-contain"
                 priority={false}
+                fill={true}
                 onMetadataLoaded={(metadata) => {
                   setCaptionEn(metadata?.caption?.en);
                   setCaptionDe(metadata?.caption?.de);
@@ -80,6 +81,7 @@ export function VisualizationCard({
                 alt={title}
                 className="object-contain"
                 priority={false}
+                fill={true}
               />
             </div>
           ) : (

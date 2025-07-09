@@ -34,7 +34,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header enableAnimations={true} />
 
       {/* Hero Video Section - Above the Fold */}
       <HeroVideoSection />
@@ -82,7 +82,10 @@ export default function HomePage() {
                   </h2>
                   <div className="w-24 h-1 bg-gradient-to-r from-[#2d5a3d] to-[#c4a747] rounded-full"></div>
                 </div>
-                <DataStoryRenderer blocks={content.blocks} globalReferences={content.references || []} />
+                <DataStoryRenderer
+                  blocks={content.blocks}
+                  globalReferences={content.references || []}
+                />
               </motion.section>
 
               {/* Technical Section */}

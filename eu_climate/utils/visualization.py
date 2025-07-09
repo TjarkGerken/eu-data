@@ -46,7 +46,7 @@ exposition_colors = [
 
 economic_risk_colors = [
     (0.0, '#ffffff'),    
-        (0.1, '#b6ffb6'),   
+    (0.1, '#b6ffb6'),   
     (0.5, '#ff0000'),   
     (1.0, '#000000')    
 ]
