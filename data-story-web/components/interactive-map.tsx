@@ -136,14 +136,18 @@ export function InteractiveMap({
         );
         
         if (currentGroup) {
-          // Check if economic indicators are configured
+          // Start with base SLR layers from the group
+          const isFromSLR = currentGroup.layerIds.includes(layer.id);
+          let isFromEconomicIndicator = false;
+          
+          // Check if economic indicators are configured and add those layers too
           if (currentGroup.economicIndicators && currentGroup.economicIndicators[selectedEconomicIndicator]) {
             const indicator = currentGroup.economicIndicators[selectedEconomicIndicator];
-            isVisible = indicator.layers.includes(layer.id) || (indicator.clusterLayer === layer.id);
-          } else {
-            // Fallback to original behavior
-            isVisible = currentGroup.layerIds.includes(layer.id);
+            isFromEconomicIndicator = indicator.layers.includes(layer.id) || (indicator.clusterLayer === layer.id);
           }
+          
+          // Show layer if it's either from SLR or economic indicator (or both)
+          isVisible = isFromSLR || isFromEconomicIndicator;
         } else {
           isVisible = false;
         }
