@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/language-context";
 
 interface WaveSliderProps {
   scenarios: Array<{
@@ -13,12 +14,28 @@ interface WaveSliderProps {
   className?: string;
 }
 
+// Wave slider translations
+const waveSliderTranslations = {
+  en: {
+    title: "Sea Level Rise Scenarios",
+    current: "Current",
+    none: "None"
+  },
+  de: {
+    title: "Meeresspiegelanstieg-Szenarien",
+    current: "Aktuell",
+    none: "Keine"
+  }
+};
+
 export function WaveSlider({
   scenarios,
   selectedScenario,
   onScenarioChange,
   className,
 }: WaveSliderProps) {
+  const { language } = useLanguage();
+  const t = waveSliderTranslations[language];
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const selectedIndex = scenarios.findIndex((s) => s.id === selectedScenario);
 
@@ -74,7 +91,7 @@ export function WaveSlider({
   return (
     <div className={cn("w-full space-y-3", className)}>
       <div className="text-sm font-medium text-center">
-        Sea Level Rise Scenarios
+        {t.title}
       </div>
 
       <div className="relative bg-stone-100 rounded-lg p-4 overflow-hidden border border-stone-200">
@@ -183,8 +200,8 @@ export function WaveSlider({
         {/* Current scenario label */}
         <div className="relative z-10 mt-3 text-center">
           <div className="text-sm text-stone-800 font-semibold bg-white/80 backdrop-blur-sm rounded-md px-3 py-1 inline-block shadow-sm border border-stone-200">
-            Current:{" "}
-            {scenarios.find((s) => s.id === selectedScenario)?.name || "None"}
+            {t.current}:{" "}
+            {scenarios.find((s) => s.id === selectedScenario)?.name || t.none}
           </div>
         </div>
       </div>

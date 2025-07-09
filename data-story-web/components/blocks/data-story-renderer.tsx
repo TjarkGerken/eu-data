@@ -6,8 +6,9 @@ import { MarkdownBlock } from "./markdown-block";
 import { CalloutBlock } from "./callout-block";
 
 import { VisualizationCard } from "@/components/visualization-card";
+import { ImageCategory, ImageScenario } from "@/lib/blob-config";
 import { InteractiveMap } from "@/components/interactive-map";
-import { ShipMap } from "@/components/ship-map";
+import { InfrastructureMap } from "@/components/infrastructure-map";
 import { AnimatedQuoteBlock } from "./animated-quote-block";
 import { AnimatedStatisticsBlock } from "./animated-statistics-block";
 import { ClimateDashboardBlock } from "./climate-dashboard-block";
@@ -53,34 +54,30 @@ export function DataStoryRenderer({
         );
 
       case "visualization":
-        console.log(block.data.captionEn, block.data.captionDe);
+        console.log("=== VISUALIZATION BLOCK DEBUG ===");
+        console.log("Full block object:", block);
+        console.log("Block title:", block.title);
+        console.log("Block content:", block.content);
+        console.log("Block data.title:", block.data.title);
+        console.log("Block data.content:", block.data.content);
+        console.log("Block data.isOwnSource:", block.data.isOwnSource);
+        console.log("Block data.references:", block.data.references);
+        console.log("Final title passed to component:", block.title || block.data.title || "");
+        console.log("Final content passed to component:", block.content || block.data.content || "");
+        console.log("Final isOwnSource passed to component:", block.data.isOwnSource || false);
+        console.log("===================================");
+        
         return (
           <VisualizationCard
             key={index}
-            title={block.data.title as string}
-            imageCategory={
-              block.data.imageCategory as
-                | "hazard"
-                | "exposition"
-                | "relevance"
-                | "risk"
-                | "risk-clusters"
-                | undefined
-            }
-            imageScenario={
-              block.data.imageScenario as
-                | "current"
-                | "conservative"
-                | "moderate"
-                | "severe"
-                | "none"
-                | "all"
-                | undefined
-            }
+            title={block.title || (typeof block.data.title === 'string' ? block.data.title : '') || ""}
+            imageCategory={block.data.imageCategory as ImageCategory}
+            imageScenario={block.data.imageScenario as ImageScenario}
             imageId={block.data.imageId as string}
-            content={block.data.content as string}
-            type={block.data.type as "map" | "chart" | "trend" | "gauge"}
-            references={block.data.references as string[]}
+            content={block.content || (typeof block.data.content === 'string' ? block.data.content : '') || ""}
+            type={(block.data.type as "chart" | "map" | "trend" | "gauge") || "chart"}
+            references={(block.data.references as string[]) || []}
+            isOwnSource={(block.data.isOwnSource as boolean) || false}
           />
         );
 
@@ -159,9 +156,10 @@ export function DataStoryRenderer({
           />
         );
 
-      case "ship-map":
+      case "infrastructure-map":
+      case "ship-map": // Backward compatibility
         return (
-          <ShipMap
+          <InfrastructureMap
             key={index}
             title={block.title}
             description={block.description}
@@ -172,12 +170,12 @@ export function DataStoryRenderer({
             seamarkOpacity={block.seamarkOpacity || 80}
             enableSeamarkLayer={block.enableSeamarkLayer !== false}
             tileServerOption={block.tileServerOption || "openseamap"}
-            portFocus={block.portFocus || "rotterdam"}
+            infrastructureFocus={block.portFocus || "rotterdam"}
             showControls={block.showControls !== false}
             enableRailwayLayer={block.enableRailwayLayer || false}
             railwayOpacity={block.railwayOpacity || 70}
             railwayStyle={block.railwayStyle || "standard"}
-            showPortFocusControl={block.showPortFocusControl !== false}
+            showInfrastructureFocusControl={block.showPortFocusControl !== false}
             showMapStyleControl={block.showMapStyleControl !== false}
             showSeamarkLayerControl={block.showSeamarkLayerControl !== false}
             showSeamarkOpacityControl={

@@ -1007,8 +1007,10 @@ export function BlockTypeFields({
     "climate-dashboard",
     "interactive-map",
     "ship-map",
+    "infrastructure-map",
     "impact-comparison",
     "kpi-showcase",
+    "visualization",
   ];
 
   const renderLanguageSpecificFields = () => (
@@ -1850,6 +1852,16 @@ export function BlockTypeFields({
                 placeholder="Select visualization image..."
               />
             </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="is-own-source"
+                checked={data?.isOwnSource || false}
+                onCheckedChange={(checked) =>
+                  updateDataField("isOwnSource", checked)
+                }
+              />
+              <Label htmlFor="is-own-source">Mark as Own Source</Label>
+            </div>
             <div className="space-y-1">
               <Label>References</Label>
               <MultiSelectReferences
@@ -2090,11 +2102,11 @@ export function BlockTypeFields({
         );
 
       case "visualization":
-        console.log(data, content, blockType, language);
         return (
           <div className="space-y-4">
+            {renderLanguageSpecificFields()}
             <div className="space-y-1">
-              <Label>Caption</Label>
+              <Label>Caption (Auto-generated from Image)</Label>
               {language === "en" ? (
                 <Textarea readOnly value={data?.captionEn || ""} rows={3} />
               ) : (

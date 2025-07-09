@@ -465,7 +465,7 @@ export const getDefaultBlockData = (blockType: string): any => {
     case "temperature-spiral":
       return { startYear: 1880, endYear: 2030, rotations: 8 };
     case "visualization":
-      return { type: "chart", imageCategory: "risk" };
+      return { type: "chart", imageCategory: "risk", isOwnSource: false };
     case "climate-timeline-minimal":
       return {
         events: [{ year: 2024, title: "", description: "" }],

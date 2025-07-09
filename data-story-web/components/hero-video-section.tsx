@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { Card } from "@/components/ui/card";
-import { Play, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
 import { useDynamicContent } from "@/hooks/use-dynamic-content";
 
@@ -61,28 +61,15 @@ export function HeroVideoSection() {
           className="relative max-w-4xl mx-auto mb-16"
         >
           <Card className="relative aspect-video overflow-hidden border-0 shadow-2xl bg-black/20 backdrop-blur-sm">
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-br from-black/40 to-black/60 flex items-center justify-center"
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="text-center text-white">
-                <motion.div
-                  animate={{
-                    scale: [1, 1.1, 1],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                >
-                  <Play className="h-20 w-20 mx-auto mb-6 opacity-90" />
-                </motion.div>
-                <h3 className="text-3xl font-semibold mb-3">{t.introVideo}</h3>
-                <p className="text-xl opacity-90">{t.videoOverview}</p>
-              </div>
-            </motion.div>
+            <iframe
+              src="https://www.youtube.com/embed/HwzwvXECIFY"
+              title="YouTube video player"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+              className="w-full h-full"
+            />
           </Card>
         </motion.div>
 

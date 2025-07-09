@@ -73,6 +73,7 @@ const AVAILABLE_BLOCK_TYPES = [
   "animated-statistics",
   "interactive-map",
   "ship-map",
+  "infrastructure-map",
   "climate-dashboard",
   "interactive-callout",
   "impact-comparison",
@@ -661,7 +662,15 @@ export default function ContentBlockEditor() {
     setError(null);
 
     try {
-      console.log("Saving block pair:", selectedPair);
+      console.log("=== SAVING BLOCK PAIR ===");
+      console.log("selectedPair:", selectedPair);
+      console.log("English block title:", selectedPair.english?.title);
+      console.log("English block content:", selectedPair.english?.content);
+      console.log("English block data:", selectedPair.english?.data);
+      console.log("German block title:", selectedPair.german?.title);
+      console.log("German block content:", selectedPair.german?.content);
+      console.log("German block data:", selectedPair.german?.data);
+      console.log("========================");
 
       const updates = [];
 

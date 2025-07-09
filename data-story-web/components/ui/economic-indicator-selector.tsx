@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/language-context";
 
 interface EconomicIndicatorSelectorProps {
   indicators: string[];
@@ -10,13 +11,45 @@ interface EconomicIndicatorSelectorProps {
   className?: string;
 }
 
+// Economic indicator translations
+const economicIndicatorTranslations = {
+  en: {
+    title: "Economic Indicators",
+    selected: "Selected",
+    indicators: {
+      Combined: "Combined",
+      Freight: "Freight",
+      Population: "Population", 
+      HRST: "HRST",
+      GDP: "GDP"
+    }
+  },
+  de: {
+    title: "Wirtschaftsindikatoren",
+    selected: "Ausgewählt",
+    indicators: {
+      Combined: "Kombiniert",
+      Freight: "Fracht",
+      Population: "Bevölkerung",
+      HRST: "HRST",
+      GDP: "BIP"
+    }
+  }
+};
+
 export function EconomicIndicatorSelector({
   indicators,
   selectedIndicator,
   onIndicatorChange,
   className,
 }: EconomicIndicatorSelectorProps) {
+  const { language } = useLanguage();
+  const t = economicIndicatorTranslations[language];
   const [hoveredIndicator, setHoveredIndicator] = useState<string | null>(null);
+
+  const getTranslatedIndicator = (indicator: string) => {
+    return t.indicators[indicator as keyof typeof t.indicators] || indicator;
+  };
 
   const getIndicatorStyles = (indicator: string) => {
     const colorMap = {
@@ -73,7 +106,7 @@ export function EconomicIndicatorSelector({
   return (
     <div className={cn("w-full space-y-3", className)}>
       <div className="text-sm font-medium text-center">
-        Economic Indicators
+        {t.title}
       </div>
 
       <div className="relative bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-4 border border-slate-200">
@@ -130,7 +163,7 @@ export function EconomicIndicatorSelector({
                 <div className="space-y-1 text-center">
                   <div className="text-lg">{styles.icon}</div>
                   <div className="font-semibold text-xs leading-tight">
-                    {indicator}
+                    {getTranslatedIndicator(indicator)}
                   </div>
                 </div>
 
@@ -146,7 +179,7 @@ export function EconomicIndicatorSelector({
         {/* Current selection label */}
         <div className="relative z-10 mt-3 text-center">
           <div className="text-sm text-slate-800 font-semibold bg-white/80 backdrop-blur-sm rounded-md px-3 py-1 inline-block shadow-sm border border-slate-200">
-            Selected: {selectedIndicator}
+            {t.selected}: {getTranslatedIndicator(selectedIndicator)}
           </div>
         </div>
       </div>

@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, TrendingUp, Globe, Thermometer } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
+import { useGlobalCitation } from "@/contexts/global-citation-context";
 import ClimateImage from "@/components/climate-image";
 import { ImageCategory, ImageScenario } from "@/lib/blob-config";
 import { useState } from "react";
@@ -23,6 +24,7 @@ interface VisualizationCardProps {
   imageCategory?: ImageCategory;
   imageScenario?: ImageScenario;
   imageId?: string;
+  isOwnSource?: boolean;
 }
 
 const iconMap = {
@@ -41,11 +43,26 @@ export function VisualizationCard({
   imageCategory,
   imageScenario,
   imageId,
+  isOwnSource = false,
 }: VisualizationCardProps) {
   const Icon = iconMap[type];
   const { t, language } = useLanguage();
+  const { globalCitationData } = useGlobalCitation();
   const [captionEn, setCaptionEn] = useState<string | undefined>(undefined);
   const [captionDe, setCaptionDe] = useState<string | undefined>(undefined);
+
+  const handleCitationClick = (referenceId: string) => {
+    const event = new CustomEvent('highlightReference', { detail: referenceId });
+    window.dispatchEvent(event);
+  };
+
+  const resolveReferenceTitle = (refId: string) => {
+    if (globalCitationData && globalCitationData.orderedReferences) {
+      const ref = globalCitationData.orderedReferences.find(r => r.id === refId);
+      return ref ? ref.title : refId;
+    }
+    return refId;
+  };
 
   return (
     <Card className="w-full mb-8">
@@ -112,15 +129,28 @@ export function VisualizationCard({
         <div className="border-t pt-4">
           <h4 className="text-sm font-medium mb-2">{t.referencedSources}</h4>
           <div className="flex flex-wrap gap-2">
-            {references.map((ref, index) => (
+            {isOwnSource && (
               <Badge
-                key={index}
-                variant="outline"
-                className="text-sm cursor-pointer hover:bg-[#2d5a3d]/10"
+                variant="default"
+                className="text-sm bg-[#2d5a3d] text-white"
               >
-                [{ref}]
+                {language === "de" ? "Eigene Darstellung" : "Own Source"}
               </Badge>
-            ))}
+            )}
+            {references.map((ref, index) => {
+              const referenceTitle = resolveReferenceTitle(ref);
+              return (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className="text-sm cursor-pointer hover:bg-[#2d5a3d]/10 transition-colors"
+                  onClick={() => handleCitationClick(ref)}
+                  title={`View reference: ${referenceTitle}`}
+                >
+                  {referenceTitle}
+                </Badge>
+              );
+            })}
           </div>
         </div>
       </CardContent>

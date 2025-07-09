@@ -12,6 +12,7 @@ import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
 import { WaveSlider } from "@/components/ui/wave-slider";
 import { EconomicIndicatorSelector } from "@/components/ui/economic-indicator-selector";
 import { createGradientFromStops } from "@/lib/color-schemes";
+import { useLanguage } from "@/contexts/language-context";
 import dynamic from "next/dynamic";
 
 const LeafletMap = dynamic(() => import("./map/leaflet-map"), {
@@ -60,9 +61,35 @@ interface LayerState {
   zIndex?: number; // Layer rendering order - optional since some layers may not have explicit z-index
 }
 
+// Interactive map translations
+const interactiveMapTranslations = {
+  en: {
+    title: "Interactive Climate Map",
+    description: "Explore climate data layers",
+    loadingTitle: "Loading Interactive Map...",
+    loadingText: "Loading map tiles...",
+    legend: "Legend",
+    layerControls: "Layer Controls",
+    opacity: "Opacity",
+    range: "Range",
+    zIndex: "z-index"
+  },
+  de: {
+    title: "Interaktive Klimakarte",
+    description: "Erkunden Sie Klimadatenschichten",
+    loadingTitle: "Interaktive Karte wird geladen...",
+    loadingText: "Kartenkacheln werden geladen...",
+    legend: "Legende",
+    layerControls: "Ebenen-Steuerung",
+    opacity: "Deckkraft",
+    range: "Bereich",
+    zIndex: "Z-Index"
+  }
+};
+
 export function InteractiveMap({
-  title = "Interactive Climate Map",
-  description = "Explore climate data layers",
+  title,
+  description,
   selectedLayers = [],
   height = "600px",
   enableLayerControls = true,
@@ -79,6 +106,9 @@ export function InteractiveMap({
   enableClusterGroups = false,
   clusterGroups = [],
 }: InteractiveMapProps) {
+  const { language } = useLanguage();
+  const t = interactiveMapTranslations[language];
+  
   const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
     []
   );
@@ -205,7 +235,7 @@ export function InteractiveMap({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5" />
-            Loading Interactive Map...
+            {t.loadingTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -216,7 +246,7 @@ export function InteractiveMap({
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading map tiles...</p>
+                <p className="text-gray-600">{t.loadingText}</p>
               </div>
             </div>
           </div>
@@ -232,10 +262,10 @@ export function InteractiveMap({
           <div>
             <CardTitle className="flex items-center gap-2">
               <Layers className="h-5 w-5" />
-              {title}
+              {title || t.title}
             </CardTitle>
-            {description && (
-              <p className="text-muted-foreground mt-2">{description}</p>
+            {(description || t.description) && (
+              <p className="text-muted-foreground mt-2">{description || t.description}</p>
             )}
           </div>
           {enableLayerControls && (
@@ -268,7 +298,7 @@ export function InteractiveMap({
               />
 
               <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg z-[1000]">
-                <h4 className="text-sm font-medium mb-2">Legend</h4>
+                <h4 className="text-sm font-medium mb-2">{t.legend}</h4>
                 <div className="space-y-1">
                   {visibleLayers.map((layer) => (
                     <div
@@ -347,7 +377,7 @@ export function InteractiveMap({
             <div className="w-full">
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Layer Controls</CardTitle>
+                  <CardTitle className="text-lg">{t.layerControls}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -398,11 +428,11 @@ export function InteractiveMap({
                               {layer.metadata.format}
                             </Badge>
                             <Badge variant="outline" className="text-xs">
-                              z-index:{" "}
+                              {t.zIndex}:{" "}
                               {layer.zIndex ?? layer.metadata.zIndex ?? 50}
                             </Badge>
                             <span className="text-xs text-muted-foreground">
-                              Range: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
+                              {t.range}: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
                               {layer.metadata.valueRange[1].toFixed(2)}
                             </span>
                           </div>
@@ -410,7 +440,7 @@ export function InteractiveMap({
                           {layer.visible && showOpacityControls && (
                             <div className="space-y-2">
                               <Label className="text-xs">
-                                Opacity: {Math.round(layer.opacity * 100)}%
+                                {t.opacity}: {Math.round(layer.opacity * 100)}%
                               </Label>
                               <Slider
                                 value={[layer.opacity * 100]}
@@ -431,37 +461,6 @@ export function InteractiveMap({
             </div>
           )}
         </div>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {visibleLayers.length}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Active Layers
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600">
-                  {layerStates.length}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Total Layers
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-orange-600">
-                  {enableLayerControls ? "ON" : "OFF"}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Layer Controls
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </CardContent>
     </Card>
   );

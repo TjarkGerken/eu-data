@@ -510,20 +510,45 @@ async function extractVectorFeaturesFromMBTiles(
 
           // Extract features from this layer
           for (let i = 0; i < layer.length; i++) {
-            const feature = layer.feature(i);
-            const geom = feature.toGeoJSON(
-              tileRow.tile_column || tileRow.x || 0,
-              tileRow.tile_row || tileRow.y || 0,
-              tileRow.zoom_level || tileRow.z || 0
-            );
+            try {
+              const feature = layer.feature(i);
+              const geom = feature.toGeoJSON(
+                tileRow.tile_column || tileRow.x || 0,
+                tileRow.tile_row || tileRow.y || 0,
+                tileRow.zoom_level || tileRow.z || 0
+              );
 
-            if (geom && geom.geometry) {
-              allFeatures.push(geom as GeoJSON.Feature);
+              if (geom && geom.geometry) {
+                allFeatures.push(geom as GeoJSON.Feature);
+              }
+            } catch (featureError) {
+              // Handle individual feature extraction errors
+              if (featureError instanceof Error) {
+                if (featureError.message.includes("Unimplemented type")) {
+                  console.warn(`Skipping feature ${i} in layer ${layerName}: Unsupported geometry type (${featureError.message})`);
+                } else {
+                  console.warn(`Failed to extract feature ${i} in layer ${layerName}:`, featureError.message);
+                }
+              } else {
+                console.warn(`Failed to extract feature ${i} in layer ${layerName}:`, featureError);
+              }
+              // Continue processing other features
+              continue;
             }
           }
         }
       } catch (error) {
-        console.warn("Failed to decode vector tile:", error);
+        if (error instanceof Error) {
+          if (error.message.includes("Unimplemented type")) {
+            console.warn(`Skipping tile due to unsupported geometry type: ${error.message}`);
+          } else {
+            console.warn("Failed to decode vector tile:", error.message);
+          }
+        } else {
+          console.warn("Failed to decode vector tile:", error);
+        }
+        // Continue processing other tiles
+        continue;
       }
     }
 

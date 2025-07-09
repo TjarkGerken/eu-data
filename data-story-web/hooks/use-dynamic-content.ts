@@ -58,17 +58,11 @@ export function useDynamicContent() {
           console.log("Transforming visualization block:", block);
           return {
             type: "visualization",
+            title: block.title,
+            content: block.content,
             data: {
-              title: block.data.title || "",
-              description: block.data.description || "",
-              content: block.data.content || "",
-              type: block.data.type || "map",
-              captionDe: block.data.captionDe || "",
-              captionEn: block.data.captionEn || "",
-              imageCategory: block.data.imageCategory || "",
-              imageScenario: block.data.imageScenario || "",
-              imageId: block.data.imageId || "",
-              references: block.references?.map((ref: any) => ref.id) || [],
+              ...block.data, // Preserve all original data fields including isOwnSource
+              references: block.data.references || [], // Use data.references, not block.references
             },
           };
 
