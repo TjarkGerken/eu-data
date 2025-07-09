@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageDropdown } from "@/components/image-dropdown";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
+import { MultiSelectLayers } from "@/components/ui/multi-select-layers";
 import { CitationInsertionButton } from "@/components/admin/citation-insertion-button";
 import { Trash2, Layers, Settings, Plus } from "lucide-react";
 import { getFieldError, type ValidationError } from "@/lib/validation";
@@ -435,6 +436,12 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
                 id: string;
                 name: string;
                 layerIds: string[];
+                economicIndicators?: {
+                  [key: string]: {
+                    layers: string[];
+                    clusterLayer?: string;
+                  };
+                };
               }>) || []
             ).map((group, index) => (
               <Card key={index}>
@@ -536,63 +543,44 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
                       Economic Indicators Configuration
                     </Label>
                     <div className="text-xs text-muted-foreground mb-3">
-                      Configure layer assignments for each economic indicator. If left empty, the scenario will use the default layer selection above.
+                      Configure layer assignments for each economic indicator. Use the multi-select with search to easily find and group layers by economic indicator.
                     </div>
                     
-                    {["Combined", "Freight", "Population", "HRST", "GDP"].map((indicator) => (
-                      <div key={indicator} className="mb-4 p-3 bg-gray-50 rounded">
-                        <Label className="text-xs font-medium mb-2 block">
-                          {indicator} Indicator
-                        </Label>
-                        
-                        <div className="grid grid-cols-1 gap-1 max-h-24 overflow-y-auto">
-                          {availableLayers.map((layer) => {
-                            const indicatorLayers = group.economicIndicators?.[indicator]?.layers || [];
-                            const isInIndicator = indicatorLayers.includes(layer.id);
-                            
-                            return (
-                              <div
-                                key={layer.id}
-                                className={`flex items-center justify-between p-1 rounded cursor-pointer text-xs ${
-                                  isInIndicator
-                                    ? "bg-blue-100 border border-blue-200"
-                                    : "bg-white hover:bg-gray-50"
-                                }`}
-                                onClick={() => {
-                                  const newGroups = [...(data?.clusterGroups || [])];
-                                  const currentIndicators = newGroups[index].economicIndicators || {};
-                                  const currentIndicator = currentIndicators[indicator] || { layers: [] };
-                                  
-                                  const newLayers = isInIndicator
-                                    ? currentIndicator.layers.filter((id) => id !== layer.id)
-                                    : [...currentIndicator.layers, layer.id];
-                                  
-                                  newGroups[index] = {
-                                    ...newGroups[index],
-                                    economicIndicators: {
-                                      ...currentIndicators,
-                                      [indicator]: {
-                                        ...currentIndicator,
-                                        layers: newLayers,
-                                      },
-                                    },
-                                  };
-                                  
-                                  updateDataField("clusterGroups", newGroups);
-                                }}
-                              >
-                                <span>{layer.name}</span>
-                                {isInIndicator && (
-                                  <Badge variant="default" className="text-xs px-1 py-0">
-                                    ✓
-                                  </Badge>
-                                )}
-                              </div>
-                            );
-                          })}
+                    {["Combined", "Freight", "Population", "HRST", "GDP"].map((indicator) => {
+                      const currentIndicatorLayers = group.economicIndicators?.[indicator]?.layers || [];
+                      
+                      return (
+                        <div key={indicator} className="mb-4 p-3 bg-gray-50 rounded">
+                          <Label className="text-xs font-medium mb-2 block">
+                            {indicator} Indicator
+                          </Label>
+                          
+                          <MultiSelectLayers
+                            layers={availableLayers}
+                            selectedLayerIds={currentIndicatorLayers}
+                            onSelectionChange={(newLayerIds) => {
+                              const newGroups = [...(data?.clusterGroups || [])];
+                              const currentIndicators = newGroups[index].economicIndicators || {};
+                              
+                              newGroups[index] = {
+                                ...newGroups[index],
+                                economicIndicators: {
+                                  ...currentIndicators,
+                                  [indicator]: {
+                                    layers: newLayerIds,
+                                  },
+                                },
+                              };
+                              
+                              updateDataField("clusterGroups", newGroups);
+                            }}
+                            placeholder={`Select layers for ${indicator} indicator...`}
+                            className="text-xs"
+                            groupByEconomicIndicator={true}
+                          />
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
