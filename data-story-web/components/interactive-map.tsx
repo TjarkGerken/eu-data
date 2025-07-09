@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Layers, Download, Settings } from "lucide-react";
 import { mapTileService, MapLayerMetadata } from "@/lib/map-tile-service";
 import { WaveSlider } from "@/components/ui/wave-slider";
+import { EconomicIndicatorSelector } from "@/components/ui/economic-indicator-selector";
 import { createGradientFromStops } from "@/lib/color-schemes";
 import dynamic from "next/dynamic";
 
@@ -42,6 +43,12 @@ interface InteractiveMapProps {
     id: string;
     name: string;
     layerIds: string[];
+    economicIndicators?: {
+      [key: string]: {
+        layers: string[];
+        clusterLayer?: string;
+      };
+    };
   }>;
 }
 
@@ -81,6 +88,7 @@ export function InteractiveMap({
   const [selectedScenario, setSelectedScenario] = useState<string>(
     clusterGroups?.[0]?.id || ""
   );
+  const [selectedEconomicIndicator, setSelectedEconomicIndicator] = useState<string>("Combined");
 
   const initializeLayerStates = useCallback(() => {
     if (!Array.isArray(availableLayers)) {
@@ -96,9 +104,19 @@ export function InteractiveMap({
         const currentGroup = clusterGroups.find(
           (group) => group.id === selectedScenario
         );
-        isVisible = currentGroup
-          ? currentGroup.layerIds.includes(layer.id)
-          : false;
+        
+        if (currentGroup) {
+          // Check if economic indicators are configured
+          if (currentGroup.economicIndicators && currentGroup.economicIndicators[selectedEconomicIndicator]) {
+            const indicator = currentGroup.economicIndicators[selectedEconomicIndicator];
+            isVisible = indicator.layers.includes(layer.id) || (indicator.clusterLayer === layer.id);
+          } else {
+            // Fallback to original behavior
+            isVisible = currentGroup.layerIds.includes(layer.id);
+          }
+        } else {
+          isVisible = false;
+        }
       } else {
         // Original behavior: show layers from selectedLayers prop
         isVisible = selectedLayers.includes(layer.id);
@@ -122,6 +140,7 @@ export function InteractiveMap({
     enableClusterGroups,
     clusterGroups,
     selectedScenario,
+    selectedEconomicIndicator,
   ]);
 
   useEffect(() => {
@@ -171,6 +190,11 @@ export function InteractiveMap({
   const handleScenarioChange = (scenarioId: string) => {
     setSelectedScenario(scenarioId);
     // Layer states will be updated automatically via the useEffect that depends on selectedScenario
+  };
+
+  const handleEconomicIndicatorChange = (indicator: string) => {
+    setSelectedEconomicIndicator(indicator);
+    // Layer states will be updated automatically via the useEffect that depends on selectedEconomicIndicator
   };
 
   const visibleLayers = layerStates.filter((layer) => layer.visible);
@@ -271,6 +295,39 @@ export function InteractiveMap({
               </div>
             </div>
           </div>
+
+          {/* Economic Indicator Selector */}
+          {enableClusterGroups && clusterGroups && clusterGroups.length > 0 && (
+            (() => {
+              // Check if any scenario has economic indicators configured
+              const hasAnyEconomicIndicators = clusterGroups.some(group => 
+                group.economicIndicators && Object.keys(group.economicIndicators).length > 0
+              );
+              
+              if (hasAnyEconomicIndicators) {
+                // Get all unique economic indicators across all scenarios
+                const allIndicators = new Set<string>();
+                clusterGroups.forEach(group => {
+                  if (group.economicIndicators) {
+                    Object.keys(group.economicIndicators).forEach(indicator => {
+                      allIndicators.add(indicator);
+                    });
+                  }
+                });
+                
+                return (
+                  <div className="w-full">
+                    <EconomicIndicatorSelector
+                      indicators={Array.from(allIndicators)}
+                      selectedIndicator={selectedEconomicIndicator}
+                      onIndicatorChange={handleEconomicIndicatorChange}
+                    />
+                  </div>
+                );
+              }
+              return null;
+            })()
+          )}
 
           {/* SLR Scenario Slider */}
           {enableClusterGroups && clusterGroups && clusterGroups.length > 0 && (

@@ -58,6 +58,12 @@ interface MapLayerData {
     id: string;
     name: string;
     layerIds: string[];
+    economicIndicators?: {
+      [key: string]: {
+        layers: string[];
+        clusterLayer?: string;
+      };
+    };
   }>;
 }
 
@@ -522,6 +528,71 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* Economic Indicators Section */}
+                  <div className="border-t pt-4 mt-4">
+                    <Label className="text-xs mb-2 block">
+                      Economic Indicators Configuration
+                    </Label>
+                    <div className="text-xs text-muted-foreground mb-3">
+                      Configure layer assignments for each economic indicator. If left empty, the scenario will use the default layer selection above.
+                    </div>
+                    
+                    {["Combined", "Freight", "Population", "HRST", "GDP"].map((indicator) => (
+                      <div key={indicator} className="mb-4 p-3 bg-gray-50 rounded">
+                        <Label className="text-xs font-medium mb-2 block">
+                          {indicator} Indicator
+                        </Label>
+                        
+                        <div className="grid grid-cols-1 gap-1 max-h-24 overflow-y-auto">
+                          {availableLayers.map((layer) => {
+                            const indicatorLayers = group.economicIndicators?.[indicator]?.layers || [];
+                            const isInIndicator = indicatorLayers.includes(layer.id);
+                            
+                            return (
+                              <div
+                                key={layer.id}
+                                className={`flex items-center justify-between p-1 rounded cursor-pointer text-xs ${
+                                  isInIndicator
+                                    ? "bg-blue-100 border border-blue-200"
+                                    : "bg-white hover:bg-gray-50"
+                                }`}
+                                onClick={() => {
+                                  const newGroups = [...(data?.clusterGroups || [])];
+                                  const currentIndicators = newGroups[index].economicIndicators || {};
+                                  const currentIndicator = currentIndicators[indicator] || { layers: [] };
+                                  
+                                  const newLayers = isInIndicator
+                                    ? currentIndicator.layers.filter((id) => id !== layer.id)
+                                    : [...currentIndicator.layers, layer.id];
+                                  
+                                  newGroups[index] = {
+                                    ...newGroups[index],
+                                    economicIndicators: {
+                                      ...currentIndicators,
+                                      [indicator]: {
+                                        ...currentIndicator,
+                                        layers: newLayers,
+                                      },
+                                    },
+                                  };
+                                  
+                                  updateDataField("clusterGroups", newGroups);
+                                }}
+                              >
+                                <span>{layer.name}</span>
+                                {isInIndicator && (
+                                  <Badge variant="default" className="text-xs px-1 py-0">
+                                    ✓
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
