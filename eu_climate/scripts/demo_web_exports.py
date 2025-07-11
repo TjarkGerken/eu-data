@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-"""
-Demo Web Export Script
-====================
-
-Demonstrates web export functionality with fallback handling
-for Windows compatibility issues.
-"""
-
 import os
 import sys
 import platform

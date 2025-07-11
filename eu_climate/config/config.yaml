@@ -1,42 +1,72 @@
 data:
-  auto_download: true
-  huggingface_repo: "TjarkGerken/eu-data"
+  # =================================================================
+  # DATA MANAGEMENT
+  # =================================================================
+  auto_download: true # Automatically download missing data from Hugging Face
+  huggingface_repo: "TjarkGerken/eu-data" # Repository containing the input datasets
+
+  # Directory structure for data organization
   data_paths:
-    local_data_dir: "data"
-    source_data_dir: "source"
-    local_output_dir: "output"
+    local_data_dir: "data" # Root directory for all data (relative to eu_climate/)
+    source_data_dir: "source" # Subdirectory for source/input data
+    local_output_dir: "output" # Subdirectory for processed output data
+  # =================================================================
+  # INPUT DATA FILE PATHS
+  # =================================================================
+  # All paths are relative to the source data directory
   file_paths:
-    dem_file: "ClippedCopernicusHeightProfile.tif"
-    ghs_built_c_file: "GHS_BUILT_C/GHS_BUILT_C.vrt"
-    ghs_built_v_file: "Clipped_GHS_Built-V-100m/Clipped_GHS_Built-V-100m.vrt"
-    population_2025_file: "Pop/POP_GHS_2025.tif"
+    # Core geospatial data
+    dem_file: "ClippedCopernicusHeightProfile.tif" # Digital Elevation Model
+    population_2025_file: "Pop/POP_GHS_2025.tif" # Population density (2025 projection)
+
+    # Built environment data (Global Human Settlement Layer)
+    ghs_built_c_file: "GHS_BUILT_C/GHS_BUILT_C.vrt" # Built-up area coverage
+    ghs_built_v_file: "Clipped_GHS_Built-V-100m/Clipped_GHS_Built-V-100m.vrt" # Built-up volume
+    land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt" # Land mass delineation
+
+    # Administrative boundaries (NUTS - Nomenclature of Territorial Units)
     nuts_files:
-      l0: "NUTS-L0-NL.shp"
-      l1: "NUTS-L1-NL.shp"
-      l2: "NUTS-L2-NL.shp"
-      l3: "NUTS-L3-NL.shp"
-    river_polygons_file: "Hydrographie-Watercourse/Watercourse-Polygon.shp"
-    land_mass_file: "Clipped_GHS_LAND-10m_Moll/Clipped_GHS_LAND-10m_Moll.vrt"
-    hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv"
-    ghs_duc_file: "degree_of_urbanisation/GHS_DUC_NL_Extract.xlsx"
-    gadm_l2_file: "NL-GADM-L2/gadm41_NLD_2.shp"
-    port_file: "Port/PORT_RG_2025_Updated.shp"
-    zeevart_freight_file: "Port/Zeevaart__gewicht__haven__soort_lading_19062025_160850.xlsx"
-    port_mapping_file: "Port/port_id_category_lookup.xlsx"
-    coastline_file: "EEA_Coastline_Polyline_Shape/Europe_coastline_raw_rev2017.shp"
-    nl_forecast_file: "NL_Riskzone/nz_riskzone_ror.gml"
-    electricity_consumption_file: "Electricity/Electricity.vrt"
-    vierkant_stats_file: "Vierkantstatistieken/cbs_vk100_2023.gpkg"
+      l0: "NUTS-L0-NL.shp" # Country level
+      l1: "NUTS-L1-NL.shp" # Major socio-economic regions
+      l2: "NUTS-L2-NL.shp" # Basic regions for policy application
+      l3: "NUTS-L3-NL.shp" # Small regions for specific diagnoses
+
+    # Geographic features and hazards
+    river_polygons_file: "Hydrographie-Watercourse/Watercourse-Polygon.shp" # River/water body polygons
+    coastline_file: "EEA_Coastline_Polyline_Shape/Europe_coastline_raw_rev2017.shp" # Coastline data
+    nl_forecast_file: "NL_Riskzone/nz_riskzone_ror.gml" # Netherlands risk forecast zones
+
+    # Economic and infrastructure data
+    electricity_consumption_file: "Electricity/Electricity.vrt" # Electricity consumption patterns
+    vierkant_stats_file: "Vierkantstatistieken/cbs_vk100_2023.gpkg" # Dutch census statistics
+    hrst_file: "L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv" # Human Resources in Science & Technology
+
+    # Urban development and planning data
+    ghs_duc_file: "degree_of_urbanisation/GHS_DUC_NL_Extract.xlsx" # Degree of Urbanization Classification
+    gadm_l2_file: "NL-GADM-L2/gadm41_NLD_2.shp" # Global Administrative Areas (Level 2)
+
+    # Port and freight data
+    port_file: "Port/PORT_RG_2025_Updated.shp" # Port locations and classifications
+    zeevart_freight_file: "Port/Zeevaart__gewicht__haven__soort_lading_19062025_160850.xlsx" # Maritime freight data
+    port_mapping_file: "Port/port_id_category_lookup.xlsx" # Port ID to category mapping
+  # =================================================================
+  # PROCESSING PARAMETERS
+  # =================================================================
+  # Configuration for raster data processing and coordinate transformations
   processing:
-    resampling_method: "bilinear" # Valid values: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, gauss, max, min, med, q1, q3
-    target_resolution: 30.0
-    # GHS data native resolution (3 arcsecond, varies by latitude)
-    ghs_native_resolution_arcsec: 3.0
-    ghs_native_resolution_meters_equator: 92.8 # At equator
-    ghs_native_resolution_meters_netherlands: 57.1 # Longitude at 52°N
-    ghs_latitude_resolution_meters: 92.8 # Latitude resolution (constant)
-    smoothing_sigma: 1.0
-    target_crs: "EPSG:3035"
+    # Resampling method for raster operations
+    # Options: nearest, bilinear, cubic, cubic_spline, lanczos, average, mode, max, min, med, q1, q3
+    resampling_method: "bilinear" # Bilinear interpolation (good balance of speed/quality)
+    target_resolution: 30.0 # Target pixel resolution in meters
+    target_crs: "EPSG:3035" # Target coordinate reference system (ETRS89-extended / LAEA Europe)
+    smoothing_sigma: 1.0 # Gaussian smoothing parameter for data processing
+
+    # GHS (Global Human Settlement) data native resolution parameters
+    # These vary by latitude due to the geographic coordinate system
+    ghs_native_resolution_arcsec: 3.0 # Native resolution in arcseconds
+    ghs_native_resolution_meters_equator: 92.8 # Resolution at equator (meters)
+    ghs_native_resolution_meters_netherlands: 57.1 # Resolution at 52°N Netherlands (meters)
+    ghs_latitude_resolution_meters: 92.8 # Latitude resolution (constant globally)
   hazard:
     river_zones:
       high_risk_distance_m: 50

@@ -1,18 +1,3 @@
-"""
-Unified Visualization Utilities for EU Climate Risk Assessment
-============================================================
-
-This module provides standardized visualization functions and styling
-that ensure consistency across all risk layers (Hazard, Exposition, Relevance).
-
-Key Features:
-- Scientific publication-ready styling
-- Consistent color schemes and layouts
-- Standardized NUTS boundary overlays
-- Unified coordinate reference handling
-- Minimalistic, professional design
-"""
-
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap, BoundaryNorm
 import numpy as np

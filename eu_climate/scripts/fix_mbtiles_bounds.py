@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-"""
-Fix MBTiles Bounds Script - Enhanced with CRS Transformation
-===========================================================
-
-This script regenerates MBTiles files with proper CRS transformation and
-optimization to fix the coordinate system issues causing visualization problems.
-
-Key Fixes:
-- Proper EPSG:3035 to WGS84 transformation
-- Optimized file size vs accuracy tradeoff
-- Validation of transformation results
-- Size monitoring (target: <50MB per file)
-
-Usage:
-    python scripts/fix_mbtiles_bounds.py
-"""
-
 import sys
 from pathlib import Path
 import logging

@@ -1,3 +1,54 @@
+"""
+Data Loading and Management Utilities for EU Climate Risk Assessment
+===================================================================
+
+This module provides comprehensive data management capabilities for the EU Climate Risk Assessment system,
+including automated data downloading, validation, integrity checking, and specialized population data processing.
+
+Key Features:
+- Automated data downloading from Hugging Face repositories
+- Environment variable validation and configuration management
+- Data integrity checking with remote synchronization
+- Specialized population data loading with resolution adaptation
+- Geographic study area masking and validation
+- Population total validation against ground truth data
+- Comprehensive error handling and logging
+
+The module handles the complexity of data management while providing a simple interface for ensuring
+data availability and integrity across the entire risk assessment workflow.
+
+Architecture:
+- Environment variable validation and loading
+- Hugging Face repository integration for data synchronization
+- Specialized population data processing with CRS transformations
+- Geographic masking using NUTS boundaries and land mass data
+- Statistical validation against known population totals
+- Comprehensive logging and error reporting
+
+Data Sources:
+- Hugging Face repositories for automated data distribution
+- Global Human Settlement (GHS) population data for 2025 projections
+- NUTS Level 3 boundaries for geographic study area definition
+- Land mass data for precise geographic masking
+- Ground truth population statistics for validation
+
+Usage:
+    from eu_climate.utils.data_loading import ensure_data_availability, load_population_2025_with_validation
+    
+    # Ensure all required data is available
+    if ensure_data_availability():
+        print("Data ready for analysis")
+    
+    # Load population data with validation
+    pop_data, metadata, validation_passed = load_population_2025_with_validation(
+        config, 
+        apply_study_area_mask=True
+    )
+    
+    if validation_passed:
+        print("Population data validated successfully")
+"""
+
 from datetime import datetime
 import os
 from pathlib import Path
@@ -15,12 +66,29 @@ from eu_climate.utils.conversion import RasterTransformer
 
 logger = logging.getLogger(__name__)
 
+# Required environment variables for data operations
 REQUIRED_ENV_VARS = {
-    'HF_API_TOKEN': 'Hugging Face API token for data upload'
+    'HF_API_TOKEN': 'Hugging Face API token for data upload and authenticated repository access'
 }
 
 def validate_env_vars() -> None:
-    """Validate that all required environment variables are set."""
+    """
+    Validate that all required environment variables are set for data operations.
+    
+    This function checks for the presence of required environment variables and loads
+    them from .env files if available. It provides detailed warnings for missing
+    variables while allowing the system to continue with limited functionality.
+    
+    Environment Variables:
+        HF_API_TOKEN: Hugging Face API token for repository operations
+    
+    Environment File Locations:
+        - {project_root}/eu_climate/config/.env
+        
+    Note:
+        Missing environment variables will result in warnings but won't prevent
+        the system from functioning. Some features may be limited without tokens.
+    """
     possible_env_paths = [
         Path(__file__).parent.parent / "config" / ".env",
     ]
@@ -48,13 +116,40 @@ def validate_env_vars() -> None:
         logger.warning("Some functionality may be limited.")
 
 def get_config() -> ProjectConfig:
+    """
+    Get the project configuration instance.
+    
+    Returns:
+        ProjectConfig: Configured project settings including data paths,
+                      repository settings, and processing parameters
+    """
     config = ProjectConfig()
     return config
 
 
-
 def download_data() -> bool:
-    """Download data from Hugging Face if auto_download is enabled."""
+    """
+    Download data from Hugging Face repository if auto_download is enabled.
+    
+    This function handles the complete data download workflow including:
+    - Configuration validation and environment setup
+    - Remote repository cleanup (if authenticated)
+    - Data download with resume capability
+    - Validation of downloaded data integrity
+    
+    The function respects the auto_download configuration setting and will
+    provide guidance for manual download if automatic download is disabled.
+    
+    Returns:
+        bool: True if data was successfully downloaded and validated,
+              False if download failed or is disabled
+              
+    Note:
+        - Requires HF_API_TOKEN environment variable for authenticated operations
+        - Supports resume download for interrupted transfers
+        - Validates downloaded data against expected directory structure
+        - Provides detailed logging for troubleshooting
+    """
     config = get_config()
     
     if not config.config.get('auto_download', False):
@@ -154,7 +249,25 @@ def download_data() -> bool:
 
 
 def check_data_availability() -> bool:
-    """Check if required data directories and key files exist."""
+    """
+    Check if required data directories and key files exist locally.
+    
+    This function performs a comprehensive check of the local data directory
+    to ensure all required files are present for risk assessment processing.
+    
+    Returns:
+        bool: True if all required data files are found locally,
+              False if any required files are missing
+              
+    Checks:
+        - Data directory exists and is accessible
+        - Key data files (DEM, boundaries, etc.) are present
+        - File integrity and basic validation
+        
+    Note:
+        This function only checks for file existence, not content validity.
+        Use check_data_integrity() for comprehensive validation.
+    """
     config = get_config()
     
     data_dir = config.data_dir
@@ -179,7 +292,31 @@ def check_data_availability() -> bool:
     return True
 
 def upload_data() -> bool:
-    """Upload all contents from the huggingface folder to Hugging Face repository."""
+    """
+    Upload all contents from the huggingface folder to Hugging Face repository.
+    
+    This function handles the complete data upload workflow for sharing processed
+    results and datasets with the research community via Hugging Face repositories.
+    
+    Returns:
+        bool: True if upload was successful, False if upload failed or is disabled
+        
+    Requirements:
+        - HF_API_TOKEN environment variable must be set
+        - Upload must be enabled in configuration
+        - Hugging Face folder must exist and contain data to upload
+        
+    Upload Process:
+        1. Validates environment and configuration
+        2. Checks for valid API token
+        3. Uploads directory contents to repository
+        4. Provides detailed logging of upload progress
+        
+    Note:
+        - Requires authenticated Hugging Face account
+        - Respects configuration upload.enabled setting
+        - Uploads all subdirectories except temporary files
+    """
     # First, ensure environment variables are loaded
     validate_env_vars()
     
@@ -224,7 +361,27 @@ def upload_data() -> bool:
         return False
 
 def ensure_data_availability() -> bool:
-    """Main function to ensure data is available."""
+    """
+    Main function to ensure data is available for risk assessment processing.
+    
+    This is the primary entry point for data availability management. It checks
+    for local data availability and automatically downloads data if needed and
+    configured to do so.
+    
+    Returns:
+        bool: True if data is available and ready for processing,
+              False if data is not available and cannot be obtained
+              
+    Workflow:
+        1. Check if required data files exist locally
+        2. If missing, attempt automatic download (if enabled)
+        3. Provide user guidance if automatic download fails
+        4. Return availability status
+        
+    Note:
+        This function should be called before any risk assessment processing
+        to ensure all required data is available and accessible.
+    """
     if not check_data_availability():
         logger.info("Required data not found locally.")
         if not download_data():
@@ -234,7 +391,32 @@ def ensure_data_availability() -> bool:
 
 
 def check_data_integrity(config: ProjectConfig) -> None:
-    """Check data integrity and sync with remote repository if needed."""
+    """
+    Check data integrity and sync with remote repository if needed.
+    
+    This function performs comprehensive data integrity checking including:
+    - Local file validation against expected structure
+    - Remote repository synchronization checks
+    - Automatic data updates when configured
+    - Age-based data freshness validation
+    
+    Args:
+        config: ProjectConfig instance with validation and sync settings
+        
+    Raises:
+        FileNotFoundError: If required data files are missing and cannot be obtained
+        
+    Validation Process:
+        1. Validate local data files against expected structure
+        2. Check remote repository for updates (if token available)
+        3. Download updates if auto_download is enabled and data is outdated
+        4. Re-validate data after any updates
+        
+    Note:
+        - Requires HF_API_TOKEN for remote repository access
+        - Respects auto_download configuration setting
+        - Considers data older than 1 day as potentially outdated
+    """
     logger.info("Checking data integrity...")
     
     try:
@@ -289,12 +471,43 @@ def load_population_2025_with_validation(config, apply_study_area_mask: bool = T
     """
     Load 2025 population data with proper resolution handling and validation.
     
+    This function provides specialized loading of Global Human Settlement (GHS) 2025
+    population projection data with comprehensive resolution adaptation, geographic
+    masking, and statistical validation against ground truth population totals.
+    
     Args:
-        config: ProjectConfig instance
+        config: ProjectConfig instance with data paths and validation parameters
         apply_study_area_mask: Whether to apply Netherlands study area masking
         
     Returns:
-        Tuple of (population_data, metadata, validation_passed)
+        Tuple of (population_data, metadata, validation_passed):
+            - population_data: Processed population raster as numpy array
+            - metadata: Dictionary with transformation and processing metadata
+            - validation_passed: Boolean indicating if validation against ground truth succeeded
+            
+    Key Features:
+        - Intelligent resolution adaptation preserving population totals
+        - Geographic masking using NUTS boundaries and land mass data
+        - Statistical validation against known population totals
+        - Proper handling of coordinate transformations
+        - Area-based scaling corrections for resolution changes
+        
+    Resolution Handling:
+        - Source: 3 arcsecond GHS data (~92.8m × 57.1m in Netherlands)
+        - Target: 30m × 30m grid for consistent analysis
+        - Uses bilinear resampling with area scaling to preserve totals
+        - Avoids population inflation from improper density resampling
+        
+    Validation:
+        - Compares processed totals against expected Netherlands population
+        - Applies configurable tolerance thresholds
+        - Provides detailed analysis of validation results
+        - Identifies potential issues with masking or transformation
+        
+    Note:
+        - Critical for accurate population-based risk assessments
+        - Requires careful validation due to resolution and masking complexity
+        - Uses RasterTransformer for consistent coordinate handling
     """
     logger.info("Loading 2025 population data with resolution adaptation and validation...")
     
@@ -398,7 +611,37 @@ def load_population_2025_with_validation(config, apply_study_area_mask: bool = T
 
 def _apply_netherlands_study_area_mask(data: np.ndarray, transform: rasterio.Affine, 
                                      shape: Tuple[int, int], config, transformer: RasterTransformer) -> np.ndarray:
-    """Apply Netherlands study area mask to population data."""
+    """
+    Apply Netherlands study area mask to population data.
+    
+    This function creates a precise geographic mask combining NUTS L3 boundaries
+    and land mass data to ensure population data is restricted to the relevant
+    study area (Netherlands land areas only).
+    
+    Args:
+        data: Population raster data to mask
+        transform: Rasterio affine transformation for the data
+        shape: Shape of the raster data (height, width)
+        config: ProjectConfig with data paths
+        transformer: RasterTransformer for coordinate handling
+        
+    Returns:
+        np.ndarray: Masked population data with values outside study area set to 0
+        
+    Masking Process:
+        1. Load NUTS L3 boundaries for Netherlands
+        2. Transform boundaries to match raster CRS
+        3. Create rasterized mask from NUTS boundaries
+        4. Load and align land mass data
+        5. Combine both masks (must be within NUTS AND on land)
+        6. Apply combined mask to population data
+        
+    Note:
+        - Ensures population data is geographically accurate
+        - Prevents inclusion of water areas and foreign territories
+        - Provides detailed logging of masking statistics
+        - Falls back gracefully if masking fails
+    """
     logger.info("Applying Netherlands study area mask to 2025 population data...")
     
     try:
@@ -471,7 +714,45 @@ def _apply_netherlands_study_area_mask(data: np.ndarray, transform: rasterio.Aff
 
 
 def _validate_population_total(population_data: np.ndarray, expected_total: int, tolerance_percent: float) -> bool:
-    """Validate population total against ground truth with tolerance."""
+    """
+    Validate population total against ground truth with tolerance.
+    
+    This function performs statistical validation of processed population data
+    against known ground truth totals, providing detailed analysis of any
+    deviations and potential causes.
+    
+    Args:
+        population_data: Processed population raster data
+        expected_total: Expected total population (ground truth)
+        tolerance_percent: Acceptable deviation percentage
+        
+    Returns:
+        bool: True if validation passed (within tolerance), False otherwise
+        
+    Validation Process:
+        1. Calculate actual population total from processed data
+        2. Compare against expected ground truth total
+        3. Check if deviation is within acceptable tolerance
+        4. Provide detailed analysis of validation results
+        5. Identify potential issues if validation fails
+        
+    Detailed Reporting:
+        - Expected vs actual population totals
+        - Absolute and percentage deviations
+        - Tolerance thresholds and acceptable ranges
+        - Diagnostic information for validation failures
+        
+    Common Validation Issues:
+        - Source data covers broader geographic area than expected
+        - Study area masking not restrictive enough
+        - Resolution handling affecting population totals
+        - Ground truth applies to different geographic scope
+        
+    Note:
+        - Critical for ensuring data quality and accuracy
+        - Provides comprehensive diagnostic information
+        - Helps identify processing pipeline issues
+    """
     
     # Calculate actual total
     valid_data = population_data[~np.isnan(population_data) & (population_data > 0)]

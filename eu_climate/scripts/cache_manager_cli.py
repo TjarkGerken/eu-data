@@ -1,19 +1,3 @@
-#!/usr/bin/env python3
-"""
-EU Climate Cache Management CLI
-==============================
-
-Command-line interface for managing the EU Climate Risk Assessment caching system.
-Provides tools for viewing cache statistics, clearing cache data, and performing maintenance.
-
-Usage:
-    python cache_manager_cli.py --stats              # Show cache statistics
-    python cache_manager_cli.py --clear all          # Clear all cache data
-    python cache_manager_cli.py --clear raster_data  # Clear specific cache type
-    python cache_manager_cli.py --cleanup 7          # Remove files older than 7 days
-    python cache_manager_cli.py --size               # Show detailed size breakdown
-"""
-
 import sys
 import argparse
 from pathlib import Path

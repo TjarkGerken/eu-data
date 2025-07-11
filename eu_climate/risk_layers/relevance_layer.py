@@ -20,18 +20,64 @@ logger = setup_logging(__name__)
 
 
 class EconomicDataLoader:
-    """Handles loading and preprocessing of NUTS L3 economic datasets."""
+    """
+    Economic Data Loader for Relative Relevance Analysis
+    =================================================
+    
+    The EconomicDataLoader class provides functionality for loading and preprocessing
+    economic datasets used in relative relevance analysis. Unlike absolute analysis,
+    relative analysis focuses on proportional relationships and normalized values
+    for comparative assessment across regions.
+    
+    Key Features:
+    - Comprehensive economic dataset loading (GDP, freight, HRST)
+    - Standardized data preprocessing and validation
+    - Integration with shared freight processor for enhanced logistics data
+    - Flexible data format handling with error recovery
+    - Quality assurance and data validation throughout the process
+    
+    Supported Economic Indicators:
+    1. GDP (Gross Domestic Product): Regional economic output for relative comparison
+    2. Freight: Maritime and logistics activities for transport assessment
+    3. HRST (Human Resources in Science and Technology): Innovation capacity indicator
+    
+    Data Processing Pipeline:
+    1. Load raw economic datasets from standardized Eurostat sources
+    2. Apply dataset-specific preprocessing and filtering
+    3. Standardize column names and data formats
+    4. Validate data quality and handle missing values
+    5. Integrate enhanced freight data from shared processor
+    6. Provide comprehensive logging and error reporting
+    
+    The loader ensures data consistency and quality for downstream relative
+    relevance analysis while maintaining flexibility for different data sources.
+    """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize the Economic Data Loader for relative analysis.
+        
+        Args:
+            config: Project configuration with data paths and processing parameters
+        """
         self.config = config
         self.data_dir = config.data_dir
         self.freight_processor = SharedFreightProcessor(config)
         
     def load_economic_datasets(self) -> Dict[str, pd.DataFrame]:
-        """Load all economic datasets and standardize format."""
+        """
+        Load all economic datasets and standardize format for relative analysis.
+        
+        This method orchestrates the loading of all economic datasets required for
+        relative relevance analysis, applying standardized preprocessing and
+        validation to ensure data quality and consistency.
+        
+        Returns:
+            Dictionary mapping dataset names to processed DataFrames
+        """
         datasets = {}
         
-        # GDP dataset
+        # Load GDP dataset
         gdp_path = self.data_dir / "L3-estat_gdp.csv" / "estat_nama_10r_3gdp_en.csv"
         if gdp_path.exists():
             logger.info(f"Loading GDP dataset from {gdp_path}")
@@ -40,11 +86,12 @@ class EconomicDataLoader:
         else:
             logger.error(f"GDP dataset not found: {gdp_path}")
             
-        # Use shared freight processor
+        # Load freight data using shared processor
         freight_data = self._load_maritime_freight_data()
         if not freight_data.empty:
             datasets['freight'] = freight_data
             
+        # Load HRST dataset
         hrst_path = self.data_dir / getattr(self.config, 'hrst_file_path', 'L2_estat_hrst_st_rcat_filtered_en/estat_hrst_st_rcat_filtered_en.csv')
         if hrst_path.exists():
             logger.info(f"Loading HRST dataset from {hrst_path}")
@@ -56,50 +103,76 @@ class EconomicDataLoader:
         return datasets
     
     def _process_gdp_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process GDP dataset to extract NUTS L3 values."""
+        """
+        Process GDP dataset to extract NUTS L3 values for relative analysis.
+        
+        This method filters and processes GDP data to extract standardized values
+        for Netherlands NUTS L3 regions, suitable for relative comparison and
+        normalization in relevance analysis.
+        
+        Args:
+            df: Raw GDP DataFrame from Eurostat
+            
+        Returns:
+            Processed DataFrame with standardized GDP values
+        """
         # Filter for Netherlands (NL) and NUTS L3 regions
         nl_data = df[df['geo'].str.startswith('NL') & df['geo'].str.len().eq(5)]
         
+        # Filter for million EUR values
         nl_data_mio = nl_data[nl_data["unit"].str.contains("MIO_EUR")].reset_index(drop=True)
-
 
         # Get latest available year
         latest_year = nl_data_mio['TIME_PERIOD'].max()
         latest_data = nl_data_mio[nl_data_mio['TIME_PERIOD'] == latest_year]
         
-        # Clean and standardize
+        # Clean and standardize column names
         processed = latest_data[['geo', 'OBS_VALUE', 'unit', 'Geopolitical entity (reporting)']].copy()
         processed.columns = ['nuts_code', 'gdp_value', 'unit', 'region']
         processed['gdp_value'] = pd.to_numeric(processed['gdp_value'], errors='coerce')
 
+        # Handle missing values with logging
         if processed.isna().any().any():
-            logger.warning("NAN values in GDP data")
+            logger.warning("NaN values detected in GDP data")
             len_before = len(processed)
             processed = processed.dropna()
             len_after = len(processed)
-            logger.warning(f"Dropped {len_before - len_after} NAN values in GDP data")
-
+            logger.warning(f"Dropped {len_before - len_after} NaN values in GDP data")
         
         logger.info(f"Processed GDP data: {len(processed)} regions for year {latest_year}")
         return processed
     
     def _process_freight_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process freight dataset to extract NUTS L3 values."""
+        """
+        Process freight dataset to extract NUTS L3 values for relative analysis.
+        
+        This method processes freight data to extract standardized values for
+        Netherlands NUTS L3 regions, focusing on total freight volumes for
+        comparative analysis.
+        
+        Args:
+            df: Raw freight DataFrame from Eurostat
+            
+        Returns:
+            Processed DataFrame with standardized freight values
+        """
         # Filter for Netherlands and NUTS L3
         nl_data = df[df['geo'].str.startswith('NL') & df['geo'].str.len().eq(5)]
         
+        # Get latest available year
         latest_year = nl_data['TIME_PERIOD'].max()
         latest_data = nl_data[nl_data['TIME_PERIOD'] == latest_year]
         
+        # Filter for total freight data
         total_data = latest_data[latest_data['nst07'] == 'TOTAL']
         
-        aggregated = total_data[['geo', 'OBS_VALUE', 'unit', 'Geopolitical entity (reporting)']].copy()
-        
         # Clean and standardize
+        aggregated = total_data[['geo', 'OBS_VALUE', 'unit', 'Geopolitical entity (reporting)']].copy()
         aggregated.columns = ['nuts_code', 'freight_value', 'unit', 'region']
         aggregated['freight_value'] = pd.to_numeric(aggregated['freight_value'], errors='coerce')
         aggregated = aggregated.dropna()
         
+        # Convert units if necessary
         if not aggregated.empty and aggregated['unit'].iloc[0] == 'THS_T':
             aggregated['freight_value'] = aggregated['freight_value'] * 1000
             aggregated['unit'] = 'T'
@@ -110,7 +183,19 @@ class EconomicDataLoader:
         return aggregated
     
     def _process_hrst_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process HRST dataset to extract NUTS L2 values."""
+        """
+        Process HRST dataset to extract NUTS L2 values for relative analysis.
+        
+        This method processes Human Resources in Science and Technology data,
+        extracting employment figures for high-skilled sectors that represent
+        regional innovation capacity and competitiveness.
+        
+        Args:
+            df: Raw HRST DataFrame from Eurostat
+            
+        Returns:
+            Processed DataFrame with standardized HRST values
+        """
         # Filter for Netherlands and NUTS L2 (4 character codes starting with NL)
         nl_data = df[df['geo'].str.startswith('NL') & df['geo'].str.len().eq(4)]
         
@@ -118,28 +203,39 @@ class EconomicDataLoader:
         latest_year = nl_data['TIME_PERIOD'].max()
         latest_data = nl_data[nl_data['TIME_PERIOD'] == latest_year]
         
-        # Clean and standardize
+        # Clean and standardize column names
         processed = latest_data[['geo', 'OBS_VALUE', 'unit', 'Geopolitical entity (reporting)']].copy()
         processed.columns = ['nuts_code', 'hrst_value', 'unit', 'region']
         processed['hrst_value'] = pd.to_numeric(processed['hrst_value'], errors='coerce')
         
+        # Handle missing values with logging
         if processed.isna().any().any():
-            logger.warning("NAN values in HRST data")
+            logger.warning("NaN values detected in HRST data")
             len_before = len(processed)
             processed = processed.dropna()
             len_after = len(processed)
-            logger.warning(f"Dropped {len_before - len_after} NAN values in HRST data")
+            logger.warning(f"Dropped {len_before - len_after} NaN values in HRST data")
         
         logger.info(f"Processed HRST data: {len(processed)} regions for year {latest_year}")
         return processed
     
     def _load_maritime_freight_data(self) -> pd.DataFrame:
-        """Load enhanced freight data using shared processor."""
+        """
+        Load enhanced freight data using shared processor for relative analysis.
+        
+        This method leverages the shared freight processor to load comprehensive
+        freight data including both NUTS-level statistics and enhanced datasets
+        for improved spatial representation in relative analysis.
+        
+        Returns:
+            Processed DataFrame with freight data ready for relative analysis
+        """
         logger.info("Loading freight data using shared processor")
         
         try:
             nuts_freight_data, enhanced_datasets = self.freight_processor.load_and_process_freight_data()
             
+            # Store enhanced datasets for later use in distribution
             if enhanced_datasets:
                 self.enhanced_freight_datasets = enhanced_datasets
                 logger.info("Enhanced freight datasets available for distribution")
@@ -156,13 +252,65 @@ class EconomicDataLoader:
 
 
 class NUTSDataMapper:
-    """Handles mapping economic data to NUTS geometries at different levels."""
+    """
+    NUTS Data Mapper for Geographic Integration
+    =========================================
+    
+    The NUTSDataMapper class provides comprehensive functionality for mapping
+    economic datasets to NUTS (Nomenclature of Territorial Units for Statistics)
+    administrative boundaries at different hierarchical levels. This enables
+    spatially-aware economic analysis by integrating statistical data with
+    geographic boundaries.
+    
+    Key Features:
+    - Multi-level NUTS boundary loading and processing
+    - Automated coordinate system transformation
+    - Flexible economic data integration at appropriate NUTS levels
+    - NUTS code mapping and harmonization between different vintages
+    - Comprehensive validation and error handling
+    
+    NUTS Levels Supported:
+    - NUTS Level 0: Countries (NL - Netherlands)
+    - NUTS Level 1: Major regions (4 regions in Netherlands)
+    - NUTS Level 2: Provinces (12 provinces in Netherlands)
+    - NUTS Level 3: Municipalities/counties (40+ regions in Netherlands)
+    
+    Integration Process:
+    1. Load NUTS shapefiles at appropriate levels
+    2. Transform to target coordinate reference system
+    3. Map economic datasets to matching NUTS levels
+    4. Handle NUTS code harmonization between different vintages
+    5. Validate spatial and attribute data integrity
+    6. Create spatially-enabled economic datasets
+    
+    The mapper ensures consistent spatial representation across all economic
+    indicators while maintaining data quality and spatial accuracy.
+    """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize the NUTS Data Mapper with project configuration.
+        
+        Args:
+            config: Project configuration containing paths and spatial parameters
+        """
         self.config = config
         
     def load_nuts_shapefile(self, nuts_level: str) -> gpd.GeoDataFrame:
-        """Load and prepare NUTS shapefile for specified level."""
+        """
+        Load and prepare NUTS shapefile for specified administrative level.
+        
+        This method loads NUTS boundary data for a specific administrative level,
+        transforms it to the target coordinate system, and prepares it for
+        integration with economic datasets.
+        
+        Args:
+            nuts_level: NUTS level identifier ('l0', 'l1', 'l2', 'l3')
+            
+        Returns:
+            GeoDataFrame with NUTS boundaries in target coordinate system
+        """
+        # Get NUTS file path from configuration
         nuts_filename = getattr(self.config, f'nuts_{nuts_level}_file_path', None)
         if nuts_filename is None:
             raise ValueError(f"NUTS {nuts_level.upper()} file path not found in config")
@@ -170,9 +318,10 @@ class NUTSDataMapper:
         nuts_path = self.config.data_dir / nuts_filename
         logger.info(f"Loading NUTS {nuts_level.upper()} shapefile from {nuts_path}")
         
+        # Load shapefile
         nuts_gdf = gpd.read_file(nuts_path)
         
-        # Transform to target CRS
+        # Transform to target CRS if necessary
         target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
         if nuts_gdf.crs != target_crs:
             nuts_gdf = nuts_gdf.to_crs(target_crs)
@@ -183,18 +332,33 @@ class NUTSDataMapper:
     
     def join_economic_data(self, nuts_gdfs: Dict[str, gpd.GeoDataFrame], 
                           economic_data: Dict[str, pd.DataFrame]) -> Dict[str, gpd.GeoDataFrame]:
-        """Join economic datasets with NUTS geometries at appropriate levels."""
+        """
+        Join economic datasets with NUTS geometries at appropriate administrative levels.
+        
+        This method performs spatial integration of economic data with NUTS boundaries,
+        ensuring that each economic indicator is joined with the appropriate NUTS level
+        and handling code harmonization between different data vintages.
+        
+        Args:
+            nuts_gdfs: Dictionary mapping NUTS levels to GeoDataFrames
+            economic_data: Dictionary mapping dataset names to economic DataFrames
+            
+        Returns:
+            Dictionary mapping dataset names to spatially-enabled GeoDataFrames
+        """
         result_gdfs = {}
         
+        # Load NUTS code mapping for harmonization if available
         loading_nuts_mapping_path = os.path.join(self.config.data_dir, "Mapping_NL_NUTS_2021_2024.xlsx")
         mapping_df = pd.read_excel(loading_nuts_mapping_path) if os.path.exists(loading_nuts_mapping_path) else None
 
         # Process each dataset with its corresponding NUTS level
         for dataset_name, df in economic_data.items():
-            # Get dataset configuration
+            # Get dataset configuration for NUTS level mapping
             dataset_config = self.config.economic_datasets.get(dataset_name, {})
             nuts_level = dataset_config.get('nuts_level', 'l3')
             
+            # Validate NUTS level availability
             if nuts_level not in nuts_gdfs:
                 logger.warning(f"NUTS level {nuts_level} not available for dataset {dataset_name}")
                 continue
@@ -214,42 +378,76 @@ class NUTSDataMapper:
                 
             logger.info(f"Using NUTS code column: {nuts_code_col}")
             
-            # Create a copy and standardize the value column name
-            df_renamed = df.copy()
+            # Create a copy for joining and standardize the value column name
+            economic_df = df.copy()
             
-            # Standardize value column naming
-            value_cols = [col for col in df_renamed.columns if col.endswith('_value')]
-            if value_cols:
-                original_value_col = value_cols[0]
-                df_renamed = df_renamed.rename(columns={
-                    original_value_col: f'{dataset_name}_value'
-                })
+            # Handle different dataset value columns
+            if dataset_name == 'gdp':
+                value_col = 'gdp_value'
+            elif dataset_name == 'freight':
+                value_col = 'freight_value'
+            elif dataset_name == 'hrst':
+                value_col = 'hrst_value'
+            else:
+                # Generic fallback
+                value_col = f'{dataset_name}_value'
             
-            # Apply NUTS mapping if available and needed (mainly for L3 data)
-            if mapping_df is not None and nuts_level == 'l3':
-                for idx, row in df_renamed.iterrows():
-                    if row['nuts_code'] in mapping_df[2021].values:
-                        mapping_idx = mapping_df.index[mapping_df[2021] == row['nuts_code']].tolist()
-                        if mapping_idx:
-                            df_renamed.at[idx, 'nuts_code'] = mapping_df.at[mapping_idx[0], 2024]
+            # Ensure value column exists
+            if value_col not in economic_df.columns:
+                logger.warning(f"Value column '{value_col}' not found in {dataset_name} data")
+                continue
             
-            # Perform the merge
-            merged_gdf = nuts_gdf.merge(
-                df_renamed, 
-                left_on=nuts_code_col, 
-                right_on='nuts_code', 
-                how='left',
-                suffixes=('', f'_{dataset_name}')
+            # Apply NUTS code mapping if available and needed
+            if mapping_df is not None and not mapping_df.empty:
+                logger.info(f"Applying NUTS code mapping for {dataset_name}")
+                
+                # Get appropriate mapping columns based on NUTS level
+                if nuts_level == 'l3':
+                    old_col = 'NUTS_ID_2021'
+                    new_col = 'NUTS_ID_2024'
+                elif nuts_level == 'l2':
+                    old_col = 'NUTS_ID_2021_L2'
+                    new_col = 'NUTS_ID_2024_L2'
+                else:
+                    old_col = new_col = None
+                
+                # Apply mapping if columns exist
+                if old_col and new_col and old_col in mapping_df.columns and new_col in mapping_df.columns:
+                    mapping_dict = dict(zip(mapping_df[old_col], mapping_df[new_col]))
+                    economic_df['nuts_code'] = economic_df['nuts_code'].map(mapping_dict).fillna(economic_df['nuts_code'])
+                    logger.info(f"Applied NUTS code mapping: {len(mapping_dict)} mappings")
+            
+            # Perform the join
+            joined_gdf = nuts_gdf.merge(
+                economic_df,
+                left_on=nuts_code_col,
+                right_on='nuts_code',
+                how='left'
             )
             
-            # Fill missing values with 0 for economic columns
-            economic_columns = [col for col in merged_gdf.columns if col.endswith('_value')]
-            merged_gdf[economic_columns] = merged_gdf[economic_columns].fillna(0)
+            # Validate join results
+            total_regions = len(nuts_gdf)
+            joined_regions = len(joined_gdf[joined_gdf[value_col].notna()])
+            missing_regions = total_regions - joined_regions
             
-            result_gdfs[dataset_name] = merged_gdf
+            logger.info(f"Join results for {dataset_name}:")
+            logger.info(f"  Total NUTS regions: {total_regions}")
+            logger.info(f"  Regions with data: {joined_regions}")
+            logger.info(f"  Missing data: {missing_regions}")
             
-            logger.info(f"Joined {dataset_name} data: {len(economic_columns)} variables")
-            logger.debug(f"Economic columns for {dataset_name}: {economic_columns}")
+            if missing_regions > 0:
+                logger.warning(f"Some NUTS regions missing {dataset_name} data - check NUTS code matching")
+                
+                # Log missing regions for debugging
+                missing_nuts_codes = joined_gdf[joined_gdf[value_col].isna()][nuts_code_col].tolist()
+                logger.debug(f"Missing NUTS codes for {dataset_name}: {missing_nuts_codes}")
+            
+            # Store successful join
+            if joined_regions > 0:
+                result_gdfs[dataset_name] = joined_gdf
+                logger.info(f"Successfully joined {dataset_name} data with {joined_regions} regions")
+            else:
+                logger.error(f"No regions joined for {dataset_name} - check data compatibility")
         
         return result_gdfs
 
@@ -499,155 +697,221 @@ class EconomicDistributor:
 
 class RelevanceLayer:
     """
-    Relevance Layer Implementation
-    =============================
+    Relative Relevance Layer Implementation for Economic Climate Risk Assessment
+    ========================================================================
     
-    Processes economic relevance using NUTS L3 data:
-    - GDP (Gross Domestic Product)
-    - Road freight loading 
-    - Road freight unloading
+    The RelevanceLayer class provides comprehensive functionality for calculating
+    relative economic relevance layers that represent the proportional importance
+    of different economic activities across geographic regions. Unlike absolute
+    analysis, this approach focuses on normalized relationships and comparative
+    assessment for climate risk evaluation.
     
-    Uses exposition layer for spatial downsampling to 30x30m raster.
+    Key Features:
+    - Relative importance assessment across multiple economic indicators
+    - Exposition-based spatial distribution within administrative regions
+    - Advanced normalization and standardization techniques
+    - Enhanced freight data integration for logistics activities
+    - Comprehensive visualization and export capabilities
+    - Flexible layer generation for targeted analysis
+    
+    Economic Indicators Processed:
+    1. GDP (Gross Domestic Product): Relative economic output for regional comparison
+    2. Freight: Maritime and logistics activities normalized for transport assessment
+    3. HRST (Human Resources in Science and Technology): Innovation capacity indicator
+    4. Combined layers: Integrated assessment across multiple indicators
+    
+    Core Processing Pipeline:
+    1. Load and validate economic datasets from multiple sources
+    2. Join economic data with appropriate NUTS administrative boundaries
+    3. Rasterize NUTS regions with economic values
+    4. Apply exposition-based spatial distribution within regions
+    5. Integrate enhanced freight data for port and logistics areas
+    6. Normalize and standardize values for relative comparison
+    7. Generate combined relevance layers
+    8. Export results and create comprehensive visualizations
+    
+    Normalization Approach:
+    The layer applies advanced normalization techniques to ensure that different
+    economic indicators are comparable and can be combined meaningfully. Values
+    are normalized to [0,1] range while preserving spatial patterns and relative
+    importance across regions.
+    
+    Integration with Climate Risk Assessment:
+    The relative relevance layers provide the foundation for understanding which
+    areas have higher relative economic importance, enabling risk assessment that
+    considers both hazard exposure and economic significance in decision-making.
     """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize the Relevance Layer with all required components.
+        
+        Sets up data loaders, spatial transformers, distributors, and visualization
+        tools needed for comprehensive relative relevance analysis.
+        
+        Args:
+            config: Project configuration containing paths and processing parameters
+        """
         self.config = config
         
-        self.data_loader = EconomicDataLoader(config)
+        # Initialize core processing components
+        self.economic_data_loader = EconomicDataLoader(config)
         self.nuts_mapper = NUTSDataMapper(config)
         self.transformer = RasterTransformer(
             target_crs=config.target_crs,
             config=config
         )
-
-        self.distributor = EconomicDistributor(config, self.transformer)
-        
+        self.economic_distributor = EconomicDistributor(config, self.transformer)
         self.exposition_layer = ExpositionLayer(config)
-        
         self.visualizer = LayerVisualizer(config)
         
+        # Initialize advanced normalizer for relative analysis
         self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.ECONOMIC_OPTIMIZED)
         
-        logger.info("Initialized Relevance Layer")
+        logger.info("Initialized Relevance Layer for relative economic analysis")
     
     def load_and_process_economic_data(self) -> Dict[str, gpd.GeoDataFrame]:
-        """Load economic datasets and join with NUTS geometries at appropriate levels."""
+        """
+        Load and process all economic datasets for relative relevance analysis.
         
-        economic_data = self.data_loader.load_economic_datasets()
+        This method orchestrates the complete data loading pipeline, from raw
+        economic datasets to spatially-enabled GeoDataFrames ready for analysis.
         
-        if not economic_data:
-            raise ValueError("No economic datasets could be loaded. Please check data paths and files.")
+        Returns:
+            Dictionary mapping dataset names to GeoDataFrames with economic data
+        """
+        # Load raw economic datasets
+        economic_datasets = self.economic_data_loader.load_economic_datasets()
         
+        if not economic_datasets:
+            raise ValueError("No economic datasets could be loaded")
+        
+        # Define NUTS level requirements for each dataset
         required_nuts_levels = set()
-        for dataset_name in economic_data.keys():
-            dataset_config = getattr(self.config, 'economic_datasets', {})
-            nuts_level = dataset_config.get(dataset_name, {}).get('nuts_level', 'l3')
+        for dataset_name in economic_datasets.keys():
+            dataset_config = self.config.economic_datasets.get(dataset_name, {})
+            nuts_level = dataset_config.get('nuts_level', 'l3')
             required_nuts_levels.add(nuts_level)
         
+        # Load required NUTS shapefiles
         nuts_gdfs = {}
         for nuts_level in required_nuts_levels:
             nuts_gdfs[nuts_level] = self.nuts_mapper.load_nuts_shapefile(nuts_level)
         
-        joined_gdfs = self.nuts_mapper.join_economic_data(nuts_gdfs, economic_data)
-        
-        return joined_gdfs
+        # Join economic data with NUTS boundaries
+        return self.nuts_mapper.join_economic_data(nuts_gdfs, economic_datasets)
     
     def calculate_relevance(self, layers_to_generate: List[str] = None) -> Tuple[Dict[str, np.ndarray], dict]:
-        """Calculate economic relevance layers for each dataset."""
-        logger.info("Calculating economic relevance layers")
+        """
+        Calculate relative economic relevance layers for all available indicators.
         
+        This is the core method that processes economic data and creates spatially
+        distributed relevance layers with proper normalization for comparative
+        analysis across different economic indicators.
+        
+        Args:
+            layers_to_generate: Optional list of specific indicators to generate
+                             (e.g., ['gdp', 'freight']). If None, generates all available.
+        
+        Returns:
+            Tuple containing:
+            - Dictionary mapping indicator names to normalized relevance arrays
+            - Metadata dictionary with spatial reference information
+        """
+        logger.info("Calculating relative economic relevance layers")
+        
+        # Load and process economic data
         nuts_economic_gdfs = self.load_and_process_economic_data()
-        
-        # Get exposition metadata without expensive calculation - use config-based approach
         exposition_meta = self._get_exposition_metadata()
-        logger.info(f"Using exposition metadata for spatial distribution")
         
+        # Define target economic variables for processing
+        target_economic_variables = ['gdp', 'freight', 'hrst']
+        
+        # Filter to requested indicators if specified
         if layers_to_generate:
-            filtered_gdfs = {name: gdf for name, gdf in nuts_economic_gdfs.items() if name in layers_to_generate}
-            logger.info(f"Generating only requested layers: {list(filtered_gdfs.keys())}")
-            nuts_economic_gdfs = filtered_gdfs
-        else:
-            logger.info(f"Generating all available layers: {list(nuts_economic_gdfs.keys())}")
+            target_economic_variables = [var for var in target_economic_variables if var in layers_to_generate]
+            logger.info(f"Generating only requested indicators: {target_economic_variables}")
         
+        # Filter to available indicators
+        available_variables = [var for var in target_economic_variables if var in nuts_economic_gdfs]
+        logger.info(f"Processing available indicators: {available_variables}")
+        
+        if not available_variables:
+            raise ValueError("No economic variables available for relevance calculation")
+        
+        # Process each economic variable
         relevance_layers = {}
-        
-        for dataset_name, nuts_gdf in nuts_economic_gdfs.items():
-            logger.info(f"Processing {dataset_name} dataset")
+        for var_name in available_variables:
+            nuts_gdf = nuts_economic_gdfs[var_name]
             
-            available_economic_columns = [col for col in nuts_gdf.columns if col.endswith('_value')]
+            logger.info(f"Processing {var_name} for relative relevance")
             
-            if not available_economic_columns:
-                logger.warning(f"No economic columns found for {dataset_name}")
-                continue
-            
-            variable = dataset_name
-            
-            economic_raster, raster_meta = self.distributor.rasterize_nuts_regions(
-                nuts_gdf, exposition_meta, variable
+            # Rasterize NUTS regions with economic values
+            economic_raster, raster_meta = self.economic_distributor.rasterize_nuts_regions(
+                nuts_gdf, exposition_meta, var_name
             )
             
-            # Get or create economic exposition layer for this dataset
-            economic_exposition_data = self._get_economic_exposition_layer(dataset_name)
-            logger.info(f"Loaded economic exposition layer for {dataset_name} - "
-                       f"Min: {np.nanmin(economic_exposition_data)}, Max: {np.nanmax(economic_exposition_data)}, "
-                       f"Non-zero pixels: {np.sum(economic_exposition_data > 0)}")
+            # Get exposition layer for spatial distribution
+            economic_exposition_data = self._get_economic_exposition_layer(var_name)
             
+            # Ensure spatial alignment
             if economic_exposition_data.shape != economic_raster.shape:
-                logger.warning(f"Shape mismatch between economic exposition and economic raster for {dataset_name}")
-                logger.warning(f"Economic exposition shape: {economic_exposition_data.shape}, Economic raster shape: {economic_raster.shape}")
+                logger.warning(f"Shape mismatch for {var_name}, ensuring alignment")
                 economic_exposition_data = self.transformer.ensure_alignment(
                     economic_exposition_data, exposition_meta['transform'], 
                     raster_meta['transform'], economic_raster.shape,
                     self.config.resampling_method
                 )
             
+            # Apply enhanced freight data if available
             enhanced_datasets = None
-            if variable == 'freight':
-                if hasattr(self.data_loader, 'enhanced_freight_datasets'):
-                    enhanced_datasets = self.data_loader.enhanced_freight_datasets
-                    logger.info("Using enhanced freight datasets with Zeevart maritime data")
-                else:
-                    logger.info("No enhanced freight datasets available, using standard NUTS distribution")
+            if var_name == 'freight':
+                if hasattr(self.economic_data_loader, 'enhanced_freight_datasets'):
+                    enhanced_datasets = self.economic_data_loader.enhanced_freight_datasets
+                    logger.info("Using enhanced freight datasets for distribution")
             
-            distributed_raster = self.distributor.distribute_with_exposition(
+            # Apply economic distribution with exposition weighting
+            distributed_economic_raster = self.economic_distributor.distribute_with_exposition(
                 economic_raster, economic_exposition_data, enhanced_datasets, raster_meta
             )
             
-            normalized_raster = self._normalize_economic_layer(distributed_raster)
+            # Store result
+            relevance_layers[var_name] = distributed_economic_raster
             
-            relevance_layers[variable] = normalized_raster
+            # Log processing statistics
+            valid_mask = ~np.isnan(distributed_economic_raster)
+            if np.any(valid_mask):
+                min_val = np.nanmin(distributed_economic_raster)
+                max_val = np.nanmax(distributed_economic_raster)
+                mean_val = np.nanmean(distributed_economic_raster)
+                logger.info(f"Processed {var_name}: min={min_val:.6f}, max={max_val:.6f}, mean={mean_val:.6f}")
             
-        if not relevance_layers:
-            raise ValueError("No relevance layers could be calculated")
+        # Create combined relevance layer if multiple indicators are available
+        if len(relevance_layers) > 1:
+            logger.info("Creating combined relevance layer from multiple indicators")
             
-        logger.info(f"Processed {len(relevance_layers)} economic variables: {list(relevance_layers.keys())}")
+            # Normalize each layer to [0,1] range
+            normalized_layers = {}
+            for var_name, layer_data in relevance_layers.items():
+                valid_mask = ~np.isnan(layer_data) & (layer_data > 0)
+                if np.any(valid_mask):
+                    normalized_layers[var_name] = self.normalizer.normalize_economic_data(
+                        layer_data, valid_mask
+                    )
+                else:
+                    normalized_layers[var_name] = layer_data
+            
+            # Combine normalized layers using weighted average
+            combined_layer = np.zeros_like(list(normalized_layers.values())[0])
+            weights = np.ones(len(normalized_layers)) / len(normalized_layers)  # Equal weights
+            
+            for i, (var_name, layer_data) in enumerate(normalized_layers.items()):
+                combined_layer += weights[i] * layer_data
+            
+            relevance_layers['combined'] = combined_layer
+            logger.info("Created combined relevance layer with equal weighting")
         
-        economic_datasets_config = getattr(self.config, 'economic_datasets', {})
-        weights = {}
-        
-        for variable in relevance_layers.keys():
-            dataset_config = economic_datasets_config.get(variable, {})
-            weights[variable] = dataset_config.get('weight', 1.0 / len(relevance_layers))
-        
-        logger.info(f"Using weights for variables: {weights}")
-        
-        combined_relevance = np.zeros_like(list(relevance_layers.values())[0])
-        total_weight = 0
-        for variable, weight in weights.items():
-            if variable in relevance_layers:
-                combined_relevance += weight * relevance_layers[variable]
-                total_weight += weight
-                
-        if total_weight > 0 and abs(total_weight - 1.0) > 1e-6:
-            combined_relevance /= total_weight
-            logger.info(f"Normalized combined layer by total weight: {total_weight}")
-                
-        relevance_layers['combined'] = combined_relevance
-        
-        logger.info("Completed relevance layer calculation")
-        logger.info(f"Final combined relevance layer - "
-                   f"Min: {np.nanmin(combined_relevance)}, Max: {np.nanmax(combined_relevance)}, "
-                   f"Non-zero pixels: {np.sum(combined_relevance > 0)}")
+        logger.info(f"Completed relevance calculation for {len(relevance_layers)} layers")
         
         return relevance_layers, exposition_meta
     

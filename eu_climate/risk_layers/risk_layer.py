@@ -24,43 +24,106 @@ logger = setup_logging(__name__)
 
 class RiskLayer:
     """
-    Risk Layer Implementation
-    ========================
+    Climate Risk Layer Implementation for Comprehensive Risk Assessment
+    ================================================================
     
-    The Risk Layer integrates hazard scenarios and economic layers to produce
-    comprehensive climate risk assessments for each region.
+    The RiskLayer class provides the final integration layer that combines hazard
+    scenarios with economic relevance data to produce comprehensive climate risk
+    assessments. This class represents the culmination of the risk assessment
+    pipeline, integrating multiple data sources and analytical approaches.
     
     Key Features:
-    - Integration of hazard and economic data
-    - Sea level rise scenario analysis
-    - Regional risk aggregation
-    - Standardized output structure
-    - Unified visualization approach
+    - Multi-hazard scenario integration (sea level rise projections)
+    - Economic relevance layer integration (GDP, freight, HRST, population)
+    - Comprehensive risk calculation methodologies
+    - Flexible scenario analysis with custom parameters
+    - Advanced caching for computational efficiency
+    - Comprehensive export and visualization capabilities
+    - Population-based risk assessment alternatives
+    
+    Risk Assessment Methodology:
+    The risk assessment follows the established framework:
+    Risk = Hazard × Exposure × Vulnerability
+    
+    Where:
+    - Hazard: Flood risk from sea level rise scenarios (from HazardLayer)
+    - Exposure: Economic activities and population at risk locations
+    - Vulnerability: Economic relevance and population density (from RelevanceLayer)
+    
+    Supported Analysis Types:
+    1. Economic Risk Assessment: Combines flood hazard with economic relevance
+    2. Population Risk Assessment: Combines flood hazard with population data
+    3. Scenario Analysis: Multiple sea level rise projections
+    4. Comparative Analysis: Different economic indicators and combinations
+    
+    Processing Pipeline:
+    1. Load or generate hazard layers for different sea level rise scenarios
+    2. Load or generate economic relevance layers for different indicators
+    3. Integrate hazard and relevance data using risk calculation methods
+    4. Apply advanced normalization and quality assurance
+    5. Export risk assessments for each scenario and indicator combination
+    6. Generate comprehensive visualizations and summary statistics
+    
+    Integration Capabilities:
+    - Seamless integration with HazardLayer for flood risk scenarios
+    - Integration with RelevanceLayer for economic importance assessment
+    - Support for both absolute and relative economic analysis approaches
+    - Flexible weighting schemes for different risk factors
+    - Comprehensive caching to avoid redundant calculations
+    
+    The RiskLayer provides the foundation for climate risk decision-making by
+    combining physical hazard projections with economic and social vulnerability
+    assessments in a spatially explicit and quantitative framework.
     """
     
     def __init__(self, config: ProjectConfig):
-        """Initialize the Risk Layer with project configuration."""
+        """
+        Initialize the Risk Layer with comprehensive analytical capabilities.
+        
+        Sets up all required components for climate risk assessment including
+        hazard analysis, relevance analysis, spatial processing, and visualization.
+        
+        Args:
+            config: Project configuration containing all processing parameters
+        """
         self.config = config
+        
+        # Initialize core analysis components
         self.hazard_layer = HazardLayer(config)
         self.relevance_layer = RelevanceLayer(config)
         
+        # Initialize sea level rise scenarios
         self.sea_level_scenarios = SeaLevelScenario.get_default_scenarios()
         
+        # Initialize spatial processing components
         self.transformer = RasterTransformer(
             target_crs=self.config.target_crs,
             config=self.config
         )
         
+        # Initialize visualization component
         self.visualizer = LayerVisualizer(self.config)
         
-        # Initialize sophisticated normalizer optimized for risk data
+        # Initialize advanced normalizer optimized for risk data
         self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.EXPOSITION_OPTIMIZED)
         
-        logger.info("Initialized Risk Layer")
+        logger.info("Initialized Risk Layer with comprehensive analytical capabilities")
     
     def load_existing_hazard_outputs(self, 
                                    sea_level_scenarios: List[SeaLevelScenario]) -> Optional[Dict[str, np.ndarray]]:
-        """Load existing hazard outputs if they exist."""
+        """
+        Load existing hazard outputs if they exist to avoid redundant computation.
+        
+        This method checks for previously computed hazard scenarios and loads them
+        if available, significantly improving computational efficiency for repeated
+        analyses or when only updating economic components.
+        
+        Args:
+            sea_level_scenarios: List of sea level rise scenarios to check for
+            
+        Returns:
+            Dictionary mapping scenario names to hazard arrays, or None if incomplete
+        """
         output_dir = Path(self.config.output_dir)
         
         hazard_results = {}
@@ -91,20 +154,33 @@ class RiskLayer:
             return None
     
     def load_existing_relevance_outputs(self) -> Optional[Dict[str, np.ndarray]]:
-        """Load existing relevance outputs if they exist."""
+        """
+        Load existing relevance outputs if they exist to avoid redundant computation.
+        
+        This method checks for previously computed relevance layers and loads them
+        if available, improving computational efficiency when only updating hazard
+        scenarios or performing sensitivity analysis.
+        
+        Returns:
+            Dictionary mapping layer names to relevance arrays, or None if incomplete
+        """
         output_dir = Path(self.config.output_dir)
         
+        # Get expected economic variables from configuration
         economic_variables = self.config.config['relevance']['economic_variables']
         relevance_files = {}
         
+        # Map expected files for each variable
         for variable in economic_variables:
             relevance_files[variable] = output_dir / "relevance" / "tif" / f"relevance_{variable}.tif"
         
+        # Also check for combined relevance layer
         relevance_files['combined'] = output_dir / "relevance" / "tif" / 'relevance_combined.tif'
         
         relevance_results = {}
         all_files_exist = True
         
+        # Attempt to load each relevance file
         for layer_name, file_path in relevance_files.items():
             if file_path.exists():
                 logger.info(f"Loading existing relevance data for {layer_name} from {file_path}")
@@ -131,12 +207,26 @@ class RiskLayer:
                      input_files=['land_mass_path'],
                      config_attrs=['target_crs', 'target_resolution'])
     def load_land_mask(self) -> Tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS]:
-        """Load and prepare land mass mask for valid study area."""
+        """
+        Load and prepare land mass mask for valid study area definition.
+        
+        This method loads the land mass raster and creates a binary mask that
+        defines the valid study area for risk assessment, ensuring that risk
+        calculations are only performed on land areas.
+        
+        Returns:
+            Tuple containing:
+            - Binary land mask array (1=land, 0=water)
+            - Affine transformation matrix for spatial reference
+            - Coordinate reference system for spatial operations
+        """
         logger.info("Loading land mass mask...")
         
+        # Use NUTS-L3 boundaries to define reference area
         nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
         reference_bounds = self.transformer.get_reference_bounds(nuts_l3_path)
         
+        # Load and transform land mass data
         land_mass_data, transform, crs = self.transformer.transform_raster(
             self.config.land_mass_path,
             reference_bounds=reference_bounds,
@@ -145,8 +235,10 @@ class RiskLayer:
             else str(self.config.resampling_method).lower()
         )
         
+        # Create binary land mask
         land_mask = (land_mass_data > 0).astype(np.uint8)
         
+        # Log mask statistics
         logger.info(f"Land mask shape: {land_mask.shape}")
         logger.info(f"Land coverage: {np.sum(land_mask) / land_mask.size * 100:.1f}%")
         
@@ -158,18 +250,28 @@ class RiskLayer:
     def process_risk_scenarios(self, 
                              custom_sea_level_scenarios: Optional[List[SeaLevelScenario]] = None) -> Dict[str, np.ndarray]:
         """
-        Process sea level rise scenarios with current GDP levels.
+        Process comprehensive risk scenarios combining sea level rise and economic data.
         
+        This is the main method for climate risk assessment that integrates hazard
+        scenarios with economic relevance data to produce spatially explicit risk
+        assessments for different climate projections.
+        
+        Args:
+            custom_sea_level_scenarios: Optional custom scenarios, uses defaults if None
+            
         Returns:
-            Dictionary with structure: {sea_level_scenario: risk_data}
+            Dictionary mapping scenario names to risk assessment arrays
         """
         logger.info("=== STARTING process_risk_scenarios ===")
-        logger.info("Processing risk scenarios with current GDP levels...")
+        logger.info("Processing comprehensive risk scenarios...")
         
+        # Use provided scenarios or default set
         sea_level_scenarios = custom_sea_level_scenarios or self.sea_level_scenarios
         
+        # Load spatial reference data
         land_mask, transform, crs = self.load_land_mask()
         
+        # Load or generate hazard data
         logger.info("Checking for existing hazard outputs...")
         hazard_results = self.load_existing_hazard_outputs(sea_level_scenarios)
         
@@ -177,6 +279,7 @@ class RiskLayer:
             logger.info("Regenerating hazard scenarios...")
             hazard_results = self.hazard_layer.process_scenarios(sea_level_scenarios)
         
+        # Load or generate relevance data
         logger.info("Checking for existing relevance outputs...")
         economic_results = self.load_existing_relevance_outputs()
         
@@ -187,56 +290,66 @@ class RiskLayer:
                 export_individual_tifs=True
             )
         
-        # Log what economic variables we have
+        # Validate economic data availability
         logger.info(f"Available economic variables: {list(economic_results.keys())}")
         
-        # Get the economic variables we want to process
+        # Define economic variables for processing
         economic_variables = [var for var in economic_results.keys() if var != 'combined']
         
-        # Always include combined if it exists
+        # Always include combined layer if available
         if 'combined' in economic_results:
             economic_variables.append('combined')
         
-        # If no variables at all, something is wrong
+        # Validate data availability
         if not economic_variables:
-            logger.error("No economic variables found at all!")
+            logger.error("No economic variables found for risk assessment!")
             return {}
         
         logger.info(f"Economic variables to process: {economic_variables}")
         
+        # Process risk scenarios for each combination
         risk_scenarios = {}
         
         for slr_scenario in sea_level_scenarios:
-            # Include meter value in scenario name: SLR-0-Current, SLR-1-Conservative, etc.
+            # Create descriptive scenario name with SLR level
             scenario_name = f"SLR-{int(slr_scenario.rise_meters)}-{slr_scenario.name}"
             
+            # Get hazard data for this scenario
             hazard_data = hazard_results[slr_scenario.name]
             
             logger.info(f"Calculating risk for {scenario_name} with {len(economic_variables)} economic variables")
             
+            # Process each economic variable
             for economic_variable in economic_variables:
                 if economic_variable == 'combined':
                     combined_scenario_name = f"{scenario_name}_COMBINED"
-                    # Use the pre-combined economic data directly
-                    economic_data_to_use = economic_results[economic_variable]
+                    logger.info(f"Processing combined economic scenario: {combined_scenario_name}")
+                    
+                    # Use combined economic data
+                    economic_data = economic_results[economic_variable]
+                    
+                    # Calculate integrated risk
+                    risk_data = self.calculate_integrated_risk(
+                        hazard_data, economic_data, land_mask
+                    )
+                    
+                    risk_scenarios[combined_scenario_name] = risk_data
                 else:
-                    combined_scenario_name = f"{scenario_name}_{economic_variable.upper()}"
-                    # Use individual economic variable
-                    economic_data_to_use = economic_results[economic_variable]
-                
-                logger.info(f"Processing: {economic_variable} -> {combined_scenario_name}")
-                
-                risk_data = self.calculate_integrated_risk(
-                    hazard_data=hazard_data,
-                    economic_data=economic_data_to_use,
-                    land_mask=land_mask
-                )
-                
-                risk_scenarios[combined_scenario_name] = risk_data
-                logger.info(f"Calculated risk for {combined_scenario_name}")
+                    # Process individual economic variable
+                    individual_scenario_name = f"{scenario_name}_{economic_variable.upper()}"
+                    logger.info(f"Processing individual economic scenario: {individual_scenario_name}")
+                    
+                    # Use specific economic data
+                    economic_data = economic_results[economic_variable]
+                    
+                    # Calculate integrated risk
+                    risk_data = self.calculate_integrated_risk(
+                        hazard_data, economic_data, land_mask
+                    )
+                    
+                    risk_scenarios[individual_scenario_name] = risk_data
         
-        logger.info(f"Final risk scenarios keys: {list(risk_scenarios.keys())}")
-        logger.info(f"Processed {len(risk_scenarios)} risk scenario combinations")
+        logger.info(f"Completed processing {len(risk_scenarios)} risk scenarios")
         return risk_scenarios
     
     def calculate_integrated_risk(self,

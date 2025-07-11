@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-"""
-Data Upload Script
-=================
-
-This script handles uploading data to the Hugging Face repository.
-It uploads both the data and output directories.
-"""
-
 import os
 import sys
 from pathlib import Path

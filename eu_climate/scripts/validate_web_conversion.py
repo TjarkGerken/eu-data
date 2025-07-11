@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-"""
-Web Conversion Accuracy Validation Script
-=========================================
-
-This script validates the accuracy of the web conversion process for both:
-- Raster data: TIF → COG (Cloud-Optimized GeoTIFF)
-- Vector data: GPKG → MBTiles (Mapbox Vector Tiles)
-
-Usage:
-    python validate_web_conversion.py [--output-dir PATH] [--verbose]
-"""
-
 import argparse
 import logging
 import sqlite3

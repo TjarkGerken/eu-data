@@ -1,17 +1,3 @@
-"""
-Transparent Caching Wrappers for Risk Layers
-===========================================
-
-This module provides transparent caching integration for existing risk layer methods.
-The wrappers intercept method calls and apply caching without modifying the original layer code.
-
-Key Features:
-- Non-intrusive integration with existing layers
-- Automatic cache key generation based on input files and parameters
-- Intelligent cache invalidation
-- Support for different data types (raster, calculations, results)
-"""
-
 import functools
 from typing import Any, Dict, List, Optional, Callable
 
@@ -27,6 +13,15 @@ class CachingLayerWrapper:
     
     This wrapper intercepts method calls and applies appropriate caching strategies
     based on the method type and data involved.
+    
+    The wrapper maintains a configuration mapping that defines:
+    - Which methods should be cached
+    - What type of cache storage to use (raster_data, calculations, final_results)
+    - Which input files to monitor for cache invalidation
+    - Which configuration parameters affect the cache key
+    
+    The wrapper is designed to be completely transparent - the wrapped layer
+    behaves exactly like the original layer, but with automatic caching.
     """
     
     def __init__(self, layer_instance, layer_type: str):
@@ -35,7 +30,7 @@ class CachingLayerWrapper:
         
         Args:
             layer_instance: The original layer instance to wrap
-            layer_type: Type of layer ('hazard', 'exposition', 'risk')
+            layer_type: Type of layer ('hazard', 'exposition', 'risk', 'relevance')
         """
         self._wrapped_layer = layer_instance
         self._layer_type = layer_type
@@ -50,8 +45,19 @@ class CachingLayerWrapper:
         logger.info(f"Applied caching wrapper to {layer_type} layer")
         
     def _get_method_cache_config(self) -> Dict[str, Dict[str, Any]]:
-        """Define caching configuration for different layer methods."""
+        """
+        Define caching configuration for different layer methods.
         
+        This configuration maps method names to their caching strategies:
+        - cache_type: Type of cache storage ('raster_data', 'calculations', 'final_results')
+        - input_files_attr: Attributes containing input file paths for invalidation
+        - config_attrs: Configuration attributes that affect the cache key
+        
+        Returns:
+            Dictionary mapping method names to caching configurations
+        """
+        
+        # Base configuration attributes that affect most methods
         base_config_attrs = ['target_crs', 'resampling_method', 'smoothing_sigma']
         
         config = {
@@ -143,7 +149,13 @@ class CachingLayerWrapper:
         return config
         
     def _apply_caching(self):
-        """Apply caching decorators to specified methods."""
+        """
+        Apply caching decorators to specified methods.
+        
+        Iterates through the method cache configuration and replaces
+        the original methods with cached versions. The cached methods
+        maintain the same signature and behavior as the original methods.
+        """
         for method_name, cache_config in self._method_cache_config.items():
             if hasattr(self._wrapped_layer, method_name):
                 original_method = getattr(self._wrapped_layer, method_name)
@@ -162,7 +174,24 @@ class CachingLayerWrapper:
                 
     def _create_cached_method(self, original_method: Callable, method_name: str, 
                             cache_config: Dict[str, Any]) -> Callable:
-        """Create a cached version of a method."""
+        """
+        Create a cached version of a method.
+        
+        The cached method:
+        1. Checks if caching is enabled
+        2. Generates a unique cache key based on method signature and configuration
+        3. Attempts to retrieve cached result
+        4. If cache miss, executes original method and caches result
+        5. Returns result (cached or freshly computed)
+        
+        Args:
+            original_method: Original method to wrap with caching
+            method_name: Name of the method for logging/debugging
+            cache_config: Caching configuration for this method
+            
+        Returns:
+            Cached version of the method
+        """
         
         @functools.wraps(original_method)
         def cached_wrapper(*args, **kwargs):
@@ -197,11 +226,28 @@ class CachingLayerWrapper:
         
     def _generate_method_cache_key(self, method_name: str, cache_config: Dict[str, Any],
                                  args: tuple, kwargs: dict) -> str:
-        """Generate cache key for a specific method call."""
+        """
+        Generate cache key for a specific method call.
+        
+        Creates a unique cache key based on:
+        - Method name and layer type
+        - Input file paths and their modification times
+        - Configuration parameters that affect the result
+        - Method arguments and keyword arguments
+        
+        Args:
+            method_name: Name of the method being cached
+            cache_config: Cache configuration for this method
+            args: Method positional arguments
+            kwargs: Method keyword arguments
+            
+        Returns:
+            Unique cache key string
+        """
         
         function_name = f"{self._layer_type}.{method_name}"
         
-        # Extract input files
+        # Extract input files from layer attributes
         input_files = []
         input_files_attr = cache_config.get('input_files_attr')
         
@@ -231,7 +277,7 @@ class CachingLayerWrapper:
                         except AttributeError:
                             pass
                             
-        # Extract config parameters
+        # Extract config parameters that affect the cache key
         config_params = {}
         config_attrs = cache_config.get('config_attrs', [])
         
@@ -252,7 +298,18 @@ class CachingLayerWrapper:
         )
         
     def __getattr__(self, name):
-        """Delegate attribute access to the wrapped layer."""
+        """
+        Delegate attribute access to the wrapped layer.
+        
+        This ensures that the wrapper is completely transparent - any attribute
+        or method not handled by the wrapper is delegated to the original layer.
+        
+        Args:
+            name: Attribute name to access
+            
+        Returns:
+            Attribute value from the wrapped layer
+        """
         return getattr(self._wrapped_layer, name)
         
 
@@ -260,9 +317,13 @@ def apply_caching_to_layer(layer_instance, layer_type: str):
     """
     Apply caching to a layer instance.
     
+    This is the main function for wrapping layer instances with caching capabilities.
+    It creates a CachingLayerWrapper that intercepts method calls and applies
+    appropriate caching strategies.
+    
     Args:
         layer_instance: The layer instance to wrap with caching
-        layer_type: Type of layer ('hazard', 'exposition', 'risk')
+        layer_type: Type of layer ('hazard', 'exposition', 'risk', 'relevance')
         
     Returns:
         The wrapped layer instance with caching capabilities
@@ -271,22 +332,78 @@ def apply_caching_to_layer(layer_instance, layer_type: str):
 
 
 def cache_hazard_layer(hazard_layer):
-    """Apply caching specifically to HazardLayer instance."""
+    """
+    Apply caching specifically to HazardLayer instance.
+    
+    Wraps the hazard layer with caching optimized for:
+    - DEM loading and preprocessing
+    - Flood extent calculations
+    - Scenario processing
+    - Visualization generation
+    
+    Args:
+        hazard_layer: HazardLayer instance to wrap
+        
+    Returns:
+        Cached HazardLayer instance
+    """
     return apply_caching_to_layer(hazard_layer, 'hazard')
 
 
 def cache_exposition_layer(exposition_layer):
-    """Apply caching specifically to ExpositionLayer instance.""" 
+    """
+    Apply caching specifically to ExpositionLayer instance.
+    
+    Wraps the exposition layer with caching optimized for:
+    - Population and built environment data loading
+    - Raster preprocessing and normalization
+    - Exposition calculations
+    - Port and infrastructure processing
+    
+    Args:
+        exposition_layer: ExpositionLayer instance to wrap
+        
+    Returns:
+        Cached ExpositionLayer instance
+    """
     return apply_caching_to_layer(exposition_layer, 'exposition')
 
 
 def cache_risk_assessment(risk_assessment):
-    """Apply caching specifically to RiskAssessment instance."""
+    """
+    Apply caching specifically to RiskAssessment instance.
+    
+    Wraps the risk assessment with caching optimized for:
+    - Data preparation and integration
+    - Risk calculations
+    - Risk classification
+    - Final result generation
+    
+    Args:
+        risk_assessment: RiskAssessment instance to wrap
+        
+    Returns:
+        Cached RiskAssessment instance
+    """
     return apply_caching_to_layer(risk_assessment, 'risk')
 
 
 def cache_relevance_layer(relevance_layer):
-    """Apply caching specifically to RelevanceLayer instance."""
+    """
+    Apply caching specifically to RelevanceLayer instance.
+    
+    Wraps the relevance layer with caching optimized for:
+    - Economic dataset loading
+    - NUTS region processing
+    - Relevance calculations
+    - Freight and population data integration
+    
+    Args:
+        relevance_layer: RelevanceLayer instance to wrap
+        
+    Returns:
+        Cached RelevanceLayer instance
+    """
     return apply_caching_to_layer(relevance_layer, 'relevance')
 
 
@@ -295,7 +412,13 @@ class CacheAwareMethod:
     Decorator class for making individual methods cache-aware.
     
     This can be used to add caching to specific methods without
-    wrapping the entire class.
+    wrapping the entire class. Useful for:
+    - Adding caching to individual utility functions
+    - Retrofitting existing methods with caching
+    - Fine-grained control over caching behavior
+    
+    The decorator provides the same caching functionality as the
+    layer wrapper but can be applied to individual methods.
     """
     
     def __init__(self, cache_type: str = 'calculations',
@@ -305,16 +428,24 @@ class CacheAwareMethod:
         Initialize the cache-aware method decorator.
         
         Args:
-            cache_type: Type of cache to use
-            input_files: List of input file attribute names
-            config_attrs: List of config attribute names
+            cache_type: Type of cache to use ('raster_data', 'calculations', 'final_results')
+            input_files: List of input file attribute names to monitor for invalidation
+            config_attrs: List of config attribute names that affect the cache key
         """
         self.cache_type = cache_type
         self.input_files = input_files or []
         self.config_attrs = config_attrs or []
         
     def __call__(self, func):
-        """Apply caching to the decorated method."""
+        """
+        Apply caching to the decorated method.
+        
+        Args:
+            func: Function to decorate with caching
+            
+        Returns:
+            Decorated function with caching capabilities
+        """
         
         # Store decorator attributes in closure
         decorator_input_files = self.input_files
@@ -331,7 +462,7 @@ class CacheAwareMethod:
             # Generate cache key
             function_name = f"{func.__module__}.{func.__qualname__}"
             
-            # Extract input files
+            # Extract input files from instance attributes
             input_file_paths = []
             for attr in decorator_input_files:
                 if hasattr(instance, attr):
@@ -339,7 +470,7 @@ class CacheAwareMethod:
                     if file_path:
                         input_file_paths.append(str(file_path))
                         
-            # Extract config parameters
+            # Extract config parameters that affect the cache key
             config_params = {}
             if hasattr(instance, 'config'):
                 config = instance.config
@@ -370,7 +501,7 @@ class CacheAwareMethod:
         return wrapper
 
 
-# Convenient aliases for the decorator
+# Convenient aliases for the decorator with specific cache types
 cache_raster_method = lambda **kwargs: CacheAwareMethod(cache_type='raster_data', **kwargs)
 cache_calculation_method = lambda **kwargs: CacheAwareMethod(cache_type='calculations', **kwargs)
 cache_result_method = lambda **kwargs: CacheAwareMethod(cache_type='final_results', **kwargs) 

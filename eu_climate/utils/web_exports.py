@@ -1,3 +1,72 @@
+"""
+Web-Optimized Data Export Manager for EU Climate Risk Assessment
+=============================================================
+
+This module provides comprehensive web-optimized export capabilities for geospatial data,
+enabling efficient delivery of risk assessment results through modern web-compatible formats.
+
+Key Features:
+- Cloud-Optimized GeoTIFF (COG) export with compression and overviews
+- Mapbox Vector Tiles (MVT) export in MBTiles format
+- Cross-platform compatibility with Windows, macOS, and Linux
+- Intelligent dependency detection and fallback mechanisms
+- Comprehensive error handling and detailed logging
+- Production-ready optimization settings
+
+The module bridges the gap between traditional GIS formats and modern web delivery requirements,
+ensuring that risk assessment data can be efficiently served to web applications and visualizations.
+
+Format Support:
+- Raster Data: Cloud-Optimized GeoTIFF (COG)
+  - LZW compression for reduced file size
+  - Overview pyramids for multi-scale viewing
+  - Optimized tiling for HTTP range requests
+  - Efficient streaming and partial loading
+
+- Vector Data: Mapbox Vector Tiles (MVT)
+  - Binary format with gzip compression
+  - Zoom-based generalization
+  - Optimized for viewport-based delivery
+  - MBTiles container format
+
+Platform Compatibility:
+- Windows: Provides installation guidance and Python fallbacks
+- macOS/Linux: Full tippecanoe integration
+- Docker: Container-based processing options
+- WSL: Windows Subsystem for Linux support
+
+Dependencies:
+- Required: rasterio, geopandas (with fallback handling)
+- Optional: rio-cogeo (enhanced COG creation)
+- External: tippecanoe (MVT generation), GDAL (COG fallback)
+
+Usage:
+    from eu_climate.utils.web_exports import WebOptimizedExporter
+    
+    # Initialize exporter
+    exporter = WebOptimizedExporter()
+    
+    # Export raster as COG
+    success = exporter.export_raster_as_cog(
+        input_path="risk_assessment.tif",
+        output_path="web/cog/risk_assessment.tif"
+    )
+    
+    # Export vector as MVT
+    success = exporter.export_vector_as_mvt(
+        input_path="clusters.gpkg",
+        output_path="web/mvt/clusters.mbtiles"
+    )
+    
+    # Create complete web exports
+    results = exporter.create_web_exports(
+        data_type="raster",
+        input_path="input.tif",
+        base_output_dir="output",
+        layer_name="risk_layer"
+    )
+"""
+
 import os
 import subprocess
 import tempfile
@@ -42,15 +111,46 @@ class WebOptimizedExporter:
     Web-Optimized Data Export Manager
     ===============================
     
-    Handles export of geospatial data in modern web-compatible formats:
-    - Raster data: Cloud-Optimized GeoTIFF (COG) with compression and overviews
-    - Vector data: Mapbox Vector Tiles (MVT) in MBTiles format
+    Handles export of geospatial data in modern web-compatible formats with
+    comprehensive cross-platform support and intelligent fallback mechanisms.
     
-    This maintains backwards compatibility with existing .tif and .gpkg formats
-    while adding efficient web delivery formats.
+    Key Features:
+        - Cloud-Optimized GeoTIFF (COG) creation with compression and overviews
+        - Mapbox Vector Tiles (MVT) generation in MBTiles format
+        - Cross-platform compatibility with Windows, macOS, and Linux
+        - Intelligent dependency detection and fallback mechanisms
+        - Production-ready optimization settings
+        - Comprehensive error handling and logging
+        
+    Format Capabilities:
+        - Raster: COG with LZW compression, overview pyramids, and optimized tiling
+        - Vector: MVT with zoom-based generalization and binary compression
+        - Maintains backward compatibility with traditional formats
+        
+    Platform Support:
+        - Windows: Installation guidance and Python fallbacks
+        - macOS/Linux: Full tippecanoe integration
+        - Docker: Container-based processing options
+        - WSL: Windows Subsystem for Linux support
+        
+    Dependencies:
+        - Core: rasterio, geopandas (with graceful fallback)
+        - Enhanced: rio-cogeo (preferred COG creation)
+        - External: tippecanoe (MVT), GDAL (COG fallback)
+        
+    Attributes:
+        config: Configuration dictionary with export settings
+        web_config: Web-specific configuration subset
+        platform: Detected platform for platform-specific optimizations
     """
     
     def __init__(self, config: Optional[Dict] = None):
+        """
+        Initialize WebOptimizedExporter with configuration.
+        
+        Args:
+            config: Optional configuration dictionary with web export settings
+        """
         self.config = config or {}
         self.web_config = self.config.get('web_export', {})
         self.platform = platform.system()
@@ -61,7 +161,30 @@ class WebOptimizedExporter:
             logger.warning("GeoPandas not available - vector processing limited")
     
     def check_dependencies(self) -> Dict[str, bool]:
-        """Check available dependencies and tools"""
+        """
+        Check available dependencies and tools for web export functionality.
+        
+        This method performs a comprehensive check of all required and optional
+        dependencies, providing a detailed status report for troubleshooting.
+        
+        Returns:
+            Dict[str, bool]: Dependency availability status:
+                - 'rasterio': Core raster processing library
+                - 'geopandas': Vector data processing library
+                - 'cog_translate': Enhanced COG creation (rio-cogeo)
+                - 'tippecanoe': Vector tile generation tool
+                
+        Dependency Details:
+            - rasterio: Required for raster processing and COG creation
+            - geopandas: Required for vector data processing
+            - rio-cogeo: Optional but preferred for COG creation
+            - tippecanoe: Required for MVT generation (platform-dependent)
+            
+        Note:
+            - Returns comprehensive status for troubleshooting
+            - Identifies missing dependencies for targeted installation
+            - Enables feature availability determination
+        """
         deps = {
             'rasterio': RASTERIO_AVAILABLE,
             'geopandas': GEOPANDAS_AVAILABLE,
@@ -153,17 +276,50 @@ class WebOptimizedExporter:
                            add_overviews: bool = True,
                            overview_levels: Optional[List[int]] = None) -> bool:
         """
-        Export raster as Cloud-Optimized GeoTIFF (COG).
+        Export raster as Cloud-Optimized GeoTIFF (COG) with comprehensive optimization.
+        
+        This method creates production-ready COG files with compression, overviews,
+        and optimized tiling for efficient web delivery.
         
         Args:
             input_path: Path to input GeoTIFF file
             output_path: Path for COG output
             overwrite: Whether to overwrite existing files
-            add_overviews: Whether to add overview pyramids
+            add_overviews: Whether to add overview pyramids for multi-scale viewing
             overview_levels: Custom overview levels (e.g., [2, 4, 8, 16])
             
         Returns:
-            bool: Success status
+            bool: Success status of COG creation
+            
+        COG Features:
+            - LZW compression for reduced file size
+            - Optimized tiling (512x512 blocks) for HTTP range requests
+            - Overview pyramids for efficient multi-scale viewing
+            - Proper metadata preservation
+            
+        Creation Process:
+            1. Validate input file existence
+            2. Handle existing output files based on overwrite setting
+            3. Prefer rio-cogeo for enhanced COG creation
+            4. Fall back to GDAL translate if rio-cogeo unavailable
+            5. Generate overview pyramids automatically or from custom levels
+            6. Validate COG structure and integrity
+            
+        Optimization:
+            - Automatic overview level generation based on raster dimensions
+            - Intelligent tiling for web delivery
+            - Compression settings optimized for web streaming
+            - Metadata preservation for analysis compatibility
+            
+        Error Handling:
+            - Comprehensive validation of input and output paths
+            - Graceful fallback between COG creation methods
+            - Detailed logging of creation process and errors
+            
+        Note:
+            - Requires either rio-cogeo or GDAL with COG driver
+            - Automatically generates overview levels if not specified
+            - Validates COG structure after creation
         """
         input_path = Path(input_path)
         output_path = Path(output_path)
@@ -271,19 +427,65 @@ class WebOptimizedExporter:
                            overwrite: bool = True) -> bool:
         """
         Export vector data as Mapbox Vector Tiles (MVT) in MBTiles format.
-        Requires tippecanoe to be installed and available in PATH.
+        
+        This method creates production-ready MVT files with zoom-based generalization
+        and comprehensive optimization for web delivery.
         
         Args:
             input_path: Path to input vector file (GeoPackage, Shapefile, etc.)
-            output_path: Path for MBTiles output
+            output_path: Path for MBTiles output file
             layer_name: Layer name in MVT (defaults to filename)
-            min_zoom: Minimum zoom level
-            max_zoom: Maximum zoom level
+            min_zoom: Minimum zoom level (0-22)
+            max_zoom: Maximum zoom level (0-22)
             simplification: Tippecanoe simplification strategy
             overwrite: Whether to overwrite existing files
             
         Returns:
-            bool: Success status
+            bool: Success status of MVT creation
+            
+        MVT Features:
+            - Binary format with gzip compression
+            - Zoom-based generalization for efficient delivery
+            - Viewport-based tile loading
+            - MBTiles container format for easy deployment
+            
+        Creation Process:
+            1. Validate input file and transform to WGS84 if needed
+            2. Check and validate geographic boundaries
+            3. Generate optimized tippecanoe command
+            4. Apply cluster-specific optimizations if applicable
+            5. Create MBTiles file with metadata
+            6. Validate output file size and structure
+            
+        Optimization Features:
+            - Automatic bounds calculation and validation
+            - Cluster-specific simplification strategies
+            - Feature density optimization
+            - Parallel processing for large datasets
+            - Intelligent vertex reduction
+            
+        Geographic Validation:
+            - Coordinate system transformation to WGS84
+            - Boundary validation for reasonable extents
+            - Geographic filtering for invalid coordinates
+            - European bounds checking for regional data
+            
+        Error Handling:
+            - Comprehensive coordinate validation
+            - Graceful handling of invalid geometries
+            - Detailed logging of processing steps
+            - Fallback mechanisms for edge cases
+            
+        Requirements:
+            - tippecanoe must be installed and available in PATH
+            - Input data must be in a supported vector format
+            - Sufficient disk space for tile generation
+            
+        Note:
+            - Automatically transforms coordinate systems to WGS84
+            - Provides detailed file size and optimization reporting
+            - Includes comprehensive geographic validation
+            - Optimized for European geographic extents
         """
         input_path = Path(input_path)
         output_path = Path(output_path)
@@ -534,16 +736,49 @@ class WebOptimizedExporter:
                          base_output_dir: Union[str, Path],
                          layer_name: Optional[str] = None) -> Dict[str, bool]:
         """
-        Create both legacy and web-optimized exports for a dataset.
+        Create comprehensive web-optimized exports for a dataset.
+        
+        This method provides a unified interface for creating web-optimized exports
+        for both raster and vector data, with automatic directory structure creation
+        and format-specific optimization.
         
         Args:
-            data_type: 'raster' or 'vector'
-            input_path: Path to input file
-            base_output_dir: Base directory for outputs
-            layer_name: Layer name (for vector data)
+            data_type: Data type to export ('raster' or 'vector')
+            input_path: Path to input file (GeoTIFF, GeoPackage, etc.)
+            base_output_dir: Base directory for web exports
+            layer_name: Layer name for vector data (defaults to filename)
             
         Returns:
-            Dict with success status for each format
+            Dict[str, bool]: Success status for each format:
+                - 'cog': Success status for Cloud-Optimized GeoTIFF (raster)
+                - 'mvt': Success status for Mapbox Vector Tiles (vector)
+                
+        Export Process:
+            1. Validate input file and data type
+            2. Create standardized web directory structure
+            3. Apply format-specific optimizations
+            4. Generate web-optimized exports
+            5. Return comprehensive success status
+            
+        Directory Structure:
+            - web/cog/: Cloud-Optimized GeoTIFF files
+            - web/mvt/: Mapbox Vector Tiles in MBTiles format
+            
+        Raster Processing:
+            - Creates COG with compression and overviews
+            - Optimizes tiling for web delivery
+            - Preserves metadata and projection information
+            
+        Vector Processing:
+            - Creates MVT with zoom-based generalization
+            - Applies geometry simplification
+            - Optimizes for viewport-based delivery
+            
+        Note:
+            - Automatically creates required directory structure
+            - Handles both raster and vector data types
+            - Provides detailed success status reporting
+            - Maintains consistent naming conventions
         """
         input_path = Path(input_path)
         base_output_dir = Path(base_output_dir)
@@ -575,7 +810,35 @@ class WebOptimizedExporter:
         return results
     
     def get_cog_info(self, cog_path: Union[str, Path]) -> Dict:
-        """Get information about a COG file for web serving."""
+        """
+        Get comprehensive information about a COG file for web serving.
+        
+        This method provides detailed metadata about a Cloud-Optimized GeoTIFF
+        that is essential for web serving configuration and optimization.
+        
+        Args:
+            cog_path: Path to the COG file to analyze
+            
+        Returns:
+            Dict: Comprehensive COG information including:
+                - Basic properties (dimensions, data type, CRS)
+                - Optimization details (tiling, compression, overviews)
+                - Web serving metadata (bounds, overview factors)
+                
+        Information Provided:
+            - File format and driver information
+            - Raster dimensions and band count
+            - Data type and coordinate reference system
+            - Tiling configuration and block sizes
+            - Compression settings and optimization
+            - Overview pyramid information
+            - Geographic bounds for web serving
+            
+        Note:
+            - Returns empty dict if file cannot be read
+            - Provides comprehensive metadata for web serving setup
+            - Includes optimization details for performance tuning
+        """
         try:
             with rasterio.open(cog_path) as src:
                 info = {

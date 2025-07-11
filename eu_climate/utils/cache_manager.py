@@ -36,46 +36,80 @@ class CacheManager:
     - Configurable storage strategies
     - Memory-efficient data handling
     - Thread-safe operations
+    
+    The cache manager automatically organizes data into different storage types
+    based on the nature of the data being cached, ensuring optimal performance
+    and storage efficiency.
+    
+    Cache Directory Structure:
+    - .cache/eu_climate/raster_data/: Large raster arrays (HDF5)
+    - .cache/eu_climate/calculations/: Intermediate results (compressed pickle)
+    - .cache/eu_climate/final_results/: Final outputs (various formats)
+    - .cache/eu_climate/metadata/: Configuration and metadata
+    - .cache/eu_climate/config_snapshots/: Configuration history
     """
     
     def __init__(self, config=None):
-        """Initialize the cache manager."""
+        """
+        Initialize the cache manager.
+        
+        Args:
+            config: ProjectConfig instance containing cache configuration.
+                   If None, caching will be disabled.
+        """
         self.config = config
         
 
+        # Set up cache directory structure within the project's HuggingFace folder
         self.cache_dir = config.huggingface_folder / ".cache" / "eu_climate"
         
             
-        # Create cache subdirectories
+        # Create cache subdirectories for different data types
         self.cache_dirs = {
-            'raster_data': self.cache_dir / 'raster_data',
-            'calculations': self.cache_dir / 'calculations', 
-            'final_results': self.cache_dir / 'final_results',
-            'metadata': self.cache_dir / 'metadata',
-            'config_snapshots': self.cache_dir / 'config_snapshots'
+            'raster_data': self.cache_dir / 'raster_data',        # Large raster arrays
+            'calculations': self.cache_dir / 'calculations',     # Intermediate calculations
+            'final_results': self.cache_dir / 'final_results',   # Final processing results
+            'metadata': self.cache_dir / 'metadata',             # Cache metadata
+            'config_snapshots': self.cache_dir / 'config_snapshots'  # Configuration history
         }
         
-        # Create directories
+        # Create directories if they don't exist
         for cache_dir in self.cache_dirs.values():
             cache_dir.mkdir(parents=True, exist_ok=True)
             
-        # Cache configuration
+        # Load cache configuration from YAML config
         self.enabled = self._get_cache_config('enabled', True)
         self.max_cache_size_gb = self._get_cache_config('max_cache_size_gb', 10)
         self.auto_cleanup = self._get_cache_config('auto_cleanup', True)
         
-        # Cache statistics
+        # Initialize cache statistics for monitoring
         self.stats = {
-            'hits': 0,
-            'misses': 0,
-            'invalidations': 0
+            'hits': 0,           # Cache hits (successful retrievals)
+            'misses': 0,         # Cache misses (data not found)
+            'invalidations': 0   # Cache invalidations (data removal)
         }
         
         logger.info(f"Cache manager initialized: {self.cache_dir}")
         logger.info(f"Cache enabled: {self.enabled}")
         
     def _get_cache_config(self, key: str, default: Any) -> Any:
-        """Get cache configuration value from YAML config."""
+        """
+        Get cache configuration value from YAML config.
+        
+        Supports both ProjectConfig instances and direct dictionaries.
+        Validates that the caching configuration section exists and contains
+        the requested key.
+        
+        Args:
+            key: Configuration key to retrieve
+            default: Default value if key not found
+            
+        Returns:
+            Configuration value or default
+            
+        Raises:
+            ValueError: If config structure is invalid or key not found
+        """
         
         if self.config is None:
             raise ValueError(f"No configuration provided to CacheManager, cannot get cache config for '{key}'")
@@ -118,18 +152,29 @@ class CacheManager:
         """
         Generate a unique cache key based on function name, inputs, and parameters.
         
+        Creates a SHA256 hash from the combination of:
+        - Function name (for method identification)
+        - Input file signatures (path + modification time + size)
+        - Function parameters (serialized as JSON)
+        - Configuration parameters (serialized as JSON)
+        
+        This ensures that cache invalidation occurs automatically when:
+        - Input files are modified
+        - Function parameters change
+        - Configuration settings change
+        
         Args:
             function_name: Name of the function being cached
-            input_files: List of input file paths
+            input_files: List of input file paths to monitor for changes
             parameters: Function parameters that affect output
             config_params: Configuration parameters that affect output
             
         Returns:
-            Unique cache key string
+            str: Unique cache key string (SHA256 hash)
         """
         key_components = [function_name]
         
-        # Add file signatures
+        # Add file signatures (path + modification time + size)
         if input_files:
             for file_path in input_files:
                 if isinstance(file_path, (str, Path)) and Path(file_path).exists():
@@ -137,24 +182,34 @@ class CacheManager:
                     file_sig = f"{file_path}:{file_stat.st_mtime}:{file_stat.st_size}"
                     key_components.append(file_sig)
                     
-        # Add parameter signatures
+        # Add parameter signatures (deterministic JSON serialization)
         if parameters:
             param_str = json.dumps(parameters, sort_keys=True, default=str)
             key_components.append(param_str)
             
-        # Add config signatures
+        # Add config signatures (deterministic JSON serialization)
         if config_params:
             config_str = json.dumps(config_params, sort_keys=True, default=str)
             key_components.append(config_str)
             
-        # Create hash
+        # Create SHA256 hash for consistent key generation
         combined_key = '|'.join(key_components)
         cache_key = hashlib.sha256(combined_key.encode()).hexdigest()
         
         return cache_key
         
     def _get_cache_path(self, cache_key: str, cache_type: str, extension: str = '') -> Path:
-        """Get the cache file path for a given key and type."""
+        """
+        Get the cache file path for a given key and type.
+        
+        Args:
+            cache_key: Unique cache key
+            cache_type: Type of cache storage ('raster_data', 'calculations', etc.)
+            extension: File extension to append
+            
+        Returns:
+            Path: Full path to cache file
+        """
         cache_dir = self.cache_dirs.get(cache_type, self.cache_dirs['calculations'])
         if extension and not extension.startswith('.'):
             extension = '.' + extension
@@ -162,48 +217,92 @@ class CacheManager:
         
     def _save_raster_data(self, data: np.ndarray, cache_path: Path, 
                          metadata: Optional[dict] = None) -> None:
-        """Save raster data in compressed HDF5 format."""
+        """
+        Save raster data in compressed HDF5 format.
+        
+        HDF5 format is used for raster data because it provides:
+        - Efficient compression for large arrays
+        - Metadata storage capabilities
+        - Cross-platform compatibility
+        - Fast random access
+        
+        Args:
+            data: Raster data array to save
+            cache_path: Path where to save the HDF5 file
+            metadata: Optional metadata dictionary to store alongside data
+        """
         with h5py.File(cache_path, 'w') as f:
-            # Save data with compression
+            # Save data with gzip compression (level 6 for good compression/speed balance)
             f.create_dataset('data', data=data, compression='gzip', compression_opts=6)
             
-            # Save metadata
+            # Save metadata as HDF5 attributes and datasets
             if metadata:
                 meta_group = f.create_group('metadata')
                 for key, value in metadata.items():
                     if isinstance(value, (str, int, float, bool)):
+                        # Simple types stored as attributes
                         meta_group.attrs[key] = value
                     elif isinstance(value, (list, tuple)):
-                        # Save lists and tuples as datasets, converting to numpy array
+                        # Lists and tuples stored as datasets
                         meta_group.create_dataset(key, data=np.array(value))
                     elif isinstance(value, np.ndarray):
+                        # Arrays stored as datasets
                         meta_group.create_dataset(key, data=value)
                     else:
-                        # Fallback to string for other types
+                        # Fallback to string representation for complex types
                         meta_group.attrs[key] = str(value)
                         
     def _load_raster_data(self, cache_path: Path) -> Tuple[np.ndarray, dict]:
-        """Load raster data from HDF5 format."""
+        """
+        Load raster data from HDF5 format.
+        
+        Args:
+            cache_path: Path to HDF5 cache file
+            
+        Returns:
+            Tuple of (data array, metadata dict)
+        """
         with h5py.File(cache_path, 'r') as f:
+            # Load the main data array
             data = f['data'][:]
             
+            # Load metadata from attributes and datasets
             metadata = {}
             if 'metadata' in f:
                 meta_group = f['metadata']
+                # Load attributes
                 for key in meta_group.attrs:
                     metadata[key] = meta_group.attrs[key]
+                # Load datasets
                 for key in meta_group.keys():
                     metadata[key] = meta_group[key][:]
                     
         return data, metadata
         
     def _save_calculation_data(self, data: Any, cache_path: Path) -> None:
-        """Save calculation data in compressed pickle format."""
+        """
+        Save calculation data in compressed pickle format.
+        
+        Uses gzip compression to reduce storage space while maintaining
+        Python object compatibility.
+        
+        Args:
+            data: Any Python object to cache
+            cache_path: Path where to save the compressed pickle file
+        """
         with gzip.open(cache_path, 'wb') as f:
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
             
     def _load_calculation_data(self, cache_path: Path) -> Any:
-        """Load calculation data from compressed pickle format."""
+        """
+        Load calculation data from compressed pickle format.
+        
+        Args:
+            cache_path: Path to compressed pickle cache file
+            
+        Returns:
+            Deserialized Python object
+        """
         with gzip.open(cache_path, 'rb') as f:
             return pickle.load(f)
             
@@ -211,12 +310,15 @@ class CacheManager:
         """
         Retrieve data from cache.
         
+        Attempts to load cached data based on the cache key and type.
+        Updates cache statistics for monitoring purposes.
+        
         Args:
-            cache_key: Unique cache key
+            cache_key: Unique cache key generated by generate_cache_key()
             cache_type: Type of cache ('raster_data', 'calculations', 'final_results')
             
         Returns:
-            Cached data or None if not found
+            Cached data if found, None otherwise
         """
         if not self.enabled:
             return None
@@ -246,10 +348,15 @@ class CacheManager:
         """
         Store data in cache.
         
+        Saves data using the appropriate format based on cache type:
+        - raster_data: HDF5 format with compression
+        - calculations: Compressed pickle format
+        - final_results: Compressed pickle format
+        
         Args:
             cache_key: Unique cache key
             data: Data to cache
-            cache_type: Type of cache
+            cache_type: Type of cache storage
             metadata: Additional metadata for raster data
             
         Returns:
@@ -264,7 +371,7 @@ class CacheManager:
                 if isinstance(data, np.ndarray):
                     self._save_raster_data(data, cache_path, metadata)
                 else:
-                    # If data is tuple (array, metadata), handle appropriately
+                    # Handle tuple format (array, metadata)
                     if isinstance(data, tuple) and len(data) == 2:
                         array_data, meta = data
                         if metadata:
@@ -287,8 +394,14 @@ class CacheManager:
         """
         Invalidate cache entries.
         
+        Removes cached data based on optional pattern matching and cache type filtering.
+        Useful for:
+        - Clearing specific cached results
+        - Removing outdated data
+        - Cleaning up after configuration changes
+        
         Args:
-            pattern: Optional pattern to match cache keys
+            pattern: Optional pattern to match cache keys (substring matching)
             cache_type: Optional specific cache type to invalidate
             
         Returns:
@@ -296,6 +409,7 @@ class CacheManager:
         """
         invalidated = 0
         
+        # Determine which cache directories to check
         cache_dirs_to_check = [self.cache_dirs[cache_type]] if cache_type else self.cache_dirs.values()
         
         for cache_dir in cache_dirs_to_check:
@@ -304,6 +418,7 @@ class CacheManager:
                 
             for cache_file in cache_dir.iterdir():
                 if cache_file.is_file():
+                    # Check if pattern matches (if specified)
                     if pattern is None or pattern in cache_file.stem:
                         try:
                             cache_file.unlink()
@@ -316,11 +431,26 @@ class CacheManager:
         return invalidated
         
     def clear_all(self) -> int:
-        """Clear all cache data."""
+        """
+        Clear all cache data.
+        
+        Removes all cached data from all cache types.
+        Useful for complete cache reset.
+        
+        Returns:
+            Number of cleared entries
+        """
         return self.invalidate()
         
     def get_cache_size(self) -> float:
-        """Get total cache size in GB."""
+        """
+        Get total cache size in GB.
+        
+        Calculates the total disk space used by all cache files.
+        
+        Returns:
+            Total cache size in gigabytes
+        """
         total_size = 0
         for cache_dir in self.cache_dirs.values():
             if cache_dir.exists():
@@ -330,7 +460,18 @@ class CacheManager:
         return total_size / (1024 ** 3)  # Convert to GB
         
     def cleanup_old_cache(self, max_age_days: int = 7) -> int:
-        """Remove cache files older than specified days."""
+        """
+        Remove cache files older than specified days.
+        
+        Automatically cleans up old cache files to prevent unlimited growth.
+        Based on file modification time.
+        
+        Args:
+            max_age_days: Maximum age in days before cache files are removed
+            
+        Returns:
+            Number of removed files
+        """
         cutoff_time = time.time() - (max_age_days * 24 * 3600)
         removed = 0
         
@@ -350,14 +491,28 @@ class CacheManager:
         return removed
         
     def get_stats(self) -> dict:
-        """Get cache statistics."""
+        """
+        Get cache statistics.
+        
+        Returns comprehensive statistics about cache usage including:
+        - Hit/miss counts and rates
+        - Current cache size
+        - Cache invalidation count
+        
+        Returns:
+            Dictionary containing cache statistics
+        """
         stats = self.stats.copy()
         stats['cache_size_gb'] = self.get_cache_size()
         stats['hit_rate'] = stats['hits'] / max(stats['hits'] + stats['misses'], 1)
         return stats
         
     def print_stats(self) -> None:
-        """Print cache statistics."""
+        """
+        Print cache statistics to the logger.
+        
+        Outputs detailed cache performance metrics for monitoring and debugging.
+        """
         stats = self.get_stats()
         logger.info("Cache Statistics:")
         logger.info(f"  Hits: {stats['hits']}")
@@ -367,12 +522,23 @@ class CacheManager:
         logger.info(f"  Invalidations: {stats['invalidations']}")
 
 
-# Global cache manager instance
+# Global cache manager instance for system-wide consistency
 _cache_manager = None
 
 
 def get_cache_manager(config=None) -> CacheManager:
-    """Get or create the global cache manager instance."""
+    """
+    Get or create the global cache manager instance.
+    
+    Implements singleton pattern to ensure consistent caching across the entire system.
+    The cache manager instance is shared across all modules and components.
+    
+    Args:
+        config: ProjectConfig instance (only used for first initialization)
+        
+    Returns:
+        CacheManager: Global cache manager instance
+    """
     global _cache_manager
     if _cache_manager is None:
         _cache_manager = CacheManager(config)
@@ -386,11 +552,31 @@ def cached_method(cache_type: str = 'calculations',
     """
     Decorator to cache method results.
     
+    Provides transparent caching for class methods without modifying the method implementation.
+    Automatically generates cache keys based on method parameters, input files, and configuration.
+    
+    Features:
+    - Automatic cache key generation
+    - File-based invalidation monitoring
+    - Configuration-aware caching
+    - Transparent cache hits/misses
+    
     Args:
-        cache_type: Type of cache to use
+        cache_type: Type of cache to use ('raster_data', 'calculations', 'final_results')
         include_self: Include self object in cache key generation
-        input_files_attr: Attribute name containing input file paths
+        input_files_attr: Attribute name containing input file paths for invalidation
         config_attrs: List of config attributes to include in cache key
+        
+    Returns:
+        Decorated method with caching capabilities
+        
+    Example:
+        @cached_method(cache_type='raster_data', 
+                      input_files_attr='dem_path',
+                      config_attrs=['target_crs', 'resampling_method'])
+        def process_elevation_data(self):
+            # Expensive computation here
+            return processed_data
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -459,10 +645,24 @@ def cached_function(cache_type: str = 'calculations',
     """
     Decorator to cache function results.
     
+    Similar to cached_method but for standalone functions.
+    Useful for utility functions that perform expensive computations.
+    
     Args:
         cache_type: Type of cache to use
-        input_files: List of input file paths
+        input_files: List of input file paths to monitor for changes
         config_params: Configuration parameters affecting the result
+        
+    Returns:
+        Decorated function with caching capabilities
+        
+    Example:
+        @cached_function(cache_type='calculations',
+                        input_files=['/path/to/input.tif'],
+                        config_params={'resolution': 30})
+        def expensive_calculation(data):
+            # Expensive computation here
+            return result
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)

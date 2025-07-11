@@ -1,11 +1,3 @@
-"""
-Cache Utilities for EU Climate Risk Assessment
-=============================================
-
-High-level utilities for cache management, integration, and monitoring.
-Provides easy-to-use functions for integrating caching into the main workflow.
-"""
-
 import os
 import sys
 from pathlib import Path
@@ -30,23 +22,44 @@ class CacheIntegrator:
     
     Provides simple methods to enable caching for different components
     and manage cache operations.
+    
+    This class serves as the main interface for integrating caching into
+    the risk assessment workflow. It handles:
+    - Automatic wrapping of layer instances with caching capabilities
+    - Cache performance monitoring and statistics
+    - Cache lifecycle management and cleanup
+    - Integration with the broader risk assessment pipeline
+    
+    The integrator maintains references to cached layer instances to ensure
+    consistent caching behavior across the system.
     """
     
     def __init__(self, config=None):
-        """Initialize the cache integrator."""
+        """
+        Initialize the cache integrator.
+        
+        Args:
+            config: ProjectConfig instance containing cache configuration
+        """
         self.config = config
         self.cache_manager = get_cache_manager(config)
-        self._cached_layers = {}
+        self._cached_layers = {}  # Store references to cached layer instances
         
     def enable_caching_for_hazard_layer(self, hazard_layer):
         """
         Enable caching for a HazardLayer instance.
         
+        Wraps the hazard layer with caching capabilities, intercepting method calls
+        to provide transparent caching for expensive operations like:
+        - DEM processing and flood extent calculations
+        - Scenario processing and risk assessments
+        - Visualization and output generation
+        
         Args:
             hazard_layer: HazardLayer instance to wrap with caching
             
         Returns:
-            Cached version of the hazard layer
+            Cached version of the hazard layer with transparent caching
         """
         if id(hazard_layer) not in self._cached_layers:
             cached_layer = cache_hazard_layer(hazard_layer)
@@ -59,11 +72,17 @@ class CacheIntegrator:
         """
         Enable caching for an ExpositionLayer instance.
         
+        Wraps the exposition layer with caching capabilities for operations like:
+        - Population and built environment data loading
+        - Raster preprocessing and normalization
+        - Exposition index calculations
+        - Port and infrastructure processing
+        
         Args:
             exposition_layer: ExpositionLayer instance to wrap with caching
             
         Returns:
-            Cached version of the exposition layer
+            Cached version of the exposition layer with transparent caching
         """
         if id(exposition_layer) not in self._cached_layers:
             cached_layer = cache_exposition_layer(exposition_layer)
@@ -76,11 +95,17 @@ class CacheIntegrator:
         """
         Enable caching for a RiskAssessment instance.
         
+        Wraps the risk assessment with caching capabilities for operations like:
+        - Data preparation and integration
+        - Integrated risk calculations
+        - Risk classification and analysis
+        - Final result generation
+        
         Args:
             risk_assessment: RiskAssessment instance to wrap with caching
             
         Returns:
-            Cached version of the risk assessment
+            Cached version of the risk assessment with transparent caching
         """
         if id(risk_assessment) not in self._cached_layers:
             cached_layer = cache_risk_assessment(risk_assessment)
@@ -93,11 +118,17 @@ class CacheIntegrator:
         """
         Enable caching for a RelevanceLayer instance.
         
+        Wraps the relevance layer with caching capabilities for operations like:
+        - Economic dataset loading and processing
+        - NUTS region processing and rasterization
+        - Relevance index calculations
+        - Freight and population data integration
+        
         Args:
             relevance_layer: RelevanceLayer instance to wrap with caching
             
         Returns:
-            Cached version of the relevance layer
+            Cached version of the relevance layer with transparent caching
         """
         if id(relevance_layer) not in self._cached_layers:
             cached_layer = cache_relevance_layer(relevance_layer)
@@ -107,7 +138,21 @@ class CacheIntegrator:
         return self._cached_layers[id(relevance_layer)]
         
     def print_cache_statistics(self):
-        """Print comprehensive cache statistics."""
+        """
+        Print comprehensive cache statistics.
+        
+        Outputs detailed information about cache performance including:
+        - Cache hit/miss rates and performance metrics
+        - Cache size and storage utilization
+        - Cache breakdown by data type
+        - Directory structure and file counts
+        
+        This information is useful for:
+        - Monitoring cache effectiveness
+        - Identifying performance bottlenecks
+        - Optimizing cache configuration
+        - Debugging cache-related issues
+        """
         stats = self.cache_manager.get_stats()
         
         print("\n" + "="*50)
@@ -139,6 +184,9 @@ class CacheIntegrator:
         """
         Clean up old cache files.
         
+        Removes cache files older than the specified number of days to prevent
+        unlimited cache growth and maintain system performance.
+        
         Args:
             max_age_days: Remove files older than this many days
         """
@@ -149,8 +197,15 @@ class CacheIntegrator:
         """
         Clear cache data.
         
+        Removes cached data either for a specific cache type or all cache data.
+        Useful for:
+        - Forcing re-computation of results
+        - Clearing cache after configuration changes
+        - Freeing up disk space
+        
         Args:
-            cache_type: Specific cache type to clear, or None for all
+            cache_type: Specific cache type to clear ('raster_data', 'calculations', 
+                       'final_results'), or None for all cache types
         """
         if cache_type:
             removed = self.cache_manager.invalidate(cache_type=cache_type)
@@ -160,7 +215,18 @@ class CacheIntegrator:
             logger.info(f"Cleared all cache data: removed {removed} files")
             
     def get_cache_info(self) -> Dict[str, Any]:
-        """Get detailed cache information."""
+        """
+        Get detailed cache information.
+        
+        Returns comprehensive information about the cache system including:
+        - Configuration and status
+        - Performance statistics
+        - Storage breakdown by cache type
+        - Directory structure and file counts
+        
+        Returns:
+            Dictionary containing detailed cache information
+        """
         stats = self.cache_manager.get_stats()
         
         cache_info = {
@@ -187,12 +253,23 @@ class CacheIntegrator:
         return cache_info
 
 
-# Global cache integrator instance
+# Global cache integrator instance for system-wide consistency
 _cache_integrator = None
 
 
 def get_cache_integrator(config=None) -> CacheIntegrator:
-    """Get or create the global cache integrator instance."""
+    """
+    Get or create the global cache integrator instance.
+    
+    Implements singleton pattern to ensure consistent cache integration
+    across the entire system.
+    
+    Args:
+        config: ProjectConfig instance (only used for first initialization)
+        
+    Returns:
+        CacheIntegrator: Global cache integrator instance
+    """
     global _cache_integrator
     if _cache_integrator is None:
         _cache_integrator = CacheIntegrator(config)
@@ -203,18 +280,28 @@ def initialize_caching(config=None) -> CacheIntegrator:
     """
     Initialize the caching system for the project.
     
+    Sets up the caching infrastructure and performs initial configuration.
+    This function should be called early in the application lifecycle to
+    ensure caching is available for all components.
+    
+    Features:
+    - Initializes cache directory structure
+    - Loads configuration from project config
+    - Performs automatic cleanup if configured
+    - Provides comprehensive logging of cache status
+    
     Args:
-        config: Project configuration
+        config: ProjectConfig instance containing cache configuration
         
     Returns:
-        CacheIntegrator instance
+        CacheIntegrator: Initialized cache integrator instance
     """
     integrator = get_cache_integrator(config)
     
     if integrator.cache_manager.enabled:
         logger.info("Caching system initialized and enabled")
         
-        # Log cache configuration
+        # Log cache configuration details
         cache_config = {}
         if config and hasattr(config, 'config'):
             cache_config = config.config.get('caching', {})
@@ -237,15 +324,22 @@ def create_cached_layers(hazard_layer=None, exposition_layer=None, relevance_lay
     """
     Create cached versions of layer instances.
     
+    Provides a convenient way to wrap multiple layer instances with caching
+    capabilities in a single function call.
+    
     Args:
-        hazard_layer: Optional HazardLayer instance
-        exposition_layer: Optional ExpositionLayer instance
-        relevance_layer: Optional RelevanceLayer instance
-        risk_assessment: Optional RiskAssessment instance
-        config: Project configuration
+        hazard_layer: Optional HazardLayer instance to wrap with caching
+        exposition_layer: Optional ExpositionLayer instance to wrap with caching
+        relevance_layer: Optional RelevanceLayer instance to wrap with caching
+        risk_assessment: Optional RiskAssessment instance to wrap with caching
+        config: ProjectConfig instance for cache configuration
         
     Returns:
-        Dictionary with cached layer instances
+        Dictionary with cached layer instances:
+        - 'hazard': Cached hazard layer (if provided)
+        - 'exposition': Cached exposition layer (if provided)
+        - 'relevance': Cached relevance layer (if provided)
+        - 'risk': Cached risk assessment (if provided)
     """
     integrator = get_cache_integrator(config)
     cached_layers = {}
@@ -266,13 +360,35 @@ def create_cached_layers(hazard_layer=None, exposition_layer=None, relevance_lay
 
 
 def print_cache_status(config=None):
-    """Print current cache status and statistics."""
+    """
+    Print current cache status and statistics.
+    
+    Convenience function to quickly display cache information without
+    creating a cache integrator instance explicitly.
+    
+    Args:
+        config: ProjectConfig instance for cache configuration
+    """
     integrator = get_cache_integrator(config)
     integrator.print_cache_statistics()
 
 
 def manage_cache_cli():
-    """Command-line interface for cache management."""
+    """
+    Command-line interface for cache management.
+    
+    Provides a CLI tool for managing cache operations including:
+    - Viewing cache statistics and status
+    - Clearing cache data by type or completely
+    - Cleaning up old cache files
+    - Displaying cache size breakdown
+    
+    Usage:
+        python -m eu_climate.utils.cache_utils --stats
+        python -m eu_climate.utils.cache_utils --clear all
+        python -m eu_climate.utils.cache_utils --cleanup 7
+        python -m eu_climate.utils.cache_utils --size
+    """
     parser = argparse.ArgumentParser(description='EU Climate Cache Management')
     parser.add_argument('--stats', action='store_true', help='Show cache statistics')
     parser.add_argument('--clear', choices=['all', 'raster_data', 'calculations', 'final_results'],
@@ -306,13 +422,34 @@ def manage_cache_cli():
 
 
 def is_caching_enabled(config=None) -> bool:
-    """Check if caching is enabled."""
+    """
+    Check if caching is enabled.
+    
+    Convenience function to check cache status without creating
+    full cache integrator instance.
+    
+    Args:
+        config: ProjectConfig instance for cache configuration
+        
+    Returns:
+        bool: True if caching is enabled, False otherwise
+    """
     cache_manager = get_cache_manager(config)
     return cache_manager.enabled
 
 
 def get_cache_directory(config=None) -> Path:
-    """Get the cache directory path."""
+    """
+    Get the cache directory path.
+    
+    Returns the path to the cache directory used by the system.
+    
+    Args:
+        config: ProjectConfig instance for cache configuration
+        
+    Returns:
+        Path: Path to cache directory
+    """
     cache_manager = get_cache_manager(config)
     return cache_manager.cache_dir
 
@@ -321,9 +458,18 @@ def invalidate_cache_for_files(file_paths: List[str], config=None):
     """
     Invalidate cache entries that depend on specific files.
     
+    Useful for invalidating cache when input files are modified externally.
+    This function provides a simplified interface for cache invalidation based
+    on file dependencies.
+    
     Args:
         file_paths: List of file paths that have been modified
-        config: Project configuration
+        config: ProjectConfig instance for cache configuration
+        
+    Note:
+        This is a simplified invalidation approach. In a more sophisticated system,
+        we could track file dependencies more precisely to only invalidate
+        cache entries that actually depend on the modified files.
     """
     cache_manager = get_cache_manager(config)
     

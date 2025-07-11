@@ -1,18 +1,3 @@
-"""
-Vierkantstatistieken Data Processing Module
-==========================================
-
-Processes CBS Vierkantstatistieken (100m grid polygons) to create 
-a socioeconomic index for the exposition layer.
-
-Extracts and combines:
-- Number of inhabitants 
-- Mean household size
-- Mean house price
-
-Creates weighted index and downsamples to target resolution (30m).
-"""
-
 import geopandas as gpd
 import numpy as np
 import rasterio

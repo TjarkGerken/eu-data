@@ -22,7 +22,28 @@ logger = setup_logging(__name__)
 
 @dataclass
 class EconomicImpactMetrics:
-    """Economic impact metrics for a single scenario."""
+    """
+    Comprehensive economic impact metrics for a single flood scenario.
+    
+    This dataclass encapsulates all key economic indicators and their risk exposure
+    for a specific flood scenario, providing a standardized way to store and
+    compare economic impacts across different scenarios.
+    
+    Attributes:
+        scenario_name: Name of the flood scenario (e.g., 'current', 'severe')
+        total_gdp_millions_eur: Total GDP in millions EUR for the region
+        at_risk_gdp_millions_eur: GDP at risk from flooding in millions EUR
+        total_freight_tonnes: Total freight activity in tonnes
+        at_risk_freight_tonnes: Freight activity at risk from flooding in tonnes
+        total_population_persons: Total population in persons
+        at_risk_population_persons: Population at risk from flooding in persons
+        total_hrst_persons: Total HRST (Human Resources in Science & Technology) in persons
+        at_risk_hrst_persons: HRST at risk from flooding in persons
+        total_population_ghs_persons: Total population from GHS data in persons
+        at_risk_population_ghs_persons: GHS population at risk from flooding in persons
+        cluster_count: Number of risk clusters identified
+        total_risk_area_square_kilometers: Total area at risk in square kilometers
+    """
     scenario_name: str
     total_gdp_millions_eur: float
     at_risk_gdp_millions_eur: float
@@ -39,21 +60,48 @@ class EconomicImpactMetrics:
 
 
 class ZonalStatisticsExtractor:
-    """Extracts absolute values from raster layers within polygon boundaries."""
+    """
+    Extracts absolute economic values from raster layers within polygon boundaries.
+    
+    This class provides functionality to extract quantitative economic values
+    from raster datasets using polygon geometries as extraction boundaries.
+    It supports multiple economic indicators and handles coordinate transformations
+    and spatial operations.
+    """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize the zonal statistics extractor.
+        
+        Args:
+            config: Project configuration containing paths and settings
+        """
         self.config = config
         
     def extract_values_from_clusters(self, 
                                    cluster_geodataframe: gpd.GeoDataFrame,
                                    relevance_layers: Dict[str, np.ndarray],
                                    relevance_metadata: dict) -> pd.DataFrame:
-        """Extract absolute economic values within each cluster polygon."""
+        """
+        Extract absolute economic values within each cluster polygon.
+        
+        Performs zonal statistics extraction for all clusters across multiple
+        economic indicators, returning a comprehensive DataFrame with extracted values.
+        
+        Args:
+            cluster_geodataframe: GeoDataFrame containing cluster polygons
+            relevance_layers: Dictionary mapping indicator names to raster arrays
+            relevance_metadata: Metadata for raster alignment and transforms
+            
+        Returns:
+            DataFrame with extracted values for each cluster and indicator
+        """
         if cluster_geodataframe.empty:
             return pd.DataFrame()
             
         results = []
         
+        # Extract values for each cluster polygon
         for _, cluster_row in cluster_geodataframe.iterrows():
             cluster_values = self._extract_single_cluster_values(
                 cluster_row, relevance_layers, relevance_metadata
@@ -66,37 +114,66 @@ class ZonalStatisticsExtractor:
                                      cluster_row: pd.Series,
                                      relevance_layers: Dict[str, np.ndarray],
                                      relevance_metadata: dict) -> Dict[str, Any]:
-        """Extract values for a single cluster polygon."""
+        """
+        Extract economic values for a single cluster polygon.
+        
+        Processes a single cluster polygon to extract values from all available
+        economic indicator rasters, handling spatial operations and data validation.
+        
+        Args:
+            cluster_row: Series containing cluster geometry and attributes
+            relevance_layers: Dictionary of economic indicator rasters
+            relevance_metadata: Raster metadata for spatial operations
+            
+        Returns:
+            Dictionary containing extracted values for all indicators
+        """
         cluster_geometry = cluster_row['geometry']
         cluster_id = cluster_row.get('risk_cluster_id', 'unknown')
         
+        # Initialize results dictionary with cluster metadata
         extracted_values = {
             'cluster_id': cluster_id,
             'cluster_area_square_meters': cluster_row.get('cluster_area_square_meters', 0)
         }
         
+        # Extract values from relevance layers
         for layer_name, layer_data in relevance_layers.items():
             if layer_name == 'combined':
-                continue
+                continue  # Skip combined layer
                 
             extracted_value = self._perform_zonal_extraction(
                 cluster_geometry, layer_data, relevance_metadata
             )
             extracted_values[f'{layer_name}_absolute'] = extracted_value
         
+        # Extract population data separately using dedicated method
         population_value = self._extract_population_from_cluster(cluster_geometry)
         extracted_values['population_absolute'] = population_value
             
         return extracted_values
     
     def _extract_population_from_cluster(self, cluster_geometry: any) -> float:
-        """Extract population values from cluster using 2025 population raster with corrected resolution."""
+        """
+        Extract population values from cluster using 2025 population raster.
+        
+        Specialized method for extracting population data with proper handling
+        of the 2025 population raster resolution and coordinate systems.
+        
+        Args:
+            cluster_geometry: Cluster polygon geometry
+            
+        Returns:
+            Total population within the cluster polygon
+        """
         try:
+            # Open population raster and extract values within cluster
             with rasterio.open(self.config.population_2025_path) as src:
                 population_data = src.read(1).astype(np.float32)
                 
                 from rasterio.features import rasterize
                 
+                # Create mask for cluster polygon
                 polygon_mask = rasterize(
                     [cluster_geometry],
                     out_shape=population_data.shape,
@@ -106,6 +183,7 @@ class ZonalStatisticsExtractor:
                     dtype=np.uint8
                 )
                 
+                # Apply mask and sum values
                 masked_values = population_data * polygon_mask
                 valid_values = masked_values[masked_values > 0]
                 
@@ -120,14 +198,29 @@ class ZonalStatisticsExtractor:
                                 geometry: any,
                                 raster_data: np.ndarray,
                                 metadata: dict) -> float:
-        """Perform zonal statistics extraction for a single geometry."""
+        """
+        Perform zonal statistics extraction for a single geometry.
+        
+        Core method that handles the rasterization of polygon geometries
+        and extraction of values from raster data arrays.
+        
+        Args:
+            geometry: Polygon geometry for extraction
+            raster_data: Raster array containing values to extract
+            metadata: Raster metadata including transform information
+            
+        Returns:
+            Sum of raster values within the polygon geometry
+        """
         try:
             from rasterio.features import rasterize
             from rasterio.transform import from_bounds
             
+            # Get raster parameters
             transform = metadata['transform']
             height, width = raster_data.shape
             
+            # Rasterize polygon to create mask
             polygon_mask = rasterize(
                 [geometry],
                 out_shape=(height, width),
@@ -137,6 +230,7 @@ class ZonalStatisticsExtractor:
                 dtype=np.uint8
             )
             
+            # Extract values using mask
             masked_values = raster_data * polygon_mask
             valid_values = masked_values[masked_values > 0]
             
@@ -148,39 +242,74 @@ class ZonalStatisticsExtractor:
 
 
 class NutsDataAggregator:
-    """Aggregates total economic values from NUTS regional data."""
+    """
+    Aggregates total economic values from NUTS regional data.
+    
+    This class provides functionality to calculate total economic values
+    across all NUTS regions for comparison with at-risk values. It handles
+    multiple data sources and ensures consistent unit conversions.
+    """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize the NUTS data aggregator.
+        
+        Args:
+            config: Project configuration containing paths and settings
+        """
         self.config = config
         self.relevance_layer = RelevanceLayer(config)
         
     def get_total_regional_values(self) -> Dict[str, float]:
-        """Get total absolute values for all economic indicators."""
+        """
+        Get total absolute values for all economic indicators across the region.
+        
+        Calculates comprehensive totals for each economic indicator by aggregating
+        values from NUTS regional data and population rasters.
+        
+        Returns:
+            Dictionary mapping indicator names to total regional values
+        """
+        # Load economic data from NUTS regions
         economic_gdfs = self.relevance_layer.load_and_process_economic_data()
         
         totals = {}
         
+        # Process each economic dataset
         for dataset_name, nuts_gdf in economic_gdfs.items():
             value_column = f"{dataset_name}_value"
             
             if value_column not in nuts_gdf.columns:
                 continue
                 
+            # Sum values across all NUTS regions
             total_value = nuts_gdf[value_column].sum()
             totals[dataset_name] = self._convert_to_standard_units(
                 total_value, dataset_name
             )
         
+        # Add population data from raster
         totals['population'] = self._get_total_population_from_raster()
             
         return totals
     
     def _get_total_population_from_raster(self) -> float:
-        """Extract total population from the 2025 GHS population raster with corrected resolution."""
+        """
+        Extract total population from the 2025 GHS population raster.
+        
+        Processes the Global Human Settlement population raster to calculate
+        total population within the study area with proper handling of
+        resolution and coordinate systems.
+        
+        Returns:
+            Total population from raster data
+        """
         try:
+            # Open population raster and extract all valid values
             with rasterio.open(self.config.population_2025_path) as src:
                 population_data = src.read(1)
                 
+                # Create mask for valid population values
                 valid_mask = ~np.isnan(population_data) & (population_data > 0)
                 total_population = float(population_data[valid_mask].sum())
                 
@@ -192,7 +321,20 @@ class NutsDataAggregator:
             return 0.0
     
     def _convert_to_standard_units(self, value: float, dataset_name: str) -> float:
-        """Convert values to standard units for comparison."""
+        """
+        Convert values to standard units for comparison.
+        
+        Ensures consistent units across different economic indicators
+        for meaningful comparison and visualization.
+        
+        Args:
+            value: Raw value to convert
+            dataset_name: Name of the dataset for unit determination
+            
+        Returns:
+            Value converted to standard units
+        """
+        # Currently using values as-is, but method allows for future unit conversions
         if dataset_name == 'gdp':
             return value
         if dataset_name == 'freight':
@@ -204,30 +346,62 @@ class NutsDataAggregator:
 
 
 class EconomicImpactVisualizer:
-    """Creates visualizations comparing total vs at-risk economic values."""
+    """
+    Creates visualizations comparing total vs at-risk economic values.
+    
+    This class generates publication-quality visualizations showing the
+    economic impact of flood scenarios through various chart types including
+    stacked bar charts, comparison plots, and multi-scenario analyses.
+    """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize the economic impact visualizer.
+        
+        Args:
+            config: Project configuration containing paths and settings
+        """
         self.config = config
         self.output_dir = Path(config.output_dir) / "economic_impact"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
     def create_impact_comparison_plots(self, 
                                      impact_metrics: List[EconomicImpactMetrics]) -> None:
-        """Create comparison plots for all scenarios and indicators."""
+        """
+        Create comparison plots for all scenarios and indicators.
+        
+        Generates comprehensive visualizations showing economic impact
+        across multiple scenarios and indicators with both individual
+        and comparative views.
+        
+        Args:
+            impact_metrics: List of impact metrics for each scenario
+        """
         if not impact_metrics:
             logger.warning("No impact metrics available for visualization")
             return
             
         scenarios = [metrics.scenario_name for metrics in impact_metrics]
         
+        # Create individual scenario plots
         for scenario in scenarios:
             scenario_metrics = next(m for m in impact_metrics if m.scenario_name == scenario)
             self._create_single_scenario_plot(scenario_metrics)
             
+        # Create multi-scenario comparison
         self._create_multi_scenario_comparison(impact_metrics)
         
     def _create_single_scenario_plot(self, metrics: EconomicImpactMetrics) -> None:
-        """Create impact comparison plot for a single scenario with percentage scaling."""
+        """
+        Create impact comparison plot for a single scenario with percentage scaling.
+        
+        Generates a stacked bar chart showing total vs at-risk values
+        for each economic indicator as percentages with absolute value annotations.
+        
+        Args:
+            metrics: Economic impact metrics for the scenario
+        """
+        # Define indicators and extract values
         indicators = ['GDP', 'Freight', 'Population']
         
         total_values = [
@@ -241,16 +415,19 @@ class EconomicImpactVisualizer:
             metrics.at_risk_population_persons
         ]
         
+        # Calculate risk percentages
         risk_percentages = [
             (at_risk / total * 100) if total > 0 else 0 
             for at_risk, total in zip(at_risk_values, total_values)
         ]
         
+        # Create figure with scientific styling
         fig, ax = plt.subplots(figsize=(12, 8), dpi=ScientificStyle.DPI)
         
         x_positions = np.arange(len(indicators))
         bar_width = 0.4
         
+        # Create stacked percentage bars
         bars_total = ax.bar(x_positions, [100] * len(indicators),
                           bar_width, label='Total Regional', 
                           color='lightgrey', alpha=0.8)
@@ -259,6 +436,7 @@ class EconomicImpactVisualizer:
                          bar_width, label='At Risk in Clusters',
                          color='red', alpha=0.8)
         
+        # Configure plot appearance
         ax.set_xlabel('Economic Indicators', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Percentage (%)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_title(f'Economic Impact Analysis: {metrics.scenario_name}', 
@@ -268,10 +446,12 @@ class EconomicImpactVisualizer:
         ax.set_ylim(0, 100)
         ax.legend()
         
+        # Add absolute value annotations
         self._add_absolute_value_labels(ax, x_positions, total_values, at_risk_values, indicators)
         
         ax.grid(axis='y', alpha=0.3)
         
+        # Save the plot
         plt.tight_layout()
         plot_path = self.output_dir / f"economic_impact_{metrics.scenario_name}.png"
         plt.savefig(plot_path, dpi=ScientificStyle.DPI, bbox_inches='tight',
@@ -283,28 +463,57 @@ class EconomicImpactVisualizer:
     def _add_absolute_value_labels(self, ax: plt.Axes, x_positions: np.ndarray,
                                  total_values: List[float], at_risk_values: List[float],
                                  indicators: List[str]) -> None:
-        """Add absolute value annotations to bars."""
+        """
+        Add absolute value annotations to bars.
+        
+        Adds properly formatted absolute value labels to bar charts
+        with appropriate units and scaling for readability.
+        
+        Args:
+            ax: Matplotlib axes object
+            x_positions: X-axis positions for bars
+            total_values: List of total values for each indicator
+            at_risk_values: List of at-risk values for each indicator
+            indicators: List of indicator names
+        """
+        # Define units for each indicator
         units = {
             'GDP': '€M',
             'Freight': 't',
             'Population': 'persons'
         }
         
+        # Add annotations for each bar
         for i, (x_pos, total, at_risk, indicator) in enumerate(zip(x_positions, total_values, at_risk_values, indicators)):
             unit = units.get(indicator, '')
             
+            # Format values with appropriate units
             total_text = self._format_value_with_unit(total, unit)
             at_risk_text = self._format_value_with_unit(at_risk, unit)
             
+            # Add total value annotation above bar
             ax.text(x_pos, 95, f'Total: {total_text}', 
                    ha='center', va='top', fontsize=10, fontweight='bold')
             
+            # Add at-risk value annotation in red section
             risk_percentage = (at_risk / total * 100) if total > 0 else 0
             ax.text(x_pos, risk_percentage/2, f'At Risk: {at_risk_text}', 
                    ha='center', va='center', fontsize=9, color='white', fontweight='bold')
     
     def _format_value_with_unit(self, value: float, unit: str) -> str:
-        """Format values with appropriate scaling and units."""
+        """
+        Format values with appropriate scaling and units.
+        
+        Provides intelligent formatting with K/M suffixes for large numbers
+        and appropriate precision for different value ranges.
+        
+        Args:
+            value: Numeric value to format
+            unit: Unit string to append
+            
+        Returns:
+            Formatted string with value and unit
+        """
         if unit == '€M':
             return f"{value:,.0f} {unit}"
         elif unit == 't':
@@ -326,10 +535,19 @@ class EconomicImpactVisualizer:
         
     def _create_multi_scenario_comparison(self, 
                                         impact_metrics: List[EconomicImpactMetrics]) -> None:
-        """Create comparison plot across multiple scenarios."""
+        """
+        Create comparison plot across multiple scenarios.
+        
+        Generates a comparative visualization showing risk exposure
+        percentages across different flood scenarios for key indicators.
+        
+        Args:
+            impact_metrics: List of impact metrics for all scenarios
+        """
         if len(impact_metrics) < 2:
             return
             
+        # Extract scenario data
         scenarios = [m.scenario_name for m in impact_metrics]
         gdp_percentages = [
             (m.at_risk_gdp_millions_eur / m.total_gdp_millions_eur * 100) 
@@ -342,16 +560,19 @@ class EconomicImpactVisualizer:
             for m in impact_metrics
         ]
         
+        # Create comparison plot
         fig, ax = plt.subplots(figsize=ScientificStyle.FIGURE_SIZE, dpi=ScientificStyle.DPI)
         
         x_positions = np.arange(len(scenarios))
         bar_width = 0.35
         
+        # Create grouped bars for GDP and Freight
         ax.bar(x_positions - bar_width/2, gdp_percentages, 
                bar_width, label='GDP at Risk (%)', color='navy', alpha=0.7)
         ax.bar(x_positions + bar_width/2, freight_percentages, 
                bar_width, label='Freight at Risk (%)', color='darkred', alpha=0.7)
         
+        # Configure plot appearance
         ax.set_xlabel('Scenarios', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_ylabel('Percentage at Risk (%)', fontsize=ScientificStyle.LABEL_SIZE)
         ax.set_title('Risk Exposure Comparison Across Scenarios', 
@@ -360,6 +581,7 @@ class EconomicImpactVisualizer:
         ax.set_xticklabels(scenarios, rotation=45, ha='right')
         ax.legend()
         
+        # Save the plot
         plt.tight_layout()
         plot_path = self.output_dir / "multi_scenario_risk_comparison.png"
         plt.savefig(plot_path, dpi=ScientificStyle.DPI, bbox_inches='tight',
@@ -369,7 +591,17 @@ class EconomicImpactVisualizer:
         logger.info(f"Saved multi-scenario comparison plot: {plot_path}")
         
     def _add_value_labels_to_bars(self, ax: plt.Axes, bars: any, values: List[float]) -> None:
-        """Add value labels on top of bars."""
+        """
+        Add value labels on top of bars.
+        
+        Utility method to add numeric labels above bar charts
+        for improved readability of exact values.
+        
+        Args:
+            ax: Matplotlib axes object
+            bars: Bar objects from matplotlib
+            values: List of values to display
+        """
         for bar, value in zip(bars, values):
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
@@ -378,9 +610,21 @@ class EconomicImpactVisualizer:
 
 
 class EconomicImpactExporter:
-    """Exports economic impact results to various file formats."""
+    """
+    Exports economic impact results to various file formats.
+    
+    This class handles the export of economic impact analysis results
+    to standard formats including CSV summaries and enhanced GeoPackage
+    files with spatial and economic data integration.
+    """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize the economic impact exporter.
+        
+        Args:
+            config: Project configuration containing paths and settings
+        """
         self.config = config
         self.output_dir = Path(config.output_dir) / "economic_impact"
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -388,17 +632,38 @@ class EconomicImpactExporter:
     def export_impact_metrics(self, 
                             impact_metrics: List[EconomicImpactMetrics],
                             cluster_details: Dict[str, pd.DataFrame]) -> None:
-        """Export impact metrics to CSV and enhanced GeoPackage formats."""
+        """
+        Export impact metrics to CSV and enhanced GeoPackage formats.
+        
+        Creates comprehensive exports including summary statistics
+        and detailed cluster-level economic data.
+        
+        Args:
+            impact_metrics: List of impact metrics for all scenarios
+            cluster_details: Dictionary of detailed cluster data by scenario
+        """
         if not impact_metrics:
             return
             
+        # Export summary statistics
         self._export_summary_csv(impact_metrics)
+        
+        # Export detailed cluster data
         self._export_detailed_cluster_data(cluster_details)
         
     def _export_summary_csv(self, impact_metrics: List[EconomicImpactMetrics]) -> None:
-        """Export summary metrics to CSV."""
+        """
+        Export summary metrics to CSV format.
+        
+        Creates a comprehensive CSV file with all economic impact metrics
+        and calculated risk percentages for each scenario.
+        
+        Args:
+            impact_metrics: List of impact metrics to export
+        """
         summary_data = []
         
+        # Process each scenario's metrics
         for metrics in impact_metrics:
             summary_data.append({
                 'scenario': metrics.scenario_name,
@@ -416,6 +681,7 @@ class EconomicImpactExporter:
                 'total_risk_area_square_kilometers': metrics.total_risk_area_square_kilometers
             })
             
+        # Export to CSV
         summary_df = pd.DataFrame(summary_data)
         csv_path = self.output_dir / "economic_impact_summary.csv"
         summary_df.to_csv(csv_path, index=False)
@@ -424,13 +690,23 @@ class EconomicImpactExporter:
         
     def _export_detailed_cluster_data(self, 
                                     cluster_details: Dict[str, pd.DataFrame]) -> None:
-        """Export detailed cluster data with economic values."""
+        """
+        Export detailed cluster data with economic values.
+        
+        Creates GeoPackage files containing cluster geometries with
+        associated economic data for detailed spatial analysis.
+        
+        Args:
+            cluster_details: Dictionary mapping scenarios to cluster DataFrames
+        """
+        # Export each scenario's cluster data
         for scenario, cluster_data in cluster_details.items():
             if cluster_data.empty:
                 continue
                 
             gpkg_path = self.output_dir / f"clusters_with_economics_{scenario}.gpkg"
             
+            # Handle both GeoDataFrame and regular DataFrame
             if hasattr(cluster_data, 'to_file'):
                 cluster_data.to_file(gpkg_path, driver='GPKG')
             else:
@@ -440,7 +716,19 @@ class EconomicImpactExporter:
             logger.info(f"Exported detailed cluster data to: {gpkg_path}")
             
     def _calculate_risk_percentage(self, at_risk_value: float, total_value: float) -> float:
-        """Calculate risk percentage with division by zero protection."""
+        """
+        Calculate risk percentage with division by zero protection.
+        
+        Safely calculates the percentage of total value that is at risk
+        with proper handling of edge cases.
+        
+        Args:
+            at_risk_value: Value at risk from flooding
+            total_value: Total value for comparison
+            
+        Returns:
+            Risk percentage (0-100)
+        """
         if total_value <= 0:
             return 0.0
         return (at_risk_value / total_value) * 100
@@ -448,21 +736,46 @@ class EconomicImpactExporter:
 
 class EconomicImpactAnalyzer:
     """
-    Economic Impact Analyzer
-    =======================
+    Economic Impact Analyzer for Flood Risk Assessment
+    ================================================
     
-    Analyzes economic impact of flood scenarios by combining absolute relevance 
-    layers with hazard assessments to determine at-risk indicator values.
+    The EconomicImpactAnalyzer class provides comprehensive analysis of economic
+    impacts from flood scenarios by combining hazard assessments with economic
+    relevance data. It quantifies the economic value at risk across multiple
+    indicators and scenarios.
     
-    Features:
+    Key Features:
     - Sequential scenario processing for memory efficiency
-    - Integration of absolute relevance and hazard data
-    - Stacked bar visualizations showing total vs at-risk amounts
-    - Configurable flood risk threshold from config
+    - Integration of hazard and economic relevance data
+    - Configurable flood risk thresholds
+    - Multiple economic indicators (GDP, Freight, Population, HRST)
+    - Comprehensive visualization and reporting
+    - Stacked bar charts showing total vs at-risk amounts
+    - Multi-scenario comparison capabilities
+    - Export functionality for results and visualizations
+    
+    Processing Pipeline:
+    1. Load absolute relevance layers for economic indicators
+    2. Load hazard scenarios (current, conservative, moderate, severe)
+    3. Apply flood risk thresholds to identify at-risk areas
+    4. Calculate economic impacts by overlaying hazard and relevance data
+    5. Generate comprehensive visualizations and reports
+    6. Export results in multiple formats
+    
+    The analyzer supports both individual scenario analysis and comparative
+    analysis across multiple flood scenarios with consistent methodology.
     """
     
     def __init__(self, config: ProjectConfig):
-        """Initialize the Economic Impact Analyzer."""
+        """
+        Initialize the Economic Impact Analyzer.
+        
+        Sets up the analyzer with configuration parameters and initializes
+        all required components for economic impact analysis.
+        
+        Args:
+            config: Project configuration containing paths and analysis settings
+        """
         self.config = config
         self.max_safe_flood_risk = config.max_safe_flood_risk
         self.indicators = config.config['relevance']['economic_variables'] + ['population']  # Add population
@@ -480,29 +793,40 @@ class EconomicImpactAnalyzer:
         logger.info("Note: Added total population from GHS_POP raster as additional indicator")
     
     def load_absolute_relevance_layers(self) -> Dict[str, np.ndarray]:
-        """Load absolute relevance layers for all indicators."""
+        """
+        Load absolute relevance layers for all economic indicators.
+        
+        Loads pre-processed absolute relevance layers that contain quantitative
+        economic values (not normalized) for use in impact calculations.
+        
+        Returns:
+            Dictionary mapping indicator names to absolute value raster arrays
+        """
         logger.info("Loading absolute relevance layers...")
         
         relevance_layers = {}
         
+        # Load each economic indicator
         for indicator in self.indicators:
             if indicator == 'population':
-                # Load population data directly from VRT file
+                # Load population data directly from raster file
                 population_data = self.load_population_data()
                 relevance_layers[indicator] = population_data
                 continue
                 
+            # Load pre-processed absolute relevance layer
             tif_path = self.config.output_dir / "relevance_absolute" / "tif" / f"absolute_relevance_{indicator}.tif"
             
             if not tif_path.exists():
                 logger.error(f"Required absolute relevance layer missing: {tif_path}")
                 raise FileNotFoundError(f"Required absolute relevance layer missing: {indicator}")
             
+            # Load raster data
             with rasterio.open(tif_path) as src:
                 data = src.read(1).astype(np.float32)
                 relevance_layers[indicator] = data
                 
-                # Log statistics
+                # Log loading statistics
                 valid_data = data[~np.isnan(data) & (data > 0)]
                 total_value = valid_data.sum() if len(valid_data) > 0 else 0
                 logger.info(f"Loaded {indicator}: {len(valid_data)} pixels, total value: {total_value:,.0f}")
@@ -510,19 +834,28 @@ class EconomicImpactAnalyzer:
         return relevance_layers
     
     def load_population_data(self) -> np.ndarray:
-        """Load 2025 population data with corrected resolution handling."""
+        """
+        Load 2025 population data with corrected resolution handling.
+        
+        Loads population data from the Global Human Settlement Layer with
+        proper validation and study area masking.
+        
+        Returns:
+            Population raster array with corrected resolution
+        """
         logger.info("Loading 2025 population data with corrected resolution handling...")
         
         try:
+            # Use the validated population loading function
             from ..utils.data_loading import load_population_2025_with_validation
             
-            # Use the corrected 2025 population loading function
+            # Load population data with validation
             population_data, metadata, validation_passed = load_population_2025_with_validation(
                 config=self.config,
                 apply_study_area_mask=True
             )
             
-            # Log statistics
+            # Log loading statistics
             valid_data = population_data[~np.isnan(population_data) & (population_data > 0)]
             total_population = valid_data.sum() if len(valid_data) > 0 else 0
             
@@ -539,7 +872,20 @@ class EconomicImpactAnalyzer:
             raise
     
     def _apply_study_area_mask(self, data: np.ndarray, transform: rasterio.Affine, shape: Tuple[int, int]) -> np.ndarray:
-        """Apply study area mask using NUTS boundaries and land mass data."""
+        """
+        Apply study area mask using NUTS boundaries and land mass data.
+        
+        Restricts analysis to relevant study areas by masking out regions
+        outside NUTS boundaries and water bodies.
+        
+        Args:
+            data: Input raster data to mask
+            transform: Raster coordinate transform
+            shape: Raster dimensions (height, width)
+            
+        Returns:
+            Masked raster data limited to study area
+        """
         logger.info("Applying study area mask to population data...")
         
         try:
@@ -611,12 +957,24 @@ class EconomicImpactAnalyzer:
             return data
     
     def load_hazard_scenario(self, scenario_name: str) -> Tuple[np.ndarray, dict]:
-        """Load hazard data for a specific scenario."""
+        """
+        Load hazard data for a specific flood scenario.
+        
+        Loads processed hazard raster data for a given scenario and extracts
+        relevant metadata for subsequent analysis.
+        
+        Args:
+            scenario_name: Name of the flood scenario to load
+            
+        Returns:
+            Tuple of (hazard_data, metadata) for the scenario
+        """
         hazard_path = self.config.output_dir / "hazard" / "tif" / f"flood_risk_{scenario_name.lower()}.tif"
         
         if not hazard_path.exists():
             raise FileNotFoundError(f"Hazard scenario not found: {hazard_path}")
         
+        # Load hazard data
         with rasterio.open(hazard_path) as src:
             hazard_data = src.read(1).astype(np.float32)
             meta = src.meta
@@ -634,7 +992,20 @@ class EconomicImpactAnalyzer:
     def calculate_scenario_impact(self, hazard_data: np.ndarray, 
                                 relevance_layers: Dict[str, np.ndarray], 
                                 scenario_name: str) -> Dict[str, Dict[str, float]]:
-        """Calculate economic impact for a specific scenario using flood risk threshold."""
+        """
+        Calculate economic impact for a specific scenario using flood risk threshold.
+        
+        Performs the core economic impact calculation by overlaying hazard data
+        with economic relevance layers and applying the configured risk threshold.
+        
+        Args:
+            hazard_data: Hazard raster array for the scenario
+            relevance_layers: Dictionary of economic indicator raster arrays
+            scenario_name: Name of the scenario for logging
+            
+        Returns:
+            Dictionary containing impact results for each economic indicator
+        """
         logger.info(f"Calculating economic impact for {scenario_name} scenario...")
         logger.info(f"Using flood risk threshold: {self.max_safe_flood_risk}")
         
@@ -647,6 +1018,7 @@ class EconomicImpactAnalyzer:
         
         impact_results = {}
         
+        # Calculate impact for each indicator
         for indicator in self.indicators:
             relevance_data = relevance_layers[indicator]
             
@@ -665,6 +1037,7 @@ class EconomicImpactAnalyzer:
             risk_percentage = (at_risk_value / total_value * 100) if total_value > 0 else 0
             safe_percentage = 100 - risk_percentage
             
+            # Store results
             impact_results[indicator] = {
                 'total_value': total_value,
                 'at_risk_value': at_risk_value,
@@ -682,9 +1055,12 @@ class EconomicImpactAnalyzer:
         """
         Create stacked vertical bar chart visualization for economic impact.
         
+        Generates a publication-quality visualization showing the economic
+        impact of flooding with stacked bars representing safe vs at-risk portions.
+        
         Args:
             impact_results: Dictionary with impact results for each indicator
-            scenario_name: Name of the scenario
+            scenario_name: Name of the scenario for titling and file naming
         """
         logger.info(f"Creating impact visualization for scenario: {scenario_name}")
         
@@ -699,21 +1075,20 @@ class EconomicImpactAnalyzer:
         percentages_at_risk = []
         
         # Define indicator display names and units
-        # Note: GDP data appears to already be in trillion EUR based on CSV values
         indicator_info = {
             'gdp': {'name': 'GDP', 'unit': 'trillion €', 'scale': 1_000_000},  # Data already in trillion
             'freight': {'name': 'Freight', 'unit': 'million tonnes', 'scale': 1_000_000},
-            'hrst': {'name': 'Population (HRST)', 'unit': 'millions persons', 'scale': 1_000_000},  # Changed to millions
-            'population': {'name': 'Population (GHS)', 'unit': 'millions persons', 'scale': 1_000_000}  # Added population
+            'hrst': {'name': 'Population (HRST)', 'unit': 'millions persons', 'scale': 1_000_000},
+            'population': {'name': 'Population (GHS)', 'unit': 'millions persons', 'scale': 1_000_000}
         }
         
+        # Process each indicator for visualization
         for indicator_key, results in impact_results.items():
             if indicator_key in indicator_info:
                 info = indicator_info[indicator_key]
                 indicators.append(info['name'])
                 
-                # For GDP, the data appears to already be in correct units (millions)
-                # For freight and population, we still need to convert
+                # Apply appropriate scaling based on indicator type
                 if indicator_key == 'gdp':
                     # GDP data is already in EUR, convert to millions
                     total_val = results['total_value'] / info['scale']
@@ -738,14 +1113,12 @@ class EconomicImpactAnalyzer:
             return
         
         # Create vertical stacked bar chart with 0-100% scale
-        # Red (at-risk) from bottom, grey (safe) on top
         fig, ax = plt.subplots(figsize=(12, 8), dpi=ScientificStyle.DPI)
         
         x_positions = np.arange(len(indicators))
         bar_width = 0.6
         
-        # Create stacked bars with red from bottom
-        # At-risk portion (red) starts from 0
+        # Create stacked bars with red (at-risk) from bottom
         bars_risk = ax.bar(x_positions, percentages_at_risk, bar_width,
                           label='At Risk', color='red', alpha=0.8)
         
@@ -792,6 +1165,7 @@ class EconomicImpactAnalyzer:
         ax.grid(axis='y', alpha=0.3)
         ax.set_axisbelow(True)
         
+        # Save the visualization
         plt.tight_layout()
         output_path = scenario_dir / f"economic_impact_{scenario_name.lower()}.png"
         plt.savefig(output_path, dpi=ScientificStyle.DPI, bbox_inches='tight',
@@ -812,6 +1186,9 @@ class EconomicImpactAnalyzer:
         """
         Process a single flood risk scenario and calculate economic impacts.
         
+        Performs complete economic impact analysis for a single scenario including
+        data loading, impact calculation, visualization, and export.
+        
         Args:
             scenario_name: Name of the scenario to process
             create_visualizations: Whether to create visualization plots
@@ -821,6 +1198,7 @@ class EconomicImpactAnalyzer:
             Economic impact metrics for the scenario, or None if processing failed
         """
         try:
+            # Load hazard data for the scenario
             logger.info(f"Loading hazard data for scenario: {scenario_name}")
             hazard_data, hazard_meta = self.load_hazard_scenario(scenario_name)
             
@@ -828,6 +1206,7 @@ class EconomicImpactAnalyzer:
                 logger.error(f"Could not load hazard data for scenario: {scenario_name}")
                 return None
             
+            # Load economic relevance layers
             logger.info(f"Loading absolute relevance layers...")
             relevance_layers = self.load_absolute_relevance_layers()
             
@@ -835,6 +1214,7 @@ class EconomicImpactAnalyzer:
                 logger.error(f"Could not load relevance layers for scenario: {scenario_name}")
                 return None
             
+            # Calculate economic impacts
             logger.info(f"Calculating economic impacts...")
             impact_results = self.calculate_scenario_impact(hazard_data, relevance_layers, scenario_name)
             
@@ -855,16 +1235,18 @@ class EconomicImpactAnalyzer:
                 total_risk_area_square_kilometers=0.0  # Will be calculated from risk mask
             )
             
-            # Calculate risk area
+            # Calculate risk area from hazard data
             risk_mask = hazard_data > self.max_safe_flood_risk
             risk_pixels = np.sum(risk_mask)
             pixel_area_square_meters = self.config.target_resolution ** 2
             metrics.total_risk_area_square_kilometers = (risk_pixels * pixel_area_square_meters) / 1_000_000
             
+            # Create visualizations if requested
             if create_visualizations:
                 logger.info(f"Creating visualization for scenario: {scenario_name}")
                 self.create_impact_visualization(impact_results, scenario_name)
             
+            # Export results if requested
             if export_results:
                 logger.info(f"Exporting results for scenario: {scenario_name}")
                 self.export_scenario_data(impact_results, scenario_name)
@@ -890,6 +1272,10 @@ class EconomicImpactAnalyzer:
         """
         Run complete economic impact analysis for all flood risk scenarios.
         
+        Executes the full economic impact analysis pipeline including
+        processing all scenarios, creating visualizations, and generating
+        comprehensive reports.
+        
         Args:
             create_visualizations: Whether to create visualization plots
             export_results: Whether to export results to files
@@ -903,6 +1289,7 @@ class EconomicImpactAnalyzer:
         
         all_metrics = []
         
+        # Process each scenario
         for scenario_name in self.hazard_scenarios:
             logger.info(f"\n{'='*50}")
             logger.info(f"Processing scenario: {scenario_name}")
@@ -915,9 +1302,11 @@ class EconomicImpactAnalyzer:
             else:
                 logger.warning(f"[FAILED] Failed to process scenario: {scenario_name}")
         
+        # Create summary report if exporting results
         if export_results:
             self.create_summary_report(all_metrics)
         
+        # Log final summary
         logger.info(f"\n{'='*60}")
         logger.info("ECONOMIC IMPACT ANALYSIS COMPLETE")
         logger.info(f"{'='*60}")
@@ -926,9 +1315,18 @@ class EconomicImpactAnalyzer:
         return all_metrics
     
     def create_summary_report(self, all_metrics: List[EconomicImpactMetrics]) -> None:
-        """Create summary report with all scenario metrics."""
+        """
+        Create comprehensive summary report with all scenario metrics.
+        
+        Generates a detailed CSV report containing all economic impact metrics
+        across all processed scenarios for comparative analysis.
+        
+        Args:
+            all_metrics: List of economic impact metrics for all scenarios
+        """
         logger.info("Creating summary report...")
         
+        # Prepare summary data
         summary_data = []
         for metrics in all_metrics:
             summary_data.append({
@@ -947,11 +1345,10 @@ class EconomicImpactAnalyzer:
                 'total_risk_area_square_kilometers': metrics.total_risk_area_square_kilometers
             })
         
-        # Create summary directory
+        # Create summary directory and export CSV
         summary_dir = self.config.output_dir / "economic_impact" / "summary"
         summary_dir.mkdir(parents=True, exist_ok=True)
         
-        # Export to CSV
         summary_df = pd.DataFrame(summary_data)
         csv_path = summary_dir / "economic_impact_summary.csv"
         summary_df.to_csv(csv_path, index=False)
@@ -960,14 +1357,23 @@ class EconomicImpactAnalyzer:
         logger.info("Summary report completed")
 
     def export_scenario_data(self, impact_results: Dict[str, Dict[str, float]], scenario_name: str) -> None:
-        """Export scenario data to CSV file."""
+        """
+        Export individual scenario data to CSV file.
+        
+        Creates detailed CSV exports for each scenario containing all
+        calculated impact metrics and analysis parameters.
+        
+        Args:
+            impact_results: Dictionary containing impact results for all indicators
+            scenario_name: Name of the scenario for file naming
+        """
         logger.info(f"Exporting data for scenario: {scenario_name}")
         
         # Create scenario output directory
         scenario_dir = self.config.output_dir / "economic_impact" / scenario_name.lower()
         scenario_dir.mkdir(parents=True, exist_ok=True)
         
-        # Prepare data for CSV
+        # Prepare data for CSV export
         csv_data = []
         for indicator, results in impact_results.items():
             csv_data.append({
@@ -981,7 +1387,7 @@ class EconomicImpactAnalyzer:
                 'flood_risk_threshold': self.max_safe_flood_risk
             })
         
-        # Save as CSV
+        # Export to CSV
         df = pd.DataFrame(csv_data)
         csv_path = scenario_dir / f"economic_impact_{scenario_name.lower()}.csv"
         df.to_csv(csv_path, index=False)
@@ -993,11 +1399,14 @@ def run_economic_impact_analysis_from_config(config: ProjectConfig) -> Dict[str,
     """
     Convenience function to run the complete economic impact analysis.
     
+    Provides a simple interface to execute the full economic impact analysis
+    pipeline with a single function call using project configuration.
+    
     Args:
-        config: Project configuration
+        config: Project configuration containing all necessary parameters
         
     Returns:
-        Results for all scenarios
+        Dictionary containing results for all scenarios and indicators
     """
     analyzer = EconomicImpactAnalyzer(config)
     return analyzer.run_economic_impact_analysis() 

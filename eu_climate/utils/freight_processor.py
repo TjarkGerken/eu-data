@@ -1,3 +1,57 @@
+"""
+Shared Freight Processing Logic for EU Climate Risk Assessment
+===========================================================
+
+This module provides the main freight processing logic that combines multiple freight data sources
+into a unified dataset for risk assessment. It implements a two-stage approach combining NUTS L3
+road freight data with Zeevart maritime freight data mapped to individual port geometries.
+
+Key Features:
+- Two-stage freight data integration (NUTS L3 + Zeevart ports)
+- Unified freight dataset creation with loading and unloading components
+- Sophisticated data validation and quality control
+- Comprehensive logging and error handling
+- Seamless integration with both regular and absolute relevance layers
+
+The module serves as the central coordinator for freight data processing, orchestrating the
+various freight components to create a comprehensive and accurate freight dataset.
+
+Architecture:
+- SharedFreightProcessor: Main processing class used by multiple layers
+- Stage 1: NUTS L3 road freight data (loading + unloading combined)
+- Stage 2: Zeevart maritime freight data mapped to port geometries
+- Unified dataset creation and validation
+- Enhanced dataset integration with maritime data
+
+Data Processing Pipeline:
+1. Load and combine NUTS L3 road freight (loading + unloading)
+2. Create unified freight dataset from component data
+3. Load and process Zeevart maritime freight statistics
+4. Map maritime freight to individual port geometries
+5. Combine datasets with anti-double-counting measures
+6. Validate and return processed freight data
+
+Data Sources:
+- NUTS L3 road freight loading data (estat_road_go_na_rl3g_en.csv)
+- NUTS L3 road freight unloading data (estat_road_go_na_ru3g_en.csv)
+- Zeevart maritime freight statistics (CBS data)
+- Port geometry and category mapping data
+
+Usage:
+    from eu_climate.utils.freight_processor import SharedFreightProcessor
+    
+    # Initialize processor
+    processor = SharedFreightProcessor(config)
+    
+    # Load and process all freight data
+    nuts_data, enhanced_datasets = processor.load_and_process_freight_data()
+    
+    # Use processed data for risk assessment
+    if enhanced_datasets:
+        maritime_data = enhanced_datasets['port_freight']
+        road_data = enhanced_datasets['nuts_freight']
+"""
+
 import pandas as pd
 import geopandas as gpd
 import numpy as np
@@ -14,22 +68,97 @@ logger = setup_logging(__name__)
 
 
 class SharedFreightProcessor:
-    """Shared freight processing logic for both regular and absolute relevance layers."""
+    """
+    Shared freight processing logic for both regular and absolute relevance layers.
+    
+    This class provides the central freight processing functionality used by multiple
+    layers in the risk assessment system. It implements a sophisticated two-stage
+    approach that combines road freight and maritime freight data sources.
+    
+    Key Features:
+        - Two-stage freight data integration approach
+        - Unified freight dataset creation from loading and unloading components
+        - Zeevart maritime freight integration with port mapping
+        - Comprehensive data validation and quality control
+        - Flexible data source handling with fallback mechanisms
+        
+    Processing Stages:
+        Stage 1: NUTS L3 Road Freight
+            - Combines loading and unloading freight data
+            - Creates unified freight dataset
+            - Handles multiple data source locations
+            - Validates and processes freight volumes
+            
+        Stage 2: Zeevart Maritime Freight
+            - Loads CBS Zeevart maritime freight statistics
+            - Maps freight data to individual port geometries
+            - Applies area-based allocation algorithms
+            - Integrates with road freight data
+            
+    Data Integration:
+        - Prevents double counting through careful data separation
+        - Maintains traceability of different freight sources
+        - Provides enhanced datasets with maritime data when available
+        - Falls back gracefully to NUTS data only if needed
+        
+    Attributes:
+        config: ProjectConfig instance with data paths and settings
+        data_dir: Directory containing freight data files
+    """
     
     def __init__(self, config: ProjectConfig):
+        """
+        Initialize SharedFreightProcessor with project configuration.
+        
+        Args:
+            config: ProjectConfig instance containing data paths and processing settings
+        """
         self.config = config
         self.data_dir = config.data_dir
         
     def load_and_process_freight_data(self) -> Tuple[pd.DataFrame, Optional[Dict[str, pd.DataFrame]]]:
         """
-        Load freight data using the two-stage approach:
-        1. NUTS L3 road freight (loading + unloading)
-        2. Zeevart maritime freight mapped to ports
+        Load freight data using the two-stage approach combining road and maritime freight.
+        
+        This method orchestrates the complete freight data processing pipeline, combining
+        NUTS L3 road freight data with Zeevart maritime freight data to create a
+        comprehensive freight dataset for risk assessment.
         
         Returns:
             Tuple containing:
-            - Primary NUTS freight data for rasterization
-            - Enhanced datasets dict with port freight data (or None if not available)
+            - Primary NUTS freight data (pd.DataFrame): Road freight data for rasterization
+            - Enhanced datasets dict (Optional[Dict[str, pd.DataFrame]]): 
+              Combined datasets with maritime data, or None if maritime data unavailable
+              
+        Processing Pipeline:
+            Stage 1: NUTS L3 Road Freight
+                1. Check for existing unified freight dataset
+                2. If not found, create from loading and unloading components
+                3. Process and validate unified freight data
+                4. Return primary road freight dataset
+                
+            Stage 2: Zeevart Maritime Freight
+                1. Load CBS Zeevart maritime freight statistics
+                2. Map freight data to individual port geometries
+                3. Apply area-based allocation algorithms
+                4. Combine with road freight data
+                5. Return enhanced datasets with maritime data
+                
+        Data Sources:
+            - NUTS L3 road freight loading data
+            - NUTS L3 road freight unloading data
+            - Zeevart maritime freight statistics
+            - Port geometry and category mapping data
+            
+        Error Handling:
+            - Graceful fallback to NUTS data only if maritime data unavailable
+            - Comprehensive logging of processing steps and issues
+            - Validation of data integrity throughout pipeline
+            
+        Note:
+            - Primary return value (NUTS data) is always available for rasterization
+            - Enhanced datasets provide additional maritime freight information
+            - Method handles missing data sources gracefully
         """
         logger.info("Loading freight data using two-stage approach (NUTS L3 + Zeevart ports)")
         
@@ -42,7 +171,26 @@ class SharedFreightProcessor:
         return nuts_freight_data, enhanced_datasets
     
     def _load_nuts_road_freight(self) -> pd.DataFrame:
-        """Load NUTS L3 road freight data (loading + unloading combined)."""
+        """
+        Load NUTS L3 road freight data (loading + unloading combined).
+        
+        This method handles the loading of NUTS L3 road freight data, checking for
+        existing unified datasets or creating new ones from component data.
+        
+        Returns:
+            pd.DataFrame: Unified road freight data with combined loading and unloading volumes
+            
+        Processing Logic:
+            1. Check for existing unified freight dataset
+            2. If found, load and process existing data
+            3. If not found, create unified dataset from components
+            4. Validate and return processed data
+            
+        Note:
+            - Prioritizes existing unified datasets for efficiency
+            - Falls back to component data processing if needed
+            - Provides comprehensive logging of data loading process
+        """
         logger.info("Stage 1: Loading NUTS L3 road freight data")
         
         # Check for existing unified freight data first
@@ -56,7 +204,33 @@ class SharedFreightProcessor:
             return self._create_unified_freight_data()
     
     def _create_unified_freight_data(self) -> pd.DataFrame:
-        """Create unified freight dataset by combining loading and unloading data."""
+        """
+        Create unified freight dataset by combining loading and unloading data.
+        
+        This method creates a comprehensive freight dataset by combining separate
+        loading and unloading freight data sources into a single unified dataset.
+        
+        Returns:
+            pd.DataFrame: Unified freight dataset with combined volumes
+            
+        Processing Steps:
+            1. Locate loading and unloading data files from multiple possible paths
+            2. Load both datasets and process them separately
+            3. Merge datasets on NUTS codes and regions
+            4. Sum loading and unloading values to get total freight
+            5. Clean and validate the combined dataset
+            6. Save unified dataset for future use
+            
+        Data Sources:
+            - Loading data: estat_road_go_na_rl3g_en.csv
+            - Unloading data: estat_road_go_na_ru3g_en.csv
+            - Multiple possible directory structures supported
+            
+        Note:
+            - Handles missing data gracefully with outer joins
+            - Saves unified dataset to avoid reprocessing
+            - Provides comprehensive logging of combination process
+        """
         logger.info("Creating unified freight dataset from loading and unloading sources")
         
         # Load freight loading data
@@ -135,7 +309,31 @@ class SharedFreightProcessor:
         return result
     
     def _process_freight_component_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process individual freight component dataset (loading or unloading)."""
+        """
+        Process individual freight component dataset (loading or unloading).
+        
+        This method processes a single freight component dataset, applying standardized
+        filtering, aggregation, and validation procedures.
+        
+        Args:
+            df: Raw freight component DataFrame
+            
+        Returns:
+            pd.DataFrame: Processed freight component data
+            
+        Processing Steps:
+            1. Filter for Netherlands NUTS L3 regions
+            2. Select most recent year data
+            3. Filter for total freight (all categories)
+            4. Aggregate and clean column names
+            5. Convert units if needed (thousands of tonnes to tonnes)
+            6. Validate numeric values and remove invalid entries
+            
+        Note:
+            - Filters for Netherlands regions (NL prefix, 5 characters)
+            - Handles unit conversions automatically
+            - Provides detailed logging of processing steps
+        """
         # Filter for Netherlands and NUTS L3
         nl_data = df[df['geo'].str.startswith('NL') & df['geo'].str.len().eq(5)]
         
@@ -163,7 +361,30 @@ class SharedFreightProcessor:
         return aggregated
     
     def _process_unified_freight_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process pre-unified freight dataset that was already combined."""
+        """
+        Process pre-unified freight dataset that was already combined.
+        
+        This method processes a freight dataset that has already been unified,
+        applying validation and cleaning procedures.
+        
+        Args:
+            df: Pre-unified freight DataFrame
+            
+        Returns:
+            pd.DataFrame: Cleaned and validated freight data
+            
+        Processing Steps:
+            1. Ensure numeric values for freight volumes
+            2. Remove invalid data (NaN, negative values)
+            3. Filter for positive freight values
+            4. Validate data integrity
+            5. Log processing results
+            
+        Note:
+            - Handles pre-combined datasets efficiently
+            - Focuses on validation rather than combination
+            - Provides detailed logging of data quality
+        """
         logger.info(f"Processing unified freight data: {len(df)} regions")
         
         # Ensure numeric values
@@ -180,7 +401,40 @@ class SharedFreightProcessor:
         return processed
     
     def _load_and_map_zeevart_freight(self, nuts_freight_data: pd.DataFrame) -> Optional[Dict[str, pd.DataFrame]]:
-        """Stage 2: Load Zeevart data and map to port geometries."""
+        """
+        Stage 2: Load Zeevart data and map to port geometries.
+        
+        This method implements the second stage of freight processing, loading
+        Zeevart maritime freight data and mapping it to individual port geometries.
+        
+        Args:
+            nuts_freight_data: NUTS L3 road freight data from Stage 1
+            
+        Returns:
+            Optional[Dict[str, pd.DataFrame]]: Enhanced datasets with maritime data,
+                                             or None if Zeevart data unavailable
+                                             
+        Processing Steps:
+            1. Load CBS Zeevart maritime freight statistics
+            2. Map freight data to individual port geometries
+            3. Apply area-based allocation algorithms
+            4. Combine with NUTS road freight data
+            5. Return enhanced datasets with both road and maritime freight
+            
+        Enhanced Dataset Contents:
+            - 'nuts_freight': Road freight data by NUTS L3 regions
+            - 'port_freight': Maritime freight data by individual ports
+            
+        Error Handling:
+            - Returns None if Zeevart data files are missing
+            - Handles port mapping failures gracefully
+            - Provides detailed logging of processing steps and issues
+            
+        Note:
+            - Stage 2 is optional - system works with NUTS data only
+            - Enhanced datasets provide additional maritime freight detail
+            - Maritime and road freight are kept separate to prevent double counting
+        """
         logger.info("Stage 2: Loading and mapping Zeevart maritime freight data to ports")
         
         try:

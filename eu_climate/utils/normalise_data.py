@@ -8,7 +8,16 @@ logger = setup_logging(__name__)
 
 
 class NormalizationStrategy(Enum):
-    """Enumeration of available normalization strategies."""
+    """
+    Enumeration of available normalization strategies.
+    
+    Each strategy is optimized for different types of data and use cases:
+    - HAZARD_SOPHISTICATED: Advanced preservation of risk distributions
+    - EXPOSITION_OPTIMIZED: Full range utilization for exposition visualization
+    - ECONOMIC_OPTIMIZED: Optimized for economic data analysis
+    - ROBUST_PERCENTILE: Robust to outliers using percentile bounds
+    - FULL_RANGE: Simple but effective min-max normalization
+    """
     HAZARD_SOPHISTICATED = "hazard_sophisticated"
     EXPOSITION_OPTIMIZED = "exposition_optimized"
     ECONOMIC_OPTIMIZED = "economic_optimized"
@@ -18,7 +27,29 @@ class NormalizationStrategy(Enum):
 
 @dataclass
 class NormalizationParams:
-    """Configuration parameters for normalization strategies."""
+    """
+    Configuration parameters for normalization strategies.
+    
+    This dataclass encapsulates all the parameters that control the normalization
+    behavior, allowing for fine-tuning of the normalization process based on
+    data characteristics and visualization requirements.
+    
+    Attributes:
+        target_max: Maximum value for normalized output (typically 1.0)
+        target_min: Minimum value for normalized output (typically 0.0)
+        conservative_max: Conservative maximum to avoid over-saturation
+        meaningful_min: Minimum meaningful value for visualization
+        significant_threshold: Threshold for determining significant values
+        outlier_threshold_percentile: Percentile for outlier detection
+        normalization_percentile: Percentile for normalization bounds
+        expected_significant_coverage_min: Expected minimum percentage of significant values
+        expected_significant_coverage_max: Expected maximum percentage of significant values
+        gentle_saturation_factor: Factor for gentle outlier saturation
+        tanh_scaling_factor: Scaling factor for tanh saturation function
+        preserve_distribution: Whether to preserve original data distribution
+        enable_boost_factor: Whether to apply boost factors for range utilization
+        enable_outlier_saturation: Whether to apply outlier saturation
+    """
     target_max: float = 1.0
     target_min: float = 0.0
     conservative_max: float = 1.0
@@ -43,14 +74,45 @@ class AdvancedDataNormalizer:
     while preserving relative relationships and ensuring optimal visualization.
     Incorporates the advanced statistical analysis and distribution preservation
     from the hazard layer as the foundation for all normalization approaches.
+    
+    The normalizer uses different strategies optimized for different types of data:
+    - Hazard data: Preserves risk distributions with sophisticated analysis
+    - Exposition data: Optimizes for full range utilization and visualization
+    - Economic data: Balances distribution preservation with range optimization
+    - General data: Applies robust normalization techniques
+    
+    Key features:
+    - Comprehensive statistical analysis of input data
+    - Intelligent parameter adjustment based on data characteristics
+    - Sophisticated outlier handling with gentle saturation
+    - Distribution-aware normalization that preserves important patterns
+    - Scale-adaptive processing for different data sizes
     """
     
     def __init__(self, strategy: NormalizationStrategy = NormalizationStrategy.HAZARD_SOPHISTICATED):
+        """
+        Initialize the advanced data normalizer.
+        
+        Args:
+            strategy: Normalization strategy to use for processing
+        """
         self.strategy = strategy
         self._params = self._get_strategy_params(strategy)
         
     def _get_strategy_params(self, strategy: NormalizationStrategy) -> NormalizationParams:
-        """Get normalization parameters optimized for each layer type."""
+        """
+        Get normalization parameters optimized for each layer type.
+        
+        This method returns carefully tuned parameters for each normalization strategy,
+        based on extensive testing and analysis of different data types in the
+        EU Climate Risk Assessment system.
+        
+        Args:
+            strategy: Normalization strategy to get parameters for
+            
+        Returns:
+            NormalizationParams instance with optimized parameters
+        """
         if strategy == NormalizationStrategy.HAZARD_SOPHISTICATED:
             return NormalizationParams(
                 target_max=1.0,
@@ -106,6 +168,20 @@ class AdvancedDataNormalizer:
         
         This is the foundational method based on the advanced logic from hazard_layer.py,
         with detailed statistical analysis and distribution preservation.
+        
+        The method performs:
+        1. Comprehensive statistical analysis of the input data
+        2. Distribution-aware normalization parameter selection
+        3. Sophisticated outlier handling with gentle saturation
+        4. Preservation of important risk patterns and relationships
+        5. Detailed logging of normalization results and guidance
+        
+        Args:
+            risk_data: Input risk data array to normalize
+            valid_study_area: Boolean mask indicating valid study area
+            
+        Returns:
+            Normalized risk data with preserved distributions
         """
         return self._apply_sophisticated_normalization(
             data=risk_data,
@@ -121,6 +197,15 @@ class AdvancedDataNormalizer:
         Normalize exposition layer data ensuring full range utilization.
         
         Uses sophisticated normalization with parameters optimized for exposition data.
+        This strategy emphasizes full range utilization for optimal visualization
+        while maintaining data integrity.
+        
+        Args:
+            data: Input exposition data array
+            study_area_mask: Optional mask for valid study area
+            
+        Returns:
+            Normalized exposition data with optimized range utilization
         """
         if study_area_mask is None:
             study_area_mask = ~np.isnan(data) & (data > 0)
@@ -139,6 +224,14 @@ class AdvancedDataNormalizer:
         Normalize economic relevance data with full range optimization.
         
         Uses sophisticated normalization with parameters optimized for economic data.
+        Balances distribution preservation with range optimization for economic analysis.
+        
+        Args:
+            data: Input economic data array
+            economic_mask: Optional mask for valid economic data
+            
+        Returns:
+            Normalized economic data with balanced optimization
         """
         if economic_mask is None:
             economic_mask = (data > 0) & ~np.isnan(data)
@@ -157,13 +250,16 @@ class AdvancedDataNormalizer:
         """
         Normalize integrated risk data using sophisticated approach.
         
+        Applies sophisticated normalization optimized for final risk assessment data,
+        with options for preserving zero values and handling integrated risk patterns.
+        
         Args:
-            data: Input data array to normalize
+            data: Input risk data array to normalize
             valid_mask: Optional mask for valid data points
-            preserve_zeros: Whether to preserve zero values
+            preserve_zeros: Whether to preserve zero values in the output
             
         Returns:
-            Normalized data array with sophisticated statistical handling
+            Normalized risk data with sophisticated statistical handling
         """
         if valid_mask is None:
             valid_mask = ~np.isnan(data)
@@ -188,6 +284,22 @@ class AdvancedDataNormalizer:
         
         This is the core normalization method that incorporates all the sophisticated
         statistical analysis and distribution preservation from the hazard layer.
+        
+        The method performs:
+        1. Comprehensive statistical analysis of input data
+        2. Intelligent normalization strategy selection
+        3. Advanced outlier handling with configurable saturation
+        4. Distribution-aware processing
+        5. Detailed result analysis and guidance
+        
+        Args:
+            data: Input data array to normalize
+            valid_mask: Boolean mask indicating valid data points
+            params: Normalization parameters for this strategy
+            layer_name: Name of the layer being processed (for logging)
+            
+        Returns:
+            Sophisticated normalized data array
         """
         # Apply study area mask first
         masked_data = data * valid_mask
@@ -211,6 +323,7 @@ class AdvancedDataNormalizer:
         # Calculate current significant value coverage
         current_significant_pct = np.sum(valid_data_values > params.significant_threshold) / len(valid_data_values) * 100
         
+        # Log comprehensive pre-normalization statistics
         logger.info(f"Pre-normalization statistics for {layer_name}:")
         logger.info(f"  Mean: {data_mean:.4f}, Median: {data_median:.4f}, Std: {data_std:.4f}")
         logger.info(f"  Range: {data_min:.4f} to {data_max:.4f}")
@@ -286,6 +399,7 @@ class AdvancedDataNormalizer:
             significant_count = very_high_count + high_count + moderate_count
             final_significant_pct = significant_count / total_count * 100
             
+            # Log comprehensive post-normalization statistics
             logger.info(f"Post-normalization statistics for {layer_name}:")
             logger.info(f"  Mean: {final_mean:.4f}, Median: {final_median:.4f}")
             logger.info(f"  Range: {final_min:.4f} to {final_max:.4f}, 95th percentile: {final_95th:.4f}")
@@ -327,14 +441,17 @@ def normalize_layer_data(data: np.ndarray,
     """
     Convenience function for normalizing layer data with appropriate sophisticated defaults.
     
+    This function provides a simple interface for normalizing different types of layer data
+    using the most appropriate normalization strategy for each data type.
+    
     Args:
-        data: Input data array
+        data: Input data array to normalize
         layer_type: Type of layer ('hazard', 'exposition', 'relevance', 'risk')
-        valid_mask: Optional validity mask
-        strategy: Optional strategy override
+        valid_mask: Optional validity mask for the data
+        strategy: Optional strategy override for custom normalization
         
     Returns:
-        Normalized data array using sophisticated normalization
+        Normalized data array using sophisticated normalization appropriate for the layer type
     """
     # Determine optimal strategy for layer type
     if strategy is None:
@@ -347,6 +464,7 @@ def normalize_layer_data(data: np.ndarray,
         else:  # risk and others
             strategy = NormalizationStrategy.EXPOSITION_OPTIMIZED
     
+    # Create normalizer and apply appropriate method
     normalizer = AdvancedDataNormalizer(strategy)
     
     if layer_type == 'hazard':
@@ -370,15 +488,20 @@ def ensure_full_range_utilization(data: np.ndarray,
     """
     Ensure data fully utilizes the target range using sophisticated normalization.
     
+    This function applies sophisticated normalization to maximize the utilization
+    of the target range while preserving data relationships and handling outliers
+    appropriately.
+    
     Args:
-        data: Input data array
-        valid_mask: Optional validity mask
-        target_max: Target maximum value
-        target_min: Target minimum value
+        data: Input data array to normalize
+        valid_mask: Optional validity mask for the data
+        target_max: Target maximum value for the output
+        target_min: Target minimum value for the output
         
     Returns:
         Data array with sophisticated full range utilization
     """
+    # Create custom parameters for full range utilization
     params = NormalizationParams(
         target_max=target_max,
         target_min=target_min,
@@ -386,6 +509,7 @@ def ensure_full_range_utilization(data: np.ndarray,
         preserve_distribution=False
     )
     
+    # Create normalizer with full range strategy
     normalizer = AdvancedDataNormalizer(NormalizationStrategy.FULL_RANGE)
     
     if valid_mask is None:
@@ -396,5 +520,10 @@ def ensure_full_range_utilization(data: np.ndarray,
 
 # Legacy compatibility - will be removed in future versions
 class DataNormalizer(AdvancedDataNormalizer):
-    """Legacy compatibility wrapper - use AdvancedDataNormalizer instead."""
+    """
+    Legacy compatibility wrapper - use AdvancedDataNormalizer instead.
+    
+    This class is maintained for backward compatibility but will be deprecated
+    in future versions. Please use AdvancedDataNormalizer directly.
+    """
     pass

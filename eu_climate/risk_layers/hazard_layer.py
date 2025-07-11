@@ -21,14 +21,32 @@ logger = setup_logging(__name__)
 
 @dataclass
 class SeaLevelScenario:
-    """Configuration for sea level rise scenarios."""
+    """
+    Configuration for sea level rise scenarios used in flood risk assessment.
+    
+    This dataclass defines the parameters for different sea level rise scenarios,
+    providing a standardized way to represent and process various climate projections.
+    
+    Attributes:
+        name: Human-readable name for the scenario (e.g., "Current", "Conservative")
+        rise_meters: Sea level rise amount in meters above current levels
+        description: Detailed description of the scenario and its timeframe
+    """
     name: str
     rise_meters: float
     description: str
     
     @classmethod
     def get_default_scenarios(cls) -> List['SeaLevelScenario']:
-        """Returns the default set of sea level rise scenarios."""
+        """
+        Returns the default set of sea level rise scenarios for analysis.
+        
+        Provides a comprehensive range of scenarios from current conditions
+        to extreme projections, covering different timeframes and confidence levels.
+        
+        Returns:
+            List of SeaLevelScenario objects representing standard assessment scenarios
+        """
         return [
             cls("Current", 0.0, "Current sea level - todays scenario (2025)"),
             cls("Conservative", 1.0, "1m sea level rise - conservative scenario (2100)"),
@@ -40,44 +58,89 @@ class SeaLevelScenario:
 
 class HazardLayer:
     """
-    Hazard Layer Implementation
-    ==========================
+    Hazard Layer Implementation for Flood Risk Assessment
+    ===================================================
     
-    The Hazard Layer processes Digital Elevation Model (DEM) data and hydrological data
-    to assess sea level rise and flood impacts under different scenarios.
+    The HazardLayer class processes Digital Elevation Model (DEM) data and hydrological
+    information to assess flood risks under different sea level rise scenarios. It
+    integrates multiple data sources to create comprehensive flood risk assessments.
     
     Key Features:
-    - Configurable sea level rise scenarios
-            - River polygon network integration
-    - Proper cartographic projection handling
-    - Flood extent calculation based on DEM and river analysis
-    - Standardized data harmonization
+    - Configurable sea level rise scenarios (current to extreme projections)
+    - River polygon network integration for enhanced flood modeling
+    - Advanced elevation-based risk calculation with decay functions
+    - Coastline proximity enhancement for coastal flood risks
+    - Proper cartographic projection handling and spatial analysis
+    - Standardized data harmonization and normalization
+    - Comprehensive visualization and export capabilities
+    
+    Data Sources Processed:
+    1. Digital Elevation Model (DEM):
+       - High-resolution topographic data
+       - Basis for elevation-based flood risk calculation
+    
+    2. River Polygon Network:
+       - Detailed hydrological features
+       - Enhanced flood risk modeling near waterways
+       - Size filtering for computational efficiency
+    
+    3. Coastline Data:
+       - Coastal boundaries for proximity analysis
+       - Enhanced flood risk in coastal zones
+    
+    4. Land Mass Data:
+       - Land/water distinction
+       - Study area masking and validation
+    
+    Processing Pipeline:
+    1. Load and prepare DEM and auxiliary datasets
+    2. Apply sea level rise scenarios to elevation data
+    3. Calculate base elevation flood risk with decay functions
+    4. Apply river proximity enhancements
+    5. Apply coastline proximity enhancements
+    6. Combine and normalize risk factors
+    7. Export results and create visualizations
+    
+    The layer supports both individual scenario processing and batch processing
+    with immediate export capabilities for memory-efficient handling of large datasets.
     """
     
     def __init__(self, config: ProjectConfig):
-        """Initialize the Hazard Layer with project configuration."""
+        """
+        Initialize the Hazard Layer with project configuration.
+        
+        Sets up all required components including data paths, transformation tools,
+        normalizers, and loads auxiliary datasets for flood risk processing.
+        
+        Args:
+            config: Project configuration containing paths and processing parameters
+        """
         self.config = config
         self.dem_path = self.config.dem_path
         self.river_polygons_path = self.config.river_polygons_path
         self.scenarios = SeaLevelScenario.get_default_scenarios()
         
+        # Initialize river polygon network (loaded later)
         self.river_polygon_network = None
 
+        # Initialize raster transformer for coordinate system handling
         self.transformer = RasterTransformer(
             target_crs=self.config.target_crs,
             config=self.config
         )
         
+        # Initialize visualization component
         self.visualizer = LayerVisualizer(self.config)
         
         # Initialize sophisticated normalizer for hazard data
         self.normalizer = AdvancedDataNormalizer(NormalizationStrategy.HAZARD_SOPHISTICATED)
         
+        # Validate required input files
         for path in [self.dem_path, self.river_polygons_path]:
             if not path.exists():
                 raise FileNotFoundError(f"Required file not found: {path}")
         
-        # Load river polygon data
+        # Load river polygon data during initialization
         self.load_river_polygon_data()
         
         logger.info(f"Initialized Hazard Layer with DEM and river polygon data")
@@ -85,12 +148,17 @@ class HazardLayer:
     def load_and_prepare_dem(self) -> Tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS, np.ndarray]:
         """
         Load and prepare Digital Elevation Model (DEM) data and land mass mask.
+        
+        Processes DEM data by transforming to target coordinate system, aligning
+        with study area boundaries, and creating associated land mass masks for
+        proper water/land distinction in flood analysis.
+        
         Returns:
             Tuple containing:
-            - DEM data array
-            - Affine transform
-            - Coordinate Reference System
-            - Land mass mask (1=land, 0=water)
+            - DEM data array: Elevation values in target CRS and resolution
+            - Affine transform: Spatial reference transformation matrix
+            - Coordinate Reference System: CRS object for spatial operations
+            - Land mass mask: Binary array (1=land, 0=water)
         """
         logger.info("Loading DEM data...")
         
@@ -98,7 +166,7 @@ class HazardLayer:
         nuts_l3_path = self.config.data_dir / "NUTS-L3-NL.shp"
         reference_bounds = self.transformer.get_reference_bounds(nuts_l3_path)
         
-        # Load DEM using NUTS-L3 bounds for consistent study area
+        # Load and transform DEM using NUTS-L3 bounds for consistent study area
         dem_data, transform, crs = self.transformer.transform_raster(
             self.dem_path,
             reference_bounds=reference_bounds,
@@ -112,18 +180,21 @@ class HazardLayer:
             resampling_method=self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
         )
         
+        # Ensure land mass data is aligned with DEM
         if not self.transformer.validate_alignment(land_mass_data, land_transform, dem_data, transform):
             land_mass_data = self.transformer.ensure_alignment(
                 land_mass_data, land_transform, transform, dem_data.shape,
                 self.config.resampling_method.name.lower() if hasattr(self.config.resampling_method, 'name') else str(self.config.resampling_method).lower()
             )
+        
+        # Create binary land mask (1=land, 0=water)
         land_mask = (land_mass_data > 0).astype(np.uint8)
         
-        # Calculate resolution in meters
+        # Calculate spatial resolution in meters for reporting
         res_x = abs(transform[0])  # Width of a pixel in meters
         res_y = abs(transform[4])  # Height of a pixel in meters
         
-        # Log statistics
+        # Log DEM statistics for validation
         valid_data = dem_data[~np.isnan(dem_data)]
         logger.info(f"DEM Statistics:")
         logger.info(f"  Shape: {dem_data.shape}")
@@ -133,7 +204,7 @@ class HazardLayer:
         logger.info(f"  Mean elevation: {np.mean(valid_data):.2f}m")
         logger.info(f"  Coverage: {len(valid_data) / dem_data.size * 100:.1f}%")
         
-        # Calculate and log the actual bounds of the DEM
+        # Calculate and log the actual spatial bounds of the DEM
         corners = [
             (0, 0),  # top-left
             (dem_data.shape[1], 0),  # top-right
@@ -147,7 +218,7 @@ class HazardLayer:
             x_geo, y_geo = transform * (x, y)
             dem_bounds.extend([float(x_geo), float(y_geo)])
         
-        # Extract min/max coordinates
+        # Extract min/max coordinates for bounds reporting
         dem_bounds = [
             min(dem_bounds[::2]),  # left
             max(dem_bounds[::2]),  # right
@@ -159,17 +230,25 @@ class HazardLayer:
         return dem_data, transform, crs, land_mask
     
     def load_river_polygon_data(self) -> gpd.GeoDataFrame:
-        """Load and prepare river polygon network data."""
+        """
+        Load and prepare river polygon network data for enhanced flood modeling.
+        
+        Processes river polygon data by transforming to target coordinate system
+        and clipping to study area boundaries for computational efficiency.
+        
+        Returns:
+            GeoDataFrame containing processed river polygon network
+        """
         logger.info("Loading river polygon network data...")
         
         try:
-            # Get target CRS from config
+            # Get target CRS from configuration
             target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
             
-            # Load river polygons with explicit CRS
+            # Load river polygons with explicit CRS handling
             river_polygon_network = gpd.read_file(self.river_polygons_path)
             
-            # Set CRS if not already set
+            # Set CRS if not already defined
             if river_polygon_network.crs is None:
                 river_polygon_network.set_crs(target_crs, inplace=True)
                 logger.info(f"Set river polygon network CRS to {target_crs}")
@@ -181,7 +260,7 @@ class HazardLayer:
             
             self.river_polygon_network = river_polygon_network
             
-            # Log the coordinate ranges to verify correct transformation
+            # Log coordinate ranges to verify correct transformation
             bounds = river_polygon_network.total_bounds
             logger.info(f"River polygon network bounds: [{bounds[0]:.2f}, {bounds[2]:.2f}] x [{bounds[1]:.2f}, {bounds[3]:.2f}]")
             
@@ -195,26 +274,32 @@ class HazardLayer:
     
     def calculate_flood_extent(self, dem_data: np.ndarray, sea_level_rise: float, transform: rasterio.Affine, land_mask: np.ndarray) -> np.ndarray:
         """
-        Calculate normalized flood risk based on DEM, river polygon network, sea level rise scenario, and land mass mask.
+        Calculate normalized flood risk based on elevation, river networks, and sea level rise.
+        
+        This is the core method for flood risk assessment that combines multiple risk factors
+        to produce a comprehensive normalized flood risk map. The method applies a sophisticated
+        multi-step process to account for elevation, river proximity, and coastline effects.
+        
         Args:
             dem_data: Digital elevation model data array
-            sea_level_rise: Sea level rise in meters
-            transform: Affine transform matrix for the DEM data
+            sea_level_rise: Sea level rise in meters for the scenario
+            transform: Affine transform matrix for spatial reference
             land_mask: Binary land mask (1=land, 0=water)
+            
         Returns:
             Normalized array where values range from 0 (no risk) to 1 (maximum risk)
         """
         logger.info(f"Calculating normalized flood risk for {sea_level_rise}m sea level rise...")
         
-        # Load NUTS boundaries
+        # Load NUTS boundaries for study area definition
         nuts_gdf = self._load_nuts_boundaries()
         if nuts_gdf is None:
             raise ValueError("Could not load NUTS boundaries - required for flood extent calculation")
         
-        # Create a mask for valid land areas (non-NaN DEM values)
+        # Create mask for valid land areas (non-NaN DEM values)
         valid_land_mask = ~np.isnan(dem_data)
         
-        # Always rasterize NUTS to DEM grid
+        # Always rasterize NUTS to DEM grid for study area definition
         nuts_mask = rasterio.features.rasterize(
             [(geom, 1) for geom in nuts_gdf.geometry],
             out_shape=dem_data.shape,
@@ -222,43 +307,55 @@ class HazardLayer:
             dtype=np.uint8
         )
         
-        
+        # Define valid study area combining land, NUTS, and data availability
         valid_study_area = (valid_land_mask & (nuts_mask == 1) & (land_mask == 1))
         
+        # Step 1: Calculate base elevation-based flood risk
         elevation_risk = self._calculate_elevation_flood_risk(dem_data, sea_level_rise, valid_study_area)
         
+        # Step 2: Apply river proximity decay enhancement
         river_decay_enhanced_risk = self._apply_river_proximity_decay(
             dem_data, elevation_risk, sea_level_rise, valid_study_area, transform
         )
         
+        # Calculate elevation statistics for context adjustment
         study_elevations = dem_data[valid_study_area]
         elevation_stats = self._calculate_elevation_statistics(study_elevations, sea_level_rise)
         
+        # Step 3: Apply study area context adjustment
         context_adjusted_risk = self._apply_study_area_context_adjustment(
             river_decay_enhanced_risk, dem_data, elevation_stats, valid_study_area
         )
         
+        # Step 4: Calculate river risk enhancement zones
         river_risk_enhancement = self._calculate_river_risk_enhancement(dem_data.shape, transform)
         
+        # Step 5: Calculate coastline risk enhancement zones
         coastline_risk_enhancement, coastline_zone_mask = self._calculate_coastline_risk_enhancement(dem_data.shape, transform, land_mask)
         
+        # Step 6: Combine all risk factors
         combined_risk = self._combine_flood_risks(context_adjusted_risk, river_risk_enhancement, coastline_risk_enhancement, valid_study_area)
         
+        # Step 7: Apply smoothing to reduce noise
         smoothed_risk = ndimage.gaussian_filter(
             np.nan_to_num(combined_risk, nan=0),
             sigma=self.config.smoothing_sigma
         )
         
+        # Step 8: Final normalization using sophisticated approach
         final_risk = self.normalizer.normalize_hazard_data(smoothed_risk, valid_study_area)
         
+        # Log comprehensive risk statistics
         self._log_final_risk_statistics(final_risk, valid_study_area)
         
+        # Calculate area statistics for reporting
         pixel_width = abs(transform[0])
         pixel_height_top = abs(transform[4])
         pixel_height_bottom = abs(transform[4] + transform[5] * dem_data.shape[0])
         pixel_height_avg = (pixel_height_top + pixel_height_bottom) / 2
         pixel_area_m2 = pixel_width * pixel_height_avg
         
+        # Calculate risk area statistics
         valid_pixels = np.int64(np.sum(valid_study_area))
         high_risk_pixels = np.int64(np.sum((final_risk > 0.7) & valid_study_area))
         moderate_risk_pixels = np.int64(np.sum((final_risk > 0.3) & (final_risk <= 0.7) & valid_study_area))
@@ -285,6 +382,9 @@ class HazardLayer:
                                  buffer_distance: float) -> gpd.GeoDataFrame:
         """
         Create a single buffer zone around river polygons at specified distance.
+        
+        Efficiently combines river geometries and creates uniform buffer zones
+        for enhanced flood risk modeling near hydrological features.
         
         Args:
             river_polygons: GeoDataFrame with river polygon geometries
@@ -315,8 +415,9 @@ class HazardLayer:
         """
         Calculate selective flood risk based on elevation within study area context.
         
-        Uses a more selective approach that concentrates high risk in truly vulnerable areas,
-        avoiding too many maximum values and overly broad risk distribution.
+        Uses a sophisticated approach that concentrates high risk in truly vulnerable areas,
+        applying scientifically-based elevation thresholds and decay functions to avoid
+        over-broad risk distribution.
         
         Args:
             dem_data: Digital elevation model data
@@ -332,20 +433,35 @@ class HazardLayer:
             logger.warning("No valid elevations in study area, returning zero risk")
             return np.zeros_like(dem_data, dtype=np.float32)
         
+        # Calculate elevation statistics for risk assessment
         elevation_stats = self._calculate_elevation_statistics(study_elevations, sea_level_rise)
         
+        # Calculate base risk using elevation and sea level rise
         base_risk = self._calculate_base_elevation_risk(dem_data, sea_level_rise, elevation_stats)
         
         return base_risk
     
     def _calculate_elevation_statistics(self, study_elevations: np.ndarray, 
                                        sea_level_rise: float) -> Dict:
-        """Calculate comprehensive elevation statistics for risk assessment."""
+        """
+        Calculate comprehensive elevation statistics for risk assessment.
+        
+        Analyzes elevation distribution within the study area to inform
+        risk calculation parameters and thresholds.
+        
+        Args:
+            study_elevations: Array of elevation values within study area
+            sea_level_rise: Sea level rise scenario in meters
+            
+        Returns:
+            Dictionary containing elevation statistics and derived parameters
+        """
         min_study_elevation = np.min(study_elevations)
         max_study_elevation = np.max(study_elevations)
         elevation_range = max_study_elevation - min_study_elevation
         mean_study_elevation = np.mean(study_elevations)
         
+        # Get safe elevation threshold from configuration
         max_safe_elevation = self.config.elevation_risk['max_safe_elevation_m']
         safe_threshold = max_safe_elevation 
         
@@ -365,7 +481,20 @@ class HazardLayer:
     
     def _calculate_base_elevation_risk(self, dem_data: np.ndarray, sea_level_rise: float, 
                                       elevation_stats: Dict) -> np.ndarray:
-        """Calculate base elevation risk using standard decay parameters."""
+        """
+        Calculate base elevation risk using standard decay parameters.
+        
+        Applies the primary elevation-based risk calculation using configured
+        decay factors and thresholds.
+        
+        Args:
+            dem_data: Digital elevation model data
+            sea_level_rise: Sea level rise scenario in meters
+            elevation_stats: Dictionary of elevation statistics
+            
+        Returns:
+            Base elevation risk array
+        """
         return self._calculate_elevation_risk_with_decay(
             dem_data, sea_level_rise, elevation_stats, 
             self.config.elevation_risk['risk_decay_factor']
@@ -373,33 +502,54 @@ class HazardLayer:
     
     def _calculate_elevation_risk_with_decay(self, dem_data: np.ndarray, sea_level_rise: float,
                                            elevation_stats: Dict, decay_factor: float) -> np.ndarray:
-        """Calculate elevation risk with specified decay factor."""
+        """
+        Calculate elevation risk with specified decay factor.
+        
+        Implements the core elevation-based risk calculation with configurable
+        decay parameters for different risk zones based on elevation relative
+        to sea level rise scenarios.
+        
+        Args:
+            dem_data: Digital elevation model data
+            sea_level_rise: Sea level rise scenario in meters
+            elevation_stats: Dictionary of elevation statistics
+            decay_factor: Exponential decay factor for risk calculation
+            
+        Returns:
+            Elevation-based risk array with applied decay
+        """
         elevation_range = elevation_stats['elevation_range']
         safe_threshold = elevation_stats['safe_threshold']
         vulnerability_range = elevation_stats['vulnerability_range']
         
+        # Handle edge case of uniform elevation
         if elevation_range == 0:
             logger.warning("All elevations in study area are identical, using uniform risk")
             uniform_risk = 0.3 if elevation_stats['min_elevation'] <= safe_threshold else 0.05
             return np.full_like(dem_data, uniform_risk, dtype=np.float32)
         
+        # Calculate elevation above sea level rise
         elevation_above_slr = dem_data - sea_level_rise
         risk = np.zeros_like(dem_data, dtype=np.float32)
         
+        # Zone 1: Areas below sea level rise (highest risk)
         below_slr_mask = elevation_above_slr <= 0
         if np.any(below_slr_mask):
             depth_below_slr = np.abs(elevation_above_slr[below_slr_mask])
             risk[below_slr_mask] = 0.8 + 0.19 * (1 - np.exp(-depth_below_slr / 2.0))
         
+        # Zone 2: Vulnerable areas above sea level rise but within vulnerability range
         vulnerable_mask = (elevation_above_slr > 0) & (elevation_above_slr <= vulnerability_range)
         if np.any(vulnerable_mask):
             height_above_slr = elevation_above_slr[vulnerable_mask]
             risk[vulnerable_mask] = 0.6 * np.exp(-height_above_slr / decay_factor)
         
+        # Zone 3: Moderate risk areas between vulnerability range and safe threshold
         moderate_mask = (elevation_above_slr > vulnerability_range) & (dem_data <= safe_threshold)
         if np.any(moderate_mask):
             risk[moderate_mask] = 0.05 + 0.1 * np.exp(-(elevation_above_slr[moderate_mask] - vulnerability_range) / 5.0)
         
+        # Zone 4: Low risk areas above safe threshold
         safe_mask = dem_data > safe_threshold
         if np.any(safe_mask):
             risk[safe_mask] = 0.001 + 0.009 * np.exp(-(dem_data[safe_mask] - safe_threshold) / 10.0)

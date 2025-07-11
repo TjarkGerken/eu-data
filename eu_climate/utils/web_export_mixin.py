@@ -1,3 +1,58 @@
+"""
+Web Export Mixin for EU Climate Risk Assessment Layers
+=====================================================
+
+This module provides a mixin class that extends existing risk assessment layers with
+web-optimized export capabilities. It enables seamless integration of modern web-compatible
+formats while maintaining backward compatibility with existing legacy formats.
+
+Key Features:
+- Non-intrusive mixin design for easy integration with existing layers
+- Simultaneous export to legacy and web-optimized formats
+- Automatic format detection and optimization
+- Cluster-specific optimizations for complex geometries
+- Comprehensive error handling and fallback mechanisms
+- Detailed export status reporting and validation
+
+The mixin approach allows existing layer classes to gain web export capabilities
+without modifying their core functionality, maintaining clean separation of concerns.
+
+Web Format Support:
+- Raster Data: Cloud-Optimized GeoTIFF (COG) with compression and overviews
+- Vector Data: Mapbox Vector Tiles (MVT) in MBTiles format
+- Cluster Data: Geometry simplification and vertex reduction for web delivery
+- Metadata: Structured metadata for web serving recommendations
+
+Export Workflow:
+1. Save data in legacy format (existing functionality)
+2. Create web-optimized versions using WebOptimizedExporter
+3. Apply format-specific optimizations
+4. Generate serving metadata and recommendations
+5. Return comprehensive export status
+
+Integration Pattern:
+- Inherit from WebExportMixin in layer classes
+- Use save_raster_with_web_exports() instead of standard raster saving
+- Use save_vector_with_web_exports() instead of standard vector saving
+- Access web export paths and metadata through provided methods
+
+Usage:
+    from eu_climate.utils.web_export_mixin import WebExportMixin
+    
+    class MyRiskLayer(WebExportMixin, BaseRiskLayer):
+        def save_results(self):
+            # Save with both legacy and web formats
+            results = self.save_raster_with_web_exports(
+                data=self.risk_data,
+                meta=self.metadata,
+                output_path=self.output_path,
+                layer_name="risk_assessment"
+            )
+            
+            if results.get('cog', False):
+                print("Web-optimized COG created successfully")
+"""
+
 from pathlib import Path
 from typing import Dict, Optional, Union
 import numpy as np
@@ -16,9 +71,36 @@ class WebExportMixin:
     
     This mixin extends existing layer classes with methods to export their
     outputs in modern web-compatible formats while maintaining existing functionality.
+    
+    Key Features:
+        - Non-intrusive design that doesn't affect existing layer functionality
+        - Simultaneous export to legacy and web-optimized formats
+        - Automatic format detection and optimization
+        - Comprehensive error handling with graceful fallbacks
+        - Detailed export status reporting
+        
+    Web Format Support:
+        - Raster: Cloud-Optimized GeoTIFF (COG) with compression and overviews
+        - Vector: Mapbox Vector Tiles (MVT) in MBTiles format
+        - Cluster: Geometry simplification for web delivery
+        
+    Integration:
+        - Inherit from this mixin in layer classes
+        - Use enhanced save methods instead of standard ones
+        - Access web export utilities through provided methods
+        
+    Attributes:
+        web_exporter: WebOptimizedExporter instance for format conversion
     """
     
     def __init__(self, *args, **kwargs):
+        """
+        Initialize WebExportMixin with web export capabilities.
+        
+        Args:
+            *args: Arguments passed to parent class
+            **kwargs: Keyword arguments passed to parent class
+        """
         super().__init__(*args, **kwargs)
         self.web_exporter = WebOptimizedExporter()
     
@@ -31,15 +113,43 @@ class WebExportMixin:
         """
         Save raster data in both legacy format and web-optimized formats.
         
+        This method provides a comprehensive raster export solution that creates
+        both traditional GeoTIFF files and modern web-optimized formats.
+        
         Args:
-            data: Raster data array
-            meta: Rasterio metadata dict
+            data: Raster data array (numpy array)
+            meta: Rasterio metadata dictionary with projection and extent info
             output_path: Path for legacy GeoTIFF output
-            layer_name: Layer name for metadata
-            create_web_formats: Whether to create web-optimized formats
+            layer_name: Layer name for metadata and web export naming
+            create_web_formats: Whether to create web-optimized formats (COG)
             
         Returns:
-            Dict with success status for each format created
+            Dict[str, bool]: Success status for each format:
+                - 'geotiff': Success status for legacy GeoTIFF
+                - 'cog': Success status for Cloud-Optimized GeoTIFF
+                
+        Export Process:
+            1. Save legacy GeoTIFF with LZW compression
+            2. Add layer metadata and tags
+            3. Create web-optimized COG version
+            4. Apply compression and overview pyramids
+            5. Validate export success
+            
+        Web Optimizations:
+            - Cloud-Optimized GeoTIFF (COG) format
+            - LZW compression for reduced file size
+            - Overview pyramids for multi-scale viewing
+            - Optimized tiling for HTTP range requests
+            
+        Error Handling:
+            - Graceful fallback if web export fails
+            - Detailed logging of export process
+            - Preserves legacy format even if web export fails
+            
+        Note:
+            - Legacy GeoTIFF is always created for backward compatibility
+            - Web formats are created only if legacy export succeeds
+            - Returns detailed status for each format
         """
         output_path = Path(output_path)
         results = {}
@@ -109,15 +219,49 @@ class WebExportMixin:
         """
         Save vector data in both legacy format and web-optimized formats.
         
+        This method provides comprehensive vector export capabilities that create
+        both traditional vector formats and modern web-optimized tile formats.
+        
         Args:
-            gdf: GeoDataFrame to save
-            output_path: Path for legacy output
-            layer_name: Layer name for metadata
-            create_web_formats: Whether to create web-optimized formats
+            gdf: GeoDataFrame to save with vector geometries and attributes
+            output_path: Path for legacy output file
+            layer_name: Layer name for metadata and web export naming
+            create_web_formats: Whether to create web-optimized formats (MVT)
             driver: Driver for legacy format (GPKG, ESRI Shapefile, etc.)
             
         Returns:
-            Dict with success status for each format created
+            Dict[str, bool]: Success status for each format:
+                - 'gpkg'/'shapefile': Success status for legacy format
+                - 'mvt': Success status for Mapbox Vector Tiles
+                
+        Export Process:
+            1. Apply cluster-specific optimizations if applicable
+            2. Save legacy format (GeoPackage or Shapefile)
+            3. Create web-optimized MVT version
+            4. Apply geometry simplification for web delivery
+            5. Validate export success
+            
+        Web Optimizations:
+            - Mapbox Vector Tiles (MVT) in MBTiles format
+            - Geometry simplification for reduced file size
+            - Vertex reduction for complex polygons
+            - Optimized for zoom-based delivery
+            
+        Cluster Optimizations:
+            - Automatic geometry simplification
+            - Vertex count reduction
+            - Topology preservation options
+            - Web-appropriate coordinate precision
+            
+        Error Handling:
+            - Graceful fallback if web export fails
+            - Detailed logging of export process
+            - Preserves legacy format even if web export fails
+            
+        Note:
+            - Legacy format is always created for backward compatibility
+            - Web formats are created only if legacy export succeeds
+            - Special handling for cluster data with complex geometries
         """
         output_path = Path(output_path)
         results = {}
@@ -176,11 +320,49 @@ class WebExportMixin:
         """
         Apply cluster-specific optimizations for web delivery.
         
+        This method applies sophisticated geometry optimizations specifically designed
+        for cluster polygons to ensure efficient web delivery while preserving
+        essential shape characteristics.
+        
         Args:
-            gdf: Original cluster GeoDataFrame
+            gdf: Original cluster GeoDataFrame with complex geometries
             
         Returns:
-            Optimized GeoDataFrame
+            gpd.GeoDataFrame: Optimized GeoDataFrame with simplified geometries
+            
+        Optimization Process:
+            1. Extract web optimization settings from cluster configuration
+            2. Apply geometry simplification with configurable tolerance
+            3. Reduce vertex count for complex polygons
+            4. Preserve topology while reducing complexity
+            5. Validate geometric integrity after optimization
+            
+        Optimization Settings:
+            - max_vertices_per_polygon: Maximum vertices per polygon (default: 1000)
+            - simplify_tolerance_meters: Simplification tolerance in meters (default: 100)
+            - preserve_topology: Whether to preserve topology during simplification
+            
+        Simplification Algorithm:
+            - Converts to WGS84 for web-appropriate simplification
+            - Applies Douglas-Peucker algorithm for vertex reduction
+            - Handles coordinate system transformations automatically
+            - Provides fallback for optimization failures
+            
+        Web Considerations:
+            - Optimized for web map rendering performance
+            - Reduces file size while maintaining visual quality
+            - Ensures compatibility with web mapping libraries
+            - Balances detail preservation with performance
+            
+        Error Handling:
+            - Graceful fallback to original geometry if optimization fails
+            - Detailed logging of optimization process
+            - Validates geometric integrity throughout process
+            
+        Note:
+            - Specifically designed for cluster data with complex boundaries
+            - Preserves essential cluster shape characteristics
+            - Optimizes for web delivery without losing analytical value
         """
         try:
             from shapely.geometry import Polygon
@@ -279,12 +461,26 @@ class WebExportMixin:
         """
         Get standardized paths for web-optimized exports.
         
+        This method provides standardized path generation for web-optimized export
+        formats, ensuring consistent directory structure across all layers.
+        
         Args:
-            base_output_dir: Base output directory
-            layer_name: Layer name
+            base_output_dir: Base output directory for the layer
+            layer_name: Layer name for file naming
             
         Returns:
-            Dict with paths for each web format
+            Dict[str, Path]: Dictionary with standardized paths:
+                - 'cog': Path for Cloud-Optimized GeoTIFF
+                - 'mvt': Path for Mapbox Vector Tiles
+                
+        Directory Structure:
+            - web/cog/: Cloud-Optimized GeoTIFF files
+            - web/mvt/: Mapbox Vector Tiles in MBTiles format
+            
+        Note:
+            - Creates consistent directory structure across all layers
+            - Separates web formats from legacy formats
+            - Enables efficient web serving and CDN integration
         """
         web_dir = base_output_dir / "web"
         
@@ -295,13 +491,36 @@ class WebExportMixin:
     
     def create_web_metadata(self, base_output_dir: Path) -> Dict:
         """
-        Create metadata file for web consumption.
+        Create comprehensive metadata file for web consumption.
+        
+        This method generates detailed metadata that provides guidance for web
+        serving, format descriptions, and deployment recommendations.
         
         Args:
-            base_output_dir: Base output directory
+            base_output_dir: Base output directory containing web exports
             
         Returns:
-            Metadata dictionary
+            Dict: Comprehensive metadata dictionary with:
+                - Format descriptions and usage guidelines
+                - Serving recommendations for each format
+                - Directory structure documentation
+                - Performance optimization suggestions
+                
+        Metadata Contents:
+            - Format specifications for COG and MVT
+            - Web serving recommendations and best practices
+            - Directory structure documentation
+            - CORS and compression guidelines
+            - CDN and caching recommendations
+            
+        Usage Guidelines:
+            - COG: HTTP range requests, dynamic tiling, overview pyramids
+            - MVT: Tile server integration, zoom-based delivery, binary compression
+            
+        Note:
+            - Provides comprehensive deployment guidance
+            - Includes performance optimization recommendations
+            - Supports both self-hosted and CDN deployment scenarios
         """
         web_dir = base_output_dir / "web"
         metadata = {

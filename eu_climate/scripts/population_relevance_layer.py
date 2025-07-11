@@ -1,20 +1,3 @@
-#!/usr/bin/env python3
-"""
-Population Relevance Layer Generator
-===================================
-
-This script creates a population relevance layer using 2025 GHS population data
-with proper 3 arcsecond resolution handling. The layer follows the same
-formatting and styling as other relevance layers in the system.
-
-Features:
-- Uses population_2025_file from config ("Pop/POP_GHS_2025.tif")
-- Applies corrected GHS resolution handling (3 arcsecond → 30m)
-- Netherlands study area masking using NUTS-L3 boundaries
-- Consistent relevance layer visualization and styling
-- Saves both normalized TIF and PNG outputs
-"""
-
 import sys
 from pathlib import Path
 import numpy as np
