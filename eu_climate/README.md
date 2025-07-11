@@ -564,15 +564,6 @@ The framework implements a four-layer approach following established climate ris
 - Standardized no-data handling
 - Comprehensive logging and error reporting
 
-### Web Export Optimization
-
-**Cloud-Optimized GeoTIFF (COG)**:
-
-- Internal tiling (512x512 pixel tiles)
-- Multiple overview levels for efficient zooming
-- LZW compression with horizontal predictor
-- Optimized for HTTP range requests
-
 **Mapbox Vector Tiles (MVT)**:
 
 - Zoom-dependent simplification using Douglas-Peucker algorithm
