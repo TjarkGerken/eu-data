@@ -66,7 +66,7 @@ export default function ImageAdmin() {
       formData.append("category", selectedCategory);
       formData.append(
         "scenario",
-        selectedScenario === "none" ? "" : selectedScenario
+        selectedScenario === "none" ? "" : selectedScenario,
       );
       formData.append("description", uploadForm.description);
       formData.append("id", uploadForm.id);

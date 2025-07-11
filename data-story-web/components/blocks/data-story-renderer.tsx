@@ -69,15 +69,15 @@ export function DataStoryRenderer({
         console.log("Block data.references:", block.data.references);
         console.log(
           "Final title passed to component:",
-          block.title || block.data.title || ""
+          block.title || block.data.title || "",
         );
         console.log(
           "Final content passed to component:",
-          block.content || block.data.content || ""
+          block.content || block.data.content || "",
         );
         console.log(
           "Final isOwnSource passed to component:",
-          block.data.isOwnSource || false
+          block.data.isOwnSource || false,
         );
         console.log("===================================");
 

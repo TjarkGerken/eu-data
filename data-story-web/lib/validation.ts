@@ -76,13 +76,13 @@ const validateColorCode = (color: string): boolean => {
 const validateNumberRange = (
   value: number,
   min: number,
-  max: number
+  max: number,
 ): boolean => {
   return value >= min && value <= max;
 };
 
 const validateBlockSpecificFields = (
-  formData: ContentBlockFormData
+  formData: ContentBlockFormData,
 ): ValidationError[] => {
   const errors: ValidationError[] = [];
   const { block_type, data } = formData;
@@ -284,7 +284,7 @@ const validateBlockSpecificFields = (
         data?.imageIndicators &&
         (!Array.isArray(data.imageIndicators) ||
           data.imageIndicators.some(
-            (ind: string) => !IMAGE_INDICATORS.includes(ind)
+            (ind: string) => !IMAGE_INDICATORS.includes(ind),
           ))
       ) {
         errors.push({
@@ -338,7 +338,7 @@ const validateBlockSpecificFields = (
 };
 
 export function validateContentBlock(
-  formData: ContentBlockFormData
+  formData: ContentBlockFormData,
 ): ValidationResult {
   const errors: ValidationError[] = [];
 
@@ -408,14 +408,14 @@ export function validateContentBlock(
 
 export function getFieldError(
   errors: ValidationError[],
-  fieldName: string
+  fieldName: string,
 ): string | undefined {
   return errors.find((error) => error.field === fieldName)?.message;
 }
 
 export function hasFieldError(
   errors: ValidationError[],
-  fieldName: string
+  fieldName: string,
 ): boolean {
   return errors.some((error) => error.field === fieldName);
 }

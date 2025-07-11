@@ -99,7 +99,7 @@ interface MapLayerSelectorProps {
 
 function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
   const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
-    []
+    [],
   );
   const [loading, setLoading] = useState(true);
   const [showLayerManager, setShowLayerManager] = useState(false);
@@ -128,7 +128,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
       | string[]
       | number
       | Record<string, number>
-      | Array<{ id: string; name: string; layerIds: string[] }>
+      | Array<{ id: string; name: string; layerIds: string[] }>,
   ) => {
     onDataChange({ ...data, [field]: value });
   };
@@ -163,7 +163,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
             onChange={(e) =>
               updateDataField(
                 "centerLat",
-                parseFloat(e.target.value) || 52.1326
+                parseFloat(e.target.value) || 52.1326,
               )
             }
             placeholder="52.1326"
@@ -257,7 +257,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
               .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)) // Sort by z-index for consistent display
               .map((layer) => {
                 const isSelected = (data?.selectedLayers || []).includes(
-                  layer.id
+                  layer.id,
                 );
                 return (
                   <Card
@@ -590,7 +590,7 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
                             />
                           </div>
                         );
-                      }
+                      },
                     )}
                   </div>
                 </CardContent>
@@ -630,7 +630,7 @@ interface ShipMapSelectorProps {
 function ShipMapSelector({ data, onDataChange }: ShipMapSelectorProps) {
   const updateDataField = (
     field: keyof ShipMapData,
-    value: string | boolean | number
+    value: string | boolean | number,
   ) => {
     onDataChange({ ...data, [field]: value });
   };
@@ -674,7 +674,7 @@ function ShipMapSelector({ data, onDataChange }: ShipMapSelectorProps) {
               onChange={(e) =>
                 updateDataField(
                   "centerLat",
-                  parseFloat(e.target.value) || 52.1326
+                  parseFloat(e.target.value) || 52.1326,
                 )
               }
               placeholder="52.1326"
@@ -686,7 +686,7 @@ function ShipMapSelector({ data, onDataChange }: ShipMapSelectorProps) {
               onChange={(e) =>
                 updateDataField(
                   "centerLng",
-                  parseFloat(e.target.value) || 5.2913
+                  parseFloat(e.target.value) || 5.2913,
                 )
               }
               placeholder="5.2913"
@@ -962,7 +962,7 @@ export function BlockTypeFields({
         }) => ({
           ...ref,
           readable_id: ref.id, // Use id as readable_id if not present
-        })
+        }),
       );
       setAvailableReferences(referencesWithReadableId);
     } catch (error) {
@@ -991,7 +991,7 @@ export function BlockTypeFields({
   const removeArrayItem = (arrayPath: string, index: number) => {
     const currentArray = getNestedValue(data, arrayPath) || [];
     const newArray = (currentArray as unknown[]).filter(
-      (_: unknown, i: number) => i !== index
+      (_: unknown, i: number) => i !== index,
     );
     updateDataField(arrayPath, newArray);
   };
@@ -1000,7 +1000,7 @@ export function BlockTypeFields({
     arrayPath: string,
     index: number,
     field: string,
-    value: unknown
+    value: unknown,
   ) => {
     const currentArray = getNestedValue(data, arrayPath) || [];
     const newArray = [...(currentArray as Record<string, unknown>[])];
@@ -1010,7 +1010,7 @@ export function BlockTypeFields({
 
   const getNestedValue = (
     obj: Record<string, unknown>,
-    path: string
+    path: string,
   ): unknown => {
     return path.split(".").reduce((current: unknown, key: string) => {
       return current && typeof current === "object" && !Array.isArray(current)
@@ -1180,7 +1180,7 @@ export function BlockTypeFields({
                               "stats",
                               index,
                               "value",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., +1.2°C"
@@ -1196,7 +1196,7 @@ export function BlockTypeFields({
                             "stats",
                             index,
                             "label",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="e.g., Temperature Rise"
@@ -1212,7 +1212,7 @@ export function BlockTypeFields({
                               "stats",
                               index,
                               "change",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., since 1990"
@@ -1265,7 +1265,7 @@ export function BlockTypeFields({
                     </div>
                   </CardContent>
                 </Card>
-              )
+              ),
             )}
             <Button
               type="button"
@@ -1365,7 +1365,7 @@ export function BlockTypeFields({
                               "metrics",
                               index,
                               "title",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., Global Temperature"
@@ -1380,7 +1380,7 @@ export function BlockTypeFields({
                               "metrics",
                               index,
                               "value",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., +1.2°C"
@@ -1397,7 +1397,7 @@ export function BlockTypeFields({
                               "metrics",
                               index,
                               "change",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., +0.1°C"
@@ -1452,7 +1452,7 @@ export function BlockTypeFields({
                               "metrics",
                               index,
                               "progress",
-                              parseInt(e.target.value)
+                              parseInt(e.target.value),
                             )
                           }
                           placeholder="0-100"
@@ -1467,7 +1467,7 @@ export function BlockTypeFields({
                               "metrics",
                               index,
                               "target",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., 1.5°C"
@@ -1476,7 +1476,7 @@ export function BlockTypeFields({
                     </div>
                   </CardContent>
                 </Card>
-              )
+              ),
             )}
             <Button
               type="button"
@@ -1532,7 +1532,7 @@ export function BlockTypeFields({
                             "comparisons",
                             index,
                             "category",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="e.g., Temperature"
@@ -1550,7 +1550,7 @@ export function BlockTypeFields({
                               "comparisons",
                               index,
                               "currentValue",
-                              parseFloat(e.target.value)
+                              parseFloat(e.target.value),
                             )
                           }
                           placeholder="1.2"
@@ -1567,7 +1567,7 @@ export function BlockTypeFields({
                               "comparisons",
                               index,
                               "projectedValue",
-                              parseFloat(e.target.value)
+                              parseFloat(e.target.value),
                             )
                           }
                           placeholder="2.0"
@@ -1582,7 +1582,7 @@ export function BlockTypeFields({
                               "comparisons",
                               index,
                               "unit",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="°C"
@@ -1598,7 +1598,7 @@ export function BlockTypeFields({
                             "comparisons",
                             index,
                             "severity",
-                            value
+                            value,
                           )
                         }
                       >
@@ -1614,7 +1614,7 @@ export function BlockTypeFields({
                     </div>
                   </CardContent>
                 </Card>
-              )
+              ),
             )}
             <Button
               type="button"
@@ -1667,7 +1667,7 @@ export function BlockTypeFields({
                               "kpis",
                               index,
                               "title",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., Global Temperature"
@@ -1682,7 +1682,7 @@ export function BlockTypeFields({
                               "kpis",
                               index,
                               "value",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., +1.2"
@@ -1699,7 +1699,7 @@ export function BlockTypeFields({
                               "kpis",
                               index,
                               "unit",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., °C"
@@ -1734,7 +1734,7 @@ export function BlockTypeFields({
                               "kpis",
                               index,
                               "changeValue",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="e.g., +0.1°C since last year"
@@ -1772,7 +1772,7 @@ export function BlockTypeFields({
                     </div>
                   </CardContent>
                 </Card>
-              )
+              ),
             )}
             <Button
               type="button"
@@ -2017,13 +2017,13 @@ export function BlockTypeFields({
                           "stats",
                           index,
                           "change",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                     />
                   </div>
                 </div>
-              )
+              ),
             )}
           </div>
         );

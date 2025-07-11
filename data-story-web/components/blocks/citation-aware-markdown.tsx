@@ -40,7 +40,7 @@ export function CitationAwareMarkdown({
       const processedData = processContentWithGlobalCitations(
         content,
         globalCitationData.citationMap,
-        globalCitationData.readableIdMap
+        globalCitationData.readableIdMap,
       );
 
       // If global processing found citations, use it
@@ -121,7 +121,7 @@ export function CitationAwareMarkdown({
     citationMap.forEach((number, refId) => {
       const regex = new RegExp(
         `\\\\cite\\{${refId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\}`,
-        "g"
+        "g",
       );
       processedContent = processedContent.replace(regex, `[${number}]`);
     });
@@ -150,7 +150,7 @@ export function CitationAwareMarkdown({
   const createCitationButton = (
     citationNumber: number,
     referenceId: string,
-    occurrenceIndex: number
+    occurrenceIndex: number,
   ) => {
     const reference = references.find((r) => r?.id === referenceId);
     return (
@@ -181,7 +181,7 @@ export function CitationAwareMarkdown({
           return createCitationButton(
             citationNumber,
             referenceId,
-            globalCitationOccurrenceCounter
+            globalCitationOccurrenceCounter,
           );
         }
       }
@@ -210,7 +210,7 @@ export function CitationAwareMarkdown({
           ),
           p: ({ children }) => {
             const processChildren = (
-              children: React.ReactNode
+              children: React.ReactNode,
             ): React.ReactNode => {
               if (Array.isArray(children)) {
                 return children.map((child, index) => {
@@ -248,7 +248,7 @@ export function CitationAwareMarkdown({
           ),
           li: ({ children }) => {
             const processChildren = (
-              children: React.ReactNode
+              children: React.ReactNode,
             ): React.ReactNode => {
               if (Array.isArray(children)) {
                 return children.map((child, index) => {
@@ -289,7 +289,7 @@ export function CitationAwareMarkdown({
       {processedData?.citationReferences?.size > 0 &&
         (() => {
           const referencesToShow = Array.from(
-            processedData.citationReferences.entries() || []
+            processedData.citationReferences.entries() || [],
           )
             .sort((a, b) => a[0] - b[0])
             .map(([citationNumber, referenceId]) => {

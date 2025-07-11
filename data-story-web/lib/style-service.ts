@@ -10,9 +10,7 @@ export const styleService = {
    * @param layerId The ID of the layer.
    * @returns The style configuration or null if not found.
    */
-  async getLayerStyle(
-    layerId: string,
-  ): Promise<LayerStyleConfig | null> {
+  async getLayerStyle(layerId: string): Promise<LayerStyleConfig | null> {
     const { data, error } = await supabase
       .from("layer_styles")
       .select("style_config")
@@ -20,8 +18,9 @@ export const styleService = {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') { // PostgREST error for "Not found"
-        return null; 
+      if (error.code === "PGRST116") {
+        // PostgREST error for "Not found"
+        return null;
       }
       console.error("Error fetching layer style:", error);
       throw error;
@@ -44,7 +43,7 @@ export const styleService = {
       .from("layer_styles")
       .upsert(
         { layer_id: layerId, style_config: styleConfig as unknown as Json },
-        { onConflict: "layer_id" }
+        { onConflict: "layer_id" },
       )
       .select()
       .single();
@@ -75,7 +74,10 @@ export const styleService = {
     const styleMap = new Map<string, LayerStyleConfig>();
     if (data) {
       for (const row of data) {
-        styleMap.set(row.layer_id, row.style_config as unknown as LayerStyleConfig);
+        styleMap.set(
+          row.layer_id,
+          row.style_config as unknown as LayerStyleConfig,
+        );
       }
     }
     return styleMap;
@@ -85,9 +87,7 @@ export const styleService = {
    * Deletes the style configuration for a specific layer.
    * @param layerId The ID of the layer.
    */
-  async deleteLayerStyle(
-    layerId: string,
-      ): Promise<void> {
+  async deleteLayerStyle(layerId: string): Promise<void> {
     const { error } = await supabase
       .from("layer_styles")
       .delete()
@@ -98,4 +98,4 @@ export const styleService = {
       throw error;
     }
   },
-}; 
+};

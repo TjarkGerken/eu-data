@@ -55,7 +55,7 @@ export async function GET() {
     console.error("Error listing layers from R2:", error);
     return NextResponse.json(
       { error: "Failed to load layers from R2 storage" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -182,7 +182,7 @@ function determineLayerType(fileName: string): string {
   if (name.startsWith("port") || name.includes("_port_")) return "port";
 
   console.log(
-    `Could not determine specific layer type for: ${fileName}, defaulting to unknown`
+    `Could not determine specific layer type for: ${fileName}, defaulting to unknown`,
   );
   return "unknown";
 }

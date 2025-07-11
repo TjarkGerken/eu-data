@@ -20,13 +20,13 @@ export function Header({ enableAnimations = true }: HeaderProps) {
   const backgroundColor = useTransform(
     scrollY,
     [0, 100],
-    ["rgba(255, 255, 255, 0)", "rgba(255, 255, 255, 0.95)"]
+    ["rgba(255, 255, 255, 0)", "rgba(255, 255, 255, 0.95)"],
   );
 
   const textColor = useTransform(
     scrollY,
     [0, 100],
-    ["rgb(255, 255, 255)", "rgb(45, 90, 61)"]
+    ["rgb(255, 255, 255)", "rgb(45, 90, 61)"],
   );
 
   useEffect(() => {

@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     console.log(
       "API: Upload request, token available:",
-      !!process.env.BLOB_READ_WRITE_TOKEN
+      !!process.env.BLOB_READ_WRITE_TOKEN,
     );
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     if (!file || !category || !id) {
       return NextResponse.json(
         { error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     console.error("Upload error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Upload failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

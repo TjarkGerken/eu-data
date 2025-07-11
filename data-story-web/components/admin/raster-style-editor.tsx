@@ -12,12 +12,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { 
-  PREDEFINED_COLOR_SCHEMES, 
-  getSchemesByCategory, 
+import {
+  PREDEFINED_COLOR_SCHEMES,
+  getSchemesByCategory,
   getAllCategories,
   createGradientFromStops,
-  getDefaultSchemeForLayerType
+  getDefaultSchemeForLayerType,
 } from "@/lib/color-schemes";
 import { RasterColorScheme, ColorStop } from "@/lib/map-types";
 import { Palette, Eye, RotateCcw } from "lucide-react";
@@ -35,17 +35,18 @@ export function RasterStyleEditor({
   layerType,
   currentScheme,
   onSchemeChange,
-  onReset
+  onReset,
 }: RasterStyleEditorProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  
+
   const categories = getAllCategories();
-  const availableSchemes = selectedCategory === "all" 
-    ? PREDEFINED_COLOR_SCHEMES 
-    : getSchemesByCategory(selectedCategory);
+  const availableSchemes =
+    selectedCategory === "all"
+      ? PREDEFINED_COLOR_SCHEMES
+      : getSchemesByCategory(selectedCategory);
 
   const handleSchemeSelect = (schemeId: string) => {
-    const scheme = PREDEFINED_COLOR_SCHEMES.find(s => s.id === schemeId);
+    const scheme = PREDEFINED_COLOR_SCHEMES.find((s) => s.id === schemeId);
     if (scheme) {
       onSchemeChange(scheme);
     }
@@ -62,7 +63,7 @@ export function RasterStyleEditor({
       <div
         className="w-full h-6 rounded border"
         style={{
-          background: createGradientFromStops(scheme.colors)
+          background: createGradientFromStops(scheme.colors),
         }}
       />
       <div className="flex flex-wrap gap-1">
@@ -86,7 +87,7 @@ export function RasterStyleEditor({
           Raster Color Scheme - {layerName}
         </CardTitle>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {/* Current scheme preview */}
         {currentScheme && (
@@ -131,14 +132,16 @@ export function RasterStyleEditor({
               <div
                 key={scheme.id}
                 className={`p-3 border rounded-lg cursor-pointer transition-all hover:border-blue-500 ${
-                  currentScheme?.id === scheme.id 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : 'border-gray-200'
+                  currentScheme?.id === scheme.id
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200"
                 }`}
                 onClick={() => handleSchemeSelect(scheme.id)}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-sm">{scheme.displayName}</span>
+                  <span className="font-medium text-sm">
+                    {scheme.displayName}
+                  </span>
                   <Badge variant="outline" className="text-xs">
                     {scheme.category}
                   </Badge>
@@ -175,10 +178,12 @@ export function RasterStyleEditor({
             <li>• Click on any color scheme to apply it to your layer</li>
             <li>• Use category filters to find specific types of schemes</li>
             <li>• Color gradients show how data values map to colors</li>
-            <li>• Reset button restores the default scheme for this layer type</li>
+            <li>
+              • Reset button restores the default scheme for this layer type
+            </li>
           </ul>
         </div>
       </CardContent>
     </Card>
   );
-} 
+}

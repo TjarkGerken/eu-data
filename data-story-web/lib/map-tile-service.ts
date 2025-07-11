@@ -100,7 +100,7 @@ export class MapTileService {
     const response = await fetch(`${this.apiEndpoint}/layers`);
     if (!response.ok) {
       throw new Error(
-        `Failed to fetch available layers: ${response.statusText}`
+        `Failed to fetch available layers: ${response.statusText}`,
       );
     }
     const data = await response.json();
@@ -113,7 +113,7 @@ export class MapTileService {
       layers.map(async (layer) => {
         try {
           const styleResponse = await fetch(
-            `/api/map-layers/${layer.id}/style`
+            `/api/map-layers/${layer.id}/style`,
           );
           if (styleResponse.ok) {
             const styleConfig = await styleResponse.json();
@@ -126,7 +126,7 @@ export class MapTileService {
           console.warn(`Could not fetch style for layer ${layer.id}:`, error);
         }
         return layer;
-      })
+      }),
     );
 
     // Ensure all layers have z-index values and sort by z-index
@@ -142,7 +142,7 @@ export class MapTileService {
   async uploadLayer(
     file: File,
     layerName: string,
-    layerType: string
+    layerType: string,
   ): Promise<LayerUploadResult> {
     const formData = new FormData();
     formData.append("file", file);
@@ -195,7 +195,7 @@ export class MapTileService {
   }
 
   async updateLayersOrder(
-    layerOrderUpdates: Array<{ id: string; zIndex: number }>
+    layerOrderUpdates: Array<{ id: string; zIndex: number }>,
   ): Promise<void> {
     const response = await fetch(`/api/map-layers/bulk-order`, {
       method: "PUT",

@@ -66,7 +66,7 @@ export default function LayerManager() {
   const [selectedLayerForStyling, setSelectedLayerForStyling] =
     useState<MapLayerMetadata | null>(null);
   const [editableStyle, setEditableStyle] = useState<LayerStyleConfig | null>(
-    null
+    null,
   );
   const [isReordering, setIsReordering] = useState(false);
   const { toast } = useToast();
@@ -130,7 +130,7 @@ export default function LayerManager() {
       const result: LayerUploadResult = await mapTileService.uploadLayer(
         selectedFile,
         layerName,
-        layerType
+        layerType,
       );
 
       setUploadProgress(100);
@@ -294,7 +294,7 @@ export default function LayerManager() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(editableStyle),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -306,7 +306,7 @@ export default function LayerManager() {
       const updatedLayers = layers.map((layer) =>
         layer.id === selectedLayerForStyling.id
           ? { ...layer, styleConfig: updatedStyle }
-          : layer
+          : layer,
       );
       setLayers(updatedLayers);
 
@@ -475,7 +475,7 @@ export default function LayerManager() {
                             rasterScheme: scheme,
                             type: "raster",
                           }
-                        : null
+                        : null,
                     )
                   }
                 />
@@ -489,7 +489,7 @@ export default function LayerManager() {
                     setEditableStyle((prev) =>
                       prev
                         ? { ...prev, vectorStyle: style, type: "vector" }
-                        : null
+                        : null,
                     )
                   }
                 />

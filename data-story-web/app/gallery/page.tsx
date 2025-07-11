@@ -115,8 +115,8 @@ export default function GalleryPage() {
           img.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
           img.scenario?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           img.indicators?.some((indicator) =>
-            indicator.toLowerCase().includes(searchTerm.toLowerCase())
-          )
+            indicator.toLowerCase().includes(searchTerm.toLowerCase()),
+          ),
       );
     }
 
@@ -140,8 +140,8 @@ export default function GalleryPage() {
     new Set(
       images
         .map((img) => img.scenario)
-        .filter((scenario): scenario is string => Boolean(scenario))
-    )
+        .filter((scenario): scenario is string => Boolean(scenario)),
+    ),
   );
 
   if (loading) {
@@ -477,7 +477,7 @@ export default function GalleryPage() {
                                 >
                                   {indicator.toUpperCase()}
                                 </Badge>
-                              )
+                              ),
                             )}
                           </div>
                         </div>
@@ -514,9 +514,9 @@ export default function GalleryPage() {
                             </span>
                             <span className="text-gray-800">
                               {new Date(
-                                selectedImage.uploadedAt
+                                selectedImage.uploadedAt,
                               ).toLocaleDateString(
-                                language === "de" ? "de-DE" : "en-US"
+                                language === "de" ? "de-DE" : "en-US",
                               )}
                             </span>
                           </div>

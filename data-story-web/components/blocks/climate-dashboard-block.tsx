@@ -117,7 +117,7 @@ export function ClimateDashboardBlock({
                   <CardTitle className="text-lg">{metric.title}</CardTitle>
                   <div
                     className={`p-2 rounded-full ${getStatusColor(
-                      metric.status
+                      metric.status,
                     )}`}
                   >
                     <StatusIcon className="h-4 w-4" />

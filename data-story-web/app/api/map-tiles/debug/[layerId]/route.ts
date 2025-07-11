@@ -17,7 +17,7 @@ const s3Client = new S3Client(R2_CONFIG);
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  { params }: { params: Promise<{ layerId: string }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -41,7 +41,7 @@ export async function GET(
     if (!response.Body) {
       return NextResponse.json(
         { error: "MBTiles file not found in storage" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -57,7 +57,7 @@ export async function GET(
     console.error("Error analyzing MBTiles:", error);
     return NextResponse.json(
       { error: "Failed to analyze MBTiles file" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -115,7 +115,7 @@ function convertFilenameToLayerId(fileName: string): string {
 async function analyzeMBTiles(
   mbtileBuffer: Buffer,
   layerId: string,
-  fileName: string
+  fileName: string,
 ): Promise<any> {
   let tempFilePath: string | null = null;
   let db: Database.Database | null = null;
@@ -180,7 +180,7 @@ async function analyzeMBTiles(
         total_tiles: totalTiles.count,
         zoom_levels: zoomStats.map((z) => z.zoom_level),
         zoom_distribution: Object.fromEntries(
-          zoomStats.map((z) => [z.zoom_level, z.tile_count])
+          zoomStats.map((z) => [z.zoom_level, z.tile_count]),
         ),
         tile_bounds_by_zoom: Object.fromEntries(
           zoomStats.map((z) => [
@@ -191,7 +191,7 @@ async function analyzeMBTiles(
               min_y: z.min_y,
               max_y: z.max_y,
             },
-          ])
+          ]),
         ),
       };
     } catch (error) {
@@ -334,38 +334,38 @@ function analyzeBounds(metadata: Record<string, string>) {
 
 function generateRecommendations(
   metadata: Record<string, string>,
-  tileStats: any
+  tileStats: any,
 ) {
   const recommendations: string[] = [];
 
   if (tileStats.total_tiles < 100) {
     recommendations.push(
-      "Very low tile count suggests incomplete MBTiles generation"
+      "Very low tile count suggests incomplete MBTiles generation",
     );
   }
 
   if (metadata.bounds === "-15,30,35,75") {
     recommendations.push(
-      "Bounds are set to default European extent - should be updated to actual data bounds"
+      "Bounds are set to default European extent - should be updated to actual data bounds",
     );
   }
 
   const maxZoom = parseInt(metadata.maxzoom || "12");
   if (maxZoom < 12) {
     recommendations.push(
-      "Maximum zoom level is quite low for detailed visualization"
+      "Maximum zoom level is quite low for detailed visualization",
     );
   }
 
   if (tileStats.zoom_levels && Math.max(...tileStats.zoom_levels) < 10) {
     recommendations.push(
-      "No high-resolution tiles available - may appear blurry at high zoom"
+      "No high-resolution tiles available - may appear blurry at high zoom",
     );
   }
 
   if (!tileStats.zoom_levels || tileStats.zoom_levels.length < 6) {
     recommendations.push(
-      "Limited zoom level coverage may cause display issues"
+      "Limited zoom level coverage may cause display issues",
     );
   }
 

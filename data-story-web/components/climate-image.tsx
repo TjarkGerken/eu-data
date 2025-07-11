@@ -31,7 +31,7 @@ export default function ClimateImage({
   onMetadataLoaded,
 }: ClimateImageProps) {
   const [targetImage, setTargetImage] = useState<CloudflareR2Image | null>(
-    null
+    null,
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,13 +69,13 @@ export default function ClimateImage({
 
         if (scenario && scenario !== "none") {
           filteredImages = images.filter(
-            (img) => img.metadata?.scenario === scenario
+            (img) => img.metadata?.scenario === scenario,
           );
         }
 
         if (id) {
           filteredImages = filteredImages.filter(
-            (img) => img.metadata?.id === id
+            (img) => img.metadata?.id === id,
           );
         }
 
@@ -128,7 +128,7 @@ export default function ClimateImage({
   // Warn developers about missing dimensions when fill=false
   if (!fill && (!width || !height)) {
     console.warn(
-      "ClimateImage: When fill=false, both width and height must be provided to avoid Next.js Image errors"
+      "ClimateImage: When fill=false, both width and height must be provided to avoid Next.js Image errors",
     );
   }
 

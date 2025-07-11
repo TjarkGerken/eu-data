@@ -202,7 +202,7 @@ export default function ContentStoriesAdmin() {
   const handleDelete = async (story: ContentStory) => {
     if (
       !confirm(
-        `Are you sure you want to delete the story "${story.hero_title}"?`
+        `Are you sure you want to delete the story "${story.hero_title}"?`,
       )
     )
       return;

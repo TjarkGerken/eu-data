@@ -8,7 +8,7 @@ export interface ReadableIdGenerationOptions {
 
 export function generateBaseReadableId(
   authors: string[],
-  year: number
+  year: number,
 ): string {
   if (!authors || authors.length === 0) {
     return `Unknown${year}`;
@@ -28,7 +28,7 @@ export function generateBaseReadableId(
 }
 
 export async function generateUniqueReadableId(
-  options: ReadableIdGenerationOptions
+  options: ReadableIdGenerationOptions,
 ): Promise<string> {
   const baseId = generateBaseReadableId(options.authors, options.year);
 
@@ -70,7 +70,7 @@ export async function generateUniqueReadableId(
 
 export async function validateReadableIdUniqueness(
   readableId: string,
-  excludeId?: string
+  excludeId?: string,
 ): Promise<{ isValid: boolean; suggestedId?: string }> {
   const { data: existing, error } = await supabase
     .from("content_references")

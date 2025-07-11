@@ -8,7 +8,7 @@ export async function PUT(request: NextRequest) {
     if (!Array.isArray(updates)) {
       return NextResponse.json(
         { error: "Updates array is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -17,7 +17,7 @@ export async function PUT(request: NextRequest) {
       if (!update.id || typeof update.zIndex !== "number") {
         return NextResponse.json(
           { error: "Each update must have 'id' and 'zIndex' fields" },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -43,7 +43,7 @@ export async function PUT(request: NextRequest) {
     console.error("Error updating layer orders:", error);
     return NextResponse.json(
       { error: "Failed to update layer orders" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

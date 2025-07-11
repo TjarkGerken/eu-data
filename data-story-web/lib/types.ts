@@ -316,7 +316,14 @@ export interface InfrastructureMapBlock {
   seamarkOpacity?: number;
   enableSeamarkLayer?: boolean;
   tileServerOption?: "openseamap" | "hybrid";
-  portFocus?: "rotterdam" | "groningen" | "amsterdam" | "full" | "custom" | "schiphol" | "sloehaven";
+  portFocus?:
+    | "rotterdam"
+    | "groningen"
+    | "amsterdam"
+    | "full"
+    | "custom"
+    | "schiphol"
+    | "sloehaven";
   showControls?: boolean;
   // Railway overlay options
   enableRailwayLayer?: boolean;

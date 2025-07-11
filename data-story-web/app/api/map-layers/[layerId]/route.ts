@@ -12,7 +12,7 @@ const s3Client = new S3Client(R2_CONFIG);
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  { params }: { params: Promise<{ layerId: string }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -21,7 +21,7 @@ export async function DELETE(
     if (!layerId) {
       return NextResponse.json(
         { error: "Layer ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -52,7 +52,7 @@ export async function DELETE(
         });
 
         console.log(
-          `Found ${matchingFiles.length} matching files for layer ${layerId}`
+          `Found ${matchingFiles.length} matching files for layer ${layerId}`,
         );
 
         for (const file of matchingFiles) {
@@ -104,7 +104,7 @@ export async function DELETE(
     }
 
     console.log(
-      `Delete operation complete. Found: ${foundFiles.length}, Deleted: ${deletedFiles.length}`
+      `Delete operation complete. Found: ${foundFiles.length}, Deleted: ${deletedFiles.length}`,
     );
 
     if (deletedFiles.length > 0) {
@@ -121,19 +121,19 @@ export async function DELETE(
           foundFiles,
           message: "Local files are not deleted via this API for safety",
         },
-        { status: 200 } // 200 since we found the files but didn't delete locals
+        { status: 200 }, // 200 since we found the files but didn't delete locals
       );
     } else {
       return NextResponse.json(
         { error: `Layer ${layerId} not found in storage or local files` },
-        { status: 404 }
+        { status: 404 },
       );
     }
   } catch (error) {
     console.error("Error deleting layer:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

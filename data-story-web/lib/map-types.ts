@@ -24,7 +24,13 @@ export interface RasterColorScheme {
   /** Array of color stops */
   colors: ColorStop[];
   /** Category for filtering */
-  category: 'risk' | 'relevance' | 'exposition' | 'economic' | 'hazard' | 'custom';
+  category:
+    | "risk"
+    | "relevance"
+    | "exposition"
+    | "economic"
+    | "hazard"
+    | "custom";
 }
 
 // ---- Vector Layer Style ----
@@ -41,7 +47,7 @@ export interface VectorStyle {
 // ---- Layer Style Configuration ----
 export interface LayerStyleConfig {
   id: string;
-  type: 'raster' | 'vector';
+  type: "raster" | "vector";
   rasterScheme?: RasterColorScheme;
   vectorStyle?: VectorStyle;
   /** For user-defined gradients */
@@ -55,48 +61,48 @@ export interface LayerStyleConfig {
 
 // Color scheme IDs for easy reference in code & UI
 export const SCHEME_IDS = {
-  RISK_DEFAULT: 'risk-white-yellow-orange-red',
-  RELEVANCE_DEFAULT: 'relevance-white-green-darkgreen',
-  EXPOSITION_DEFAULT: 'exposition-white-green-darkgreen',
-  ECONOMIC_DEFAULT: 'economic-white-green-red-black',
-  HAZARD_DEFAULT: 'hazard-white-orange-red-darkred',
+  RISK_DEFAULT: "risk-white-yellow-orange-red",
+  RELEVANCE_DEFAULT: "relevance-white-green-darkgreen",
+  EXPOSITION_DEFAULT: "exposition-white-green-darkgreen",
+  ECONOMIC_DEFAULT: "economic-white-green-red-black",
+  HAZARD_DEFAULT: "hazard-white-orange-red-darkred",
 } as const;
 
-export type SchemeId = typeof SCHEME_IDS[keyof typeof SCHEME_IDS];
+export type SchemeId = (typeof SCHEME_IDS)[keyof typeof SCHEME_IDS];
 
 // Default vector styles by semantic layer type (used when no custom style provided)
 export const DEFAULT_VECTOR_STYLES: Record<string, VectorStyle> = {
   clusters: {
-    fillColor: '#4fc3f7',
+    fillColor: "#4fc3f7",
     fillOpacity: 0.6,
-    borderColor: '#ffffff',
+    borderColor: "#ffffff",
     borderWidth: 2,
     borderOpacity: 0.9,
   },
   ports: {
-    fillColor: '#9c27b0',
+    fillColor: "#9c27b0",
     fillOpacity: 0.7,
-    borderColor: '#000000',
+    borderColor: "#000000",
     borderWidth: 1,
     borderOpacity: 1.0,
   },
   nuts: {
-    fillColor: 'transparent',
+    fillColor: "transparent",
     fillOpacity: 0,
-    borderColor: '#2c3e50',
+    borderColor: "#2c3e50",
     borderWidth: 1,
     borderOpacity: 0.9,
   },
   default: {
-    fillColor: '#ff6b6b',
+    fillColor: "#ff6b6b",
     fillOpacity: 0.6,
-    borderColor: '#ffffff',
+    borderColor: "#ffffff",
     borderWidth: 2,
     borderOpacity: 0.9,
   },
 };
 
-export type ColorSchemeCategory = RasterColorScheme['category'];
+export type ColorSchemeCategory = RasterColorScheme["category"];
 
 // Ensure file recognized as a module
-export {}; 
+export {};

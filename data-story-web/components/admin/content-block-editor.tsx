@@ -87,7 +87,7 @@ export default function ContentBlockEditor() {
   const [selectedPair, setSelectedPair] = useState<BlockPair | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
-    []
+    [],
   );
   const [formData, setFormData] = useState<ContentBlockFormData>({
     block_type: "",
@@ -163,7 +163,7 @@ export default function ContentBlockEditor() {
           : 0,
         germanBlocks.length > 0
           ? Math.max(...germanBlocks.map((b) => b.order_index))
-          : 0
+          : 0,
       );
 
       for (let i = 1; i <= maxIndex; i++) {
@@ -203,13 +203,13 @@ export default function ContentBlockEditor() {
 
   const updateFormField = (
     field: keyof ContentBlockFormData,
-    value: string | Json
+    value: string | Json,
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
     if (validationErrors.length > 0) {
       setValidationErrors((prev) =>
-        prev.filter((error) => error.field !== field)
+        prev.filter((error) => error.field !== field),
       );
     }
   };
@@ -245,7 +245,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: block.order_index + 1 })
-            .eq("id", block.id)
+            .eq("id", block.id),
         );
       }
 
@@ -254,7 +254,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: block.order_index + 1 })
-            .eq("id", block.id)
+            .eq("id", block.id),
         );
       }
 
@@ -278,7 +278,7 @@ export default function ContentBlockEditor() {
     if (!storyIds) return;
 
     console.log(
-      `Reordering blocks after deletion of index ${deletedOrderIndex}`
+      `Reordering blocks after deletion of index ${deletedOrderIndex}`,
     );
 
     try {
@@ -309,7 +309,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: block.order_index - 1 })
-            .eq("id", block.id)
+            .eq("id", block.id),
         );
       }
 
@@ -318,7 +318,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: block.order_index - 1 })
-            .eq("id", block.id)
+            .eq("id", block.id),
         );
       }
 
@@ -333,7 +333,7 @@ export default function ContentBlockEditor() {
         }
 
         console.log(
-          `Successfully reordered ${updates.length} blocks after deletion`
+          `Successfully reordered ${updates.length} blocks after deletion`,
         );
       } else {
         console.log("No blocks to reorder after deletion");
@@ -383,12 +383,12 @@ export default function ContentBlockEditor() {
     try {
       // Check if a block already exists at this index
       const existingPair = blockPairs.find(
-        (pair) => pair.orderIndex === formData.order_index
+        (pair) => pair.orderIndex === formData.order_index,
       );
 
       if (existingPair) {
         console.log(
-          `Block already exists at index ${formData.order_index}, shifting indexes`
+          `Block already exists at index ${formData.order_index}, shifting indexes`,
         );
         // Shift all blocks at this index and above by 1
         await shiftBlockIndexes(formData.order_index);
@@ -513,7 +513,7 @@ export default function ContentBlockEditor() {
             .from("block_references")
             .delete()
             .eq("block_id", pair.english.id),
-          supabase.from("content_blocks").delete().eq("id", pair.english.id)
+          supabase.from("content_blocks").delete().eq("id", pair.english.id),
         );
       }
 
@@ -523,7 +523,7 @@ export default function ContentBlockEditor() {
             .from("block_references")
             .delete()
             .eq("block_id", pair.german.id),
-          supabase.from("content_blocks").delete().eq("id", pair.german.id)
+          supabase.from("content_blocks").delete().eq("id", pair.german.id),
         );
       }
 
@@ -554,7 +554,7 @@ export default function ContentBlockEditor() {
 
   const moveBlockPair = async (
     orderIndex: number,
-    direction: "up" | "down"
+    direction: "up" | "down",
   ) => {
     const targetIndex = direction === "up" ? orderIndex - 1 : orderIndex + 1;
     const currentPair = blockPairs.find((p) => p.orderIndex === orderIndex);
@@ -570,7 +570,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: targetIndex })
-            .eq("id", currentPair.english.id)
+            .eq("id", currentPair.english.id),
         );
       }
       if (currentPair.german) {
@@ -578,7 +578,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: targetIndex })
-            .eq("id", currentPair.german.id)
+            .eq("id", currentPair.german.id),
         );
       }
       if (targetPair.english) {
@@ -586,7 +586,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: orderIndex })
-            .eq("id", targetPair.english.id)
+            .eq("id", targetPair.english.id),
         );
       }
       if (targetPair.german) {
@@ -594,7 +594,7 @@ export default function ContentBlockEditor() {
           supabase
             .from("content_blocks")
             .update({ order_index: orderIndex })
-            .eq("id", targetPair.german.id)
+            .eq("id", targetPair.german.id),
         );
       }
 
@@ -683,7 +683,7 @@ export default function ContentBlockEditor() {
               title: selectedPair.english.title || null,
               content: selectedPair.english.content || null,
             })
-            .eq("id", selectedPair.english.id)
+            .eq("id", selectedPair.english.id),
         );
       }
 
@@ -697,7 +697,7 @@ export default function ContentBlockEditor() {
               title: selectedPair.german.title || null,
               content: selectedPair.german.content || null,
             })
-            .eq("id", selectedPair.german.id)
+            .eq("id", selectedPair.german.id),
         );
       }
 
@@ -748,7 +748,7 @@ export default function ContentBlockEditor() {
 
   const copyContentToLanguage = (
     fromBlock: ContentBlock,
-    toLanguage: "en" | "de"
+    toLanguage: "en" | "de",
   ) => {
     if (!selectedPair) return;
 
@@ -797,7 +797,7 @@ export default function ContentBlockEditor() {
   const renderLanguageSpecificFields = (
     block: ContentBlock | null,
     updateBlock: (updatedBlock: ContentBlock) => void,
-    language: "en" | "de"
+    language: "en" | "de",
   ) => {
     if (!block) {
       return (
@@ -1116,7 +1116,7 @@ export default function ContentBlockEditor() {
                             ...selectedPair,
                             english: updatedBlock,
                           }),
-                        "en"
+                        "en",
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">
@@ -1160,7 +1160,7 @@ export default function ContentBlockEditor() {
                             ...selectedPair,
                             german: updatedBlock,
                           }),
-                        "de"
+                        "de",
                       )
                     ) : (
                       <p className="text-muted-foreground text-sm">

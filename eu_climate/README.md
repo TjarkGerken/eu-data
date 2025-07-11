@@ -1,140 +1,78 @@
 # EU Climate Risk Assessment Framework
 
-A comprehensive framework for climate risk analysis with modern web-compatible data exports.
+A comprehensive geospatial analysis framework for climate risk assessment in European regions, implementing a four-layer approach: **Hazard**, **Exposition**, **Relevance**, and **Risk**. This system provides robust data processing pipelines, multi-scenario analysis capabilities, and web-optimized outputs for modern climate risk visualization.
+
+## 🎯 Project Overview
+
+### Key Features
+
+- **Multi-Layer Risk Assessment**: Implements a scientifically-grounded four-layer approach for comprehensive climate risk analysis
+- **Sea Level Rise Scenarios**: Supports multiple scenarios from current levels to extreme 15m rise projections (2025-2300)
+- **Advanced Data Processing**: Robust ETL pipelines with standardized cartographic projections and normalization
+- **Web-Ready Outputs**: Automatic generation of Cloud-Optimized GeoTIFF (COG) and Mapbox Vector Tiles (MVT) for web applications
+- **Economic Impact Analysis**: Quantitative assessment of GDP, freight, and human resources at risk
+- **Cluster Analysis**: Spatial clustering of high-risk areas with polygon extraction and smoothing
+- **Interactive Visualization**: Comprehensive plotting and mapping capabilities with standardized color schemes
+
+### Technical Architecture
+
+- **Language**: Python 3.11+
+- **Key Libraries**: GeoPandas, Rasterio, Scikit-learn, Matplotlib, Folium
+- **Data Storage**: Cloud-integrated with Hugging Face Hub for dataset management
+- **Output Formats**: GeoTIFF, GeoPackage, COG, MVT, PNG, CSV
+- **Coordinate System**: EPSG:3035 (European standard)
+- **Resolution**: 30m standardized grid
 
 ## 📋 Table of Contents
 
 1. [🚀 Quick Start](#-quick-start)
 2. [💻 Environment Setup](#-environment-setup)
-3. [🌐 Web Export System](#-web-export-system)
+3. [🌐 Data Management](#-data-management)
 4. [🔧 Running the Analysis](#-running-the-analysis)
 5. [📊 Output Formats](#-output-formats)
 6. [🛠️ Advanced Usage](#️-advanced-usage)
 7. [📁 Project Structure](#-project-structure)
+8. [📦 Datasets Overview](#-datasets-overview)
+9. [🔬 Technical Details](#-technical-details)
+10. [🤝 Contributing](#-contributing)
 
 ## 🚀 Quick Start
 
-### For Windows Users (Recommended: WSL Setup)
+### Prerequisites
 
-**Best Performance with Full Web Export Support:**
+- **Python**: 3.11+ (Python 3.11 recommended for optimal geospatial library compatibility)
+- **Storage**: At least 20 GB of free disk space
+- **Memory**: Minimum 16 GB RAM (32 GB recommended for large-scale analysis)
+- **Platform**: Windows (WSL), Linux, or macOS
 
-1. **Install WSL and set up the environment:**
-```powershell
-# Install WSL (if not already installed)
-wsl --install
-
-# Run the setup (one-time only)
-.\run_in_wsl.ps1 setup
-```
-
-2. **Run the analysis:**
-```powershell
-# Run complete analysis with web exports
-.\run_in_wsl.ps1 main
-
-# Run web export demo
-.\run_in_wsl.ps1 demo
-
-# Open WSL shell for development
-.\run_in_wsl.ps1 shell
-```
-
-### For Windows Users (Alternative: Native Setup)
-
-**Limited web export support but simpler setup:**
-
-```powershell
-# Create conda environment
-conda create -n eu-climate python=3.11 gdal rasterio geopandas -c conda-forge -y
-conda activate eu-climate
-pip install -r requirements.txt
-
-# Run analysis
-python eu_climate/main.py
-```
-
-### For Linux/macOS Users
+### Fastest Setup (Recommended)
 
 ```bash
+# Clone the repository
+git clone
+cd eu_climate
+
 # Create virtual environment
 python3 -m venv ./.venv
-source ./.venv/bin/activate
-pip install -r requirements.txt
+source ./.venv/bin/activate  # On Windows: .\.venv\Scripts\activate
 
-# Install web export dependencies
-sudo apt install tippecanoe  # Ubuntu/Debian
-# or brew install tippecanoe  # macOS
+# Install dependencies
+pip install -r ../requirements.txt
 
-# Run analysis
+# Configure Hugging Face token (required for data access)
+cd config
+cp .template.env .env
+# Edit .env file and add: HF_API_TOKEN=hf_YOUR_TOKEN_HERE
+
+# Run complete analysis
 python -m eu_climate.main
 ```
 
 ## 💻 Environment Setup
 
-### Prerequisites
+### Option 1: Linux/macOS (Full Feature Support)
 
-- **Storage**: At least 20 GB of free disk space
-- **Memory**: Minimum 16 GB RAM
-- **Python**: 3.11+ (Python 3.11 recommended for geospatial dependencies)
-
-### Option 1: WSL Setup (Windows - Recommended)
-
-**Advantages:**
-- ✅ Full web export support (COG + MVT)
-- ✅ Best performance for geospatial processing
-- ✅ Native Linux tooling (tippecanoe, GDAL)
-- ✅ No Windows DLL issues
-
-**Setup:**
-
-1. **Install WSL:**
-```powershell
-wsl --install
-```
-
-2. **Use the provided runner script:**
-```powershell
-# The script handles everything automatically
-.\run_in_wsl.ps1 demo  # Test the setup
-```
-
-**What the WSL setup includes:**
-- Ubuntu environment with Python 3.12
-- Complete geospatial stack (GDAL, Rasterio, GeoPandas)
-- Tippecanoe for optimal MVT generation
-- Rio-cogeo for professional COG creation
-
-### Option 2: Native Windows Setup
-
-**Advantages:**
-- ✅ Simpler setup
-- ✅ No WSL required
-
-**Limitations:**
-- ❌ Limited web export support (COG only, no tippecanoe)
-- ❌ Potential GDAL DLL issues
-
-**Setup:**
-
-1. **Install Anaconda/Miniconda:**
-   - Download from: https://www.anaconda.com/download
-   - ✅ **IMPORTANT**: Check "Add to PATH environment variable"
-
-2. **Create Environment:**
-```powershell
-conda create -n eu-climate python=3.11 gdal rasterio geopandas numpy pandas matplotlib scipy pyyaml -c conda-forge -y
-conda activate eu-climate
-pip install -r requirements.txt
-```
-
-3. **Run Analysis:**
-```powershell
-python eu_climate/main.py
-```
-
-### Option 3: Linux/macOS Setup
-
-**Full feature support with native performance:**
+**Advantages**: Complete web export support, native performance, all features available
 
 ```bash
 # Create virtual environment
@@ -144,7 +82,7 @@ source ./.venv/bin/activate
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Install system dependencies
+# Install system dependencies for web exports
 # Ubuntu/Debian:
 sudo apt update
 sudo apt install gdal-bin libgdal-dev tippecanoe
@@ -156,120 +94,156 @@ brew install gdal tippecanoe
 python -c "import rasterio, geopandas; print('✅ All dependencies working!')"
 ```
 
-### Data Setup
+### Option 2: Windows with WSL (Recommended)
 
-The system uses data hosted on Hugging Face with automatic download:
+**Advantages**: Full feature support, Docker-like isolation, consistent behavior
 
-1. **Configure Hugging Face token:**
-```bash
-cd eu_climate/config
-cp .template.env .env
-# Edit .env and add your HF token: HF_API_TOKEN=hf_XXXX
+```powershell
+# Install WSL2 if not already installed
+wsl --install
+
+# Use the provided PowerShell runner
+.\run_in_wsl.ps1 main
 ```
 
-2. **Get token:** https://huggingface.co/settings/tokens (write access required)
+### Option 3: Native Windows (Limited Features)
 
-3. **Manual download alternative:** https://huggingface.co/datasets/TjarkGerken/eu-data
+**Advantages**: Simpler setup, no WSL required  
+**Limitations**: Limited web export support (COG only, no tippecanoe), potential GDAL issues
 
-## 🌐 Web Export System
+```powershell
+# Install Anaconda/Miniconda
+# Download from: https://www.anaconda.com/download
 
-The framework automatically generates web-optimized formats alongside traditional analysis outputs.
+# Create conda environment
+conda create -n eu-climate python=3.11 gdal rasterio geopandas numpy pandas matplotlib scipy pyyaml -c conda-forge -y
+conda activate eu-climate
+pip install -r requirements.txt
 
-### Supported Formats
+# Run analysis
+python eu_climate/main.py
+```
 
-#### Cloud-Optimized GeoTIFF (COG)
-- **Purpose**: Efficient web delivery of raster data
-- **Features**: 
-  - HTTP range request support
-  - LZW compression
-  - Automatic overview pyramids
-  - 512×512 pixel tiles
-- **Use Cases**: Web mapping, progressive loading, mobile apps
+## 🌐 Data Management
 
-#### Mapbox Vector Tiles (MVT)
-- **Purpose**: Efficient web delivery of vector data
-- **Features**:
-  - MBTiles format (SQLite database)
-  - Multiple zoom levels (0-12)
-  - Binary compression
-  - Optimized for web rendering
-- **Use Cases**: Interactive maps, clustering visualization, responsive design
+### Automatic Data Download (Recommended)
 
-### Web Export Dependencies
+The system automatically downloads required datasets from Hugging Face Hub:
 
-| Platform | COG Support | MVT Support | Setup |
-|----------|-------------|-------------|-------|
-| **WSL (Windows)** | ✅ Full | ✅ Full | Automatic via `run_in_wsl.ps1` |
-| **Native Windows** | ✅ Full | ⚠️ Python fallback | Conda setup |
-| **Linux/macOS** | ✅ Full | ✅ Full | Install tippecanoe |
+1. **Configure Hugging Face Token**:
 
-### Testing Web Exports
+   ```bash
+   cd eu_climate/config
+   cp .template.env .env
+   ```
+
+2. **Get Token**: Visit [Hugging Face Settings](https://huggingface.co/settings/tokens) and create a token with **write access**
+
+3. **Add Token to .env**:
+   ```env
+   HF_API_TOKEN=hf_YOUR_TOKEN_HERE
+   ```
+
+### Manual Data Download
+
+If automatic download fails or you prefer manual setup:
+
+1. Visit: [EU Climate Data Repository](https://huggingface.co/datasets/TjarkGerken/eu-data)
+2. Download and extract the repository contents
+3. Place contents in: `eu_climate/data/source/`
+4. Verify paths in `eu_climate/config/config.yaml`
+
+### Data Upload
+
+Upload analysis results back to Hugging Face:
 
 ```bash
-# WSL (Windows)
-.\run_in_wsl.ps1 demo
+# Upload only (skip analysis)
+python -m eu_climate.main --upload
 
-# Native Windows
-python eu_climate/scripts/demo_web_exports.py
-
-# Linux/macOS
-python -m eu_climate.scripts.demo_web_exports
+# Regular analysis with upload
+python -m eu_climate.main  # Upload happens automatically at the end
 ```
 
 ## 🔧 Running the Analysis
 
-### Basic Usage
+### Basic Execution
 
 ```bash
 # Complete analysis (all layers)
 python -m eu_climate.main
 
-# Or using WSL runner (Windows)
-.\run_in_wsl.ps1 main
+# With verbose logging
+python -m eu_climate.main --verbose
 ```
 
 ### Layer-Specific Analysis
 
 ```bash
 # Individual layers
-python -m eu_climate.main --hazard
-python -m eu_climate.main --exposition  
-python -m eu_climate.main --relevance
-python -m eu_climate.main --risk
+python -m eu_climate.main --hazard                # Sea level rise scenarios
+python -m eu_climate.main --exposition            # Building density, population
+python -m eu_climate.main --relevance             # Economic factors (GDP, freight, HRST)
+python -m eu_climate.main --risk                  # Integrated risk assessment
+python -m eu_climate.main --clusters              # Risk cluster extraction
+python -m eu_climate.main --economic-impact       # Economic impact quantification
 
 # Multiple layers
-python -m eu_climate.main --hazard --exposition
+python -m eu_climate.main --hazard --exposition --relevance
+```
+
+### Specialized Analysis
+
+```bash
+# Freight-only analysis with enhanced maritime data
+python -m eu_climate.main --freight-only
+
+# Absolute relevance (preserves original values)
+python -m eu_climate.main --relevance-absolute
+
+# Population-specific analysis
+python -m eu_climate.main --population
+
+# Population relevance layer generation
+python -m eu_climate.main --population-relevance
+```
+
+### Web Optimization
+
+```bash
+# Convert existing outputs to web formats
+python -m eu_climate.main --web-conversion
+
+# Analysis with automatic web export
+python -m eu_climate.main --all  # Web exports created automatically
 ```
 
 ### Advanced Options
 
 ```bash
-# Verbose logging
-python -m eu_climate.main --verbose
-
-# Disable caching
+# Disable caching (force regeneration)
 python -m eu_climate.main --no-cache
 
 # Skip data upload
 python -m eu_climate.main --no-upload
 
-# Combined options
-python -m eu_climate.main --verbose --no-cache --risk
+# Custom output directory
+python -m eu_climate.main --output-dir /path/to/custom/output
+
+# Download data only
+python -m eu_climate.main --download
 ```
 
 ### WSL-Specific Commands
 
 ```powershell
-# Run analysis in WSL
+# Complete analysis
 .\run_in_wsl.ps1 main
 
-# Test setup
-.\run_in_wsl.ps1 test
+# Specific layers
+.\run_in_wsl.ps1 main --risk --clusters
 
-# Open development shell
-.\run_in_wsl.ps1 shell
-
-# Run demo
+# Web conversion demo
 .\run_in_wsl.ps1 demo
 ```
 
@@ -278,251 +252,219 @@ python -m eu_climate.main --verbose --no-cache --risk
 ### Directory Structure
 
 ```
-eu_climate/data/.output/
-├── hazard/
-│   ├── tif/                    # Traditional GeoTIFF files
-│   └── web/cog/               # Cloud-Optimized GeoTIFF files
-├── exposition/
-│   ├── tif/                    # Traditional GeoTIFF files  
-│   └── web/cog/               # Cloud-Optimized GeoTIFF files
-├── relevance/
-│   ├── tif/                    # Traditional GeoTIFF files
-│   └── web/cog/               # Cloud-Optimized GeoTIFF files
-├── risk/
+eu_climate/data/output/
+├── hazard/                           # Sea level rise hazard analysis
+│   ├── tif/                          # Standard GeoTIFF files
+│   │   ├── flood_risk_current.tif
+│   │   ├── flood_risk_conservative.tif
+│   │   └── flood_risk_severe.tif
+│   └── web/cog/                      # Cloud-Optimized GeoTIFF
+│       └── flood_risk_*.tif
+├── exposition/                       # Building and population exposure
+│   ├── tif/
+│   │   ├── exposition_layer.tif
+│   │   ├── exposition_freight.tif
+│   │   ├── exposition_gdp.tif
+│   │   └── exposition_hrst.tif
+│   └── web/cog/
+├── relevance/                        # Economic relevance factors
+│   ├── tif/
+│   │   ├── relevance_combined.tif
+│   │   ├── relevance_freight.tif
+│   │   ├── relevance_gdp.tif
+│   │   └── relevance_hrst.tif
+│   └── web/cog/
+├── risk/                             # Integrated risk assessment
 │   └── SLR-{scenario}/
-│       ├── tif/               # Traditional GeoTIFF files
-│       └── web/cog/           # Cloud-Optimized GeoTIFF files
-└── clusters/
-    └── SLR-{scenario}/
-        ├── gpkg/              # Traditional GeoPackage files
-        └── web/mvt/           # Mapbox Vector Tiles
+│       ├── tif/                      # Standard risk outputs
+│       │   ├── risk_SLR-0-Current_COMBINED.tif
+│       │   ├── risk_SLR-0-Current_GDP.tif
+│       │   ├── risk_SLR-0-Current_FREIGHT.tif
+│       │   └── risk_SLR-0-Current_POPULATION.tif
+│       └── web/cog/                  # Web-optimized risk outputs
+├── clusters/                         # Risk cluster polygons
+│   └── SLR-{scenario}/
+│       ├── gpkg/                     # Standard vector files
+│       │   ├── clusters_SLR-0-Current_GDP.gpkg
+│       │   └── clusters_SLR-0-Current_FREIGHT.gpkg
+│       └── web/mvt/                  # Mapbox Vector Tiles
+│           ├── clusters_SLR-0-Current_GDP.mbtiles
+│           └── clusters_SLR-0-Current_FREIGHT.mbtiles
+├── economic_impact/                  # Economic impact metrics
+│   ├── current/
+│   │   ├── economic_impact_current.csv
+│   │   └── economic_impact_current.png
+│   └── summary/
+│       └── economic_impact_summary.csv
+└── source/web/mvt/                   # Web-optimized source data
+    ├── NUTS-L3-NL.mbtiles
+    ├── PORT_RG_2025_Updated.mbtiles
+    └── Europe_coastline_raw_rev2017.mbtiles
 ```
 
-### File Naming Convention
+### File Naming Conventions
 
-**Traditional Formats:**
-- `{layer}_{scenario}_{type}.tif` - Raster analysis files
-- `clusters_{scenario}_{type}.gpkg` - Vector cluster files
+**Raster Data**:
 
-**Web-Optimized Formats:**
+- `{layer}_{scenario}_{type}.tif` - Standard GeoTIFF files
 - `{layer}_{scenario}_{type}_cog.tif` - Cloud-Optimized GeoTIFF
+
+**Vector Data**:
+
+- `clusters_{scenario}_{type}.gpkg` - Standard GeoPackage files
 - `clusters_{scenario}_{type}.mbtiles` - Mapbox Vector Tiles
 
-### Scenarios
+**Scenarios**:
 
-- `SLR-0-Current` - Current sea level conditions
-- `SLR-1-Conservative` - Conservative sea level rise scenario
-- `SLR-2-Moderate` - Moderate sea level rise scenario  
-- `SLR-3-Severe` - Severe sea level rise scenario
+- `SLR-0-Current` - Current sea level conditions (2025)
+- `SLR-1-Conservative` - 1m sea level rise (2100)
+- `SLR-2-Moderate` - 2m sea level rise (2100)
+- `SLR-3-Severe` - 3m sea level rise (2100)
 
-### Risk Types
+**Risk Types**:
 
-- `COMBINED` - Overall combined risk assessment
-- `POPULATION` - Population-based risk
-- `GDP` - Economic (GDP) risk
-- `FREIGHT` - Freight transport risk
+- `COMBINED` - Overall integrated risk assessment
+- `POPULATION` - Population-based risk analysis
+- `GDP` - Economic (GDP) risk assessment
+- `FREIGHT` - Freight transport risk analysis
 - `HRST` - Human resources in science & technology risk
+
+### Web-Ready Formats
+
+**Cloud-Optimized GeoTIFF (COG)**:
+
+- Tiled structure for efficient web streaming
+- Multiple resolution overviews
+- LZW compression for optimal file size
+- Compatible with modern web mapping libraries
+
+**Mapbox Vector Tiles (MVT)**:
+
+- Zoom levels 0-12 for multi-scale visualization
+- Topology-preserving simplification
+- Optimized for web rendering performance
+- Direct integration with mapping frameworks
 
 ## 🛠️ Advanced Usage
 
-### Custom Web Export
+### Configuration Customization
 
-```python
-from eu_climate.utils.web_exports import WebOptimizedExporter
-
-# Initialize exporter
-exporter = WebOptimizedExporter()
-
-# Export raster to COG
-exporter.export_raster_as_cog(
-    input_path="data/input.tif",
-    output_path="data/output_cog.tif",
-    add_overviews=True
-)
-
-# Export vector to MVT
-exporter.export_vector_as_mvt(
-    input_path="data/input.gpkg", 
-    output_path="data/output.mbtiles",
-    min_zoom=0,
-    max_zoom=12
-)
-```
-
-### Configuration
-
-Edit `eu_climate/config/config.yaml` to customize:
+Edit `eu_climate/config/config.yaml` to modify:
 
 ```yaml
-web_export:
-  cog_profile: "lzw"           # COG compression profile
-  mvt_max_zoom: 12             # Maximum zoom level for MVT
-  mvt_simplification: "drop-densest-as-needed"
+data:
+  processing:
+    target_resolution: 30.0 # Output resolution in meters
+    resampling_method: "bilinear" # Resampling algorithm
+    target_crs: "EPSG:3035" # Coordinate reference system
+
+  risk_assessment:
+    n_risk_classes: 5 # Number of risk classification levels
+    weights:
+      hazard: 0.1 # Hazard layer weight
+      economic: 0.9 # Economic relevance weight
+
+  clustering:
+    risk_threshold: 0.35 # Minimum risk for cluster inclusion
+    minimum_polygon_area_square_meters: 12000000 # Min cluster size
 ```
 
-### Development Setup
+### Caching System
+
+The framework includes an intelligent caching system:
 
 ```bash
-# WSL development environment
-.\run_in_wsl.ps1 shell
+# Enable caching (default)
+python -m eu_climate.main
 
-# Install additional dev dependencies
-pip install jupyter jupyterlab black flake8
+# Disable caching
+python -m eu_climate.main --no-cache
 
-# Launch Jupyter Lab
-jupyter lab
+# Clear cache
+python -m eu_climate.scripts.cache_manager_cli --clear
 ```
 
-### Troubleshooting
+### Custom Sea Level Scenarios
 
-**Common Issues:**
+Modify `eu_climate/risk_layers/hazard_layer.py` to add custom scenarios:
 
-1. **GDAL DLL errors (Windows):**
-   - Solution: Use WSL setup instead of native Windows
+```python
+custom_scenarios = [
+    SeaLevelScenario("Custom", 5.0, "5m sea level rise - custom scenario"),
+    SeaLevelScenario("Extreme", 20.0, "20m sea level rise - extreme scenario")
+]
+```
 
-2. **Tippecanoe not found:**
-   - Linux: `sudo apt install tippecanoe`
-   - macOS: `brew install tippecanoe`
-   - Windows: Use WSL or accept Python fallback
+### Performance Optimization
 
-3. **Memory issues:**
-   - Increase system RAM or reduce processing area
-   - Use `--no-cache` flag to reduce memory usage
+**Memory Management**:
 
-4. **Permission errors (WSL):**
-   - Ensure files are accessible from WSL: `/mnt/c/...`
+- Use `--no-cache` for memory-constrained environments
+- Process individual layers separately for large datasets
+- Consider chunked processing for very high-resolution data
+
+**Parallel Processing**:
+
+- Multiple CPU cores utilized automatically for raster operations
+- Vector operations parallelized where possible
+- Web export conversions run in parallel
 
 ## 📁 Project Structure
 
 ```
 eu_climate/
-├── config/                    # Configuration files
-│   ├── config.py             # Main configuration class
-│   ├── config.yaml           # YAML configuration
-│   └── .env                  # Environment variables (create from template)
-├── risk_layers/              # Risk analysis modules
-│   ├── hazard_layer.py       # Hazard layer processing
-│   ├── exposition_layer.py   # Exposition layer processing
-│   ├── relevance_layer.py    # Relevance layer processing
-│   ├── cluster_layer.py      # Clustering analysis
-│   └── economic_impact_analyzer.py  # Economic impact analysis
-├── utils/                    # Utility modules
-│   ├── web_exports.py        # Web export functionality
-│   ├── cache_manager.py      # Data caching
-│   ├── data_loader.py        # Data loading utilities
-│   └── visualization.py     # Visualization tools
-├── scripts/                  # Utility scripts
-│   ├── demo_web_exports.py   # Web export demonstration
-│   └── cache_manager_cli.py  # Cache management CLI
-├── data/                     # Data directory (synced with HuggingFace)
-│   ├── source/               # Input data
-│   └── .output/              # Generated outputs
-├── debug/                    # Log files
-├── main.py                   # Main execution script
-└── README.md                 # This documentation
+├── config/                          # Configuration management
+│   ├── config.py                    # Configuration class
+│   ├── config.yaml                  # Main configuration file
+│   └── .template.env                # Environment template
+├── risk_layers/                     # Core analysis modules
+│   ├── hazard_layer.py              # Sea level rise hazard assessment
+│   ├── exposition_layer.py          # Building and population exposure
+│   ├── relevance_layer.py           # Economic relevance analysis
+│   ├── relevance_absolute_layer.py  # Absolute value relevance
+│   ├── risk_layer.py                # Integrated risk assessment
+│   ├── cluster_layer.py             # Spatial clustering analysis
+│   └── economic_impact_analyzer.py  # Economic impact quantification
+├── utils/                           # Utility modules
+│   ├── web_exports.py               # Web format conversion utilities
+│   ├── cache_manager.py             # Data caching system
+│   ├── data_loading.py              # Data loading and validation
+│   ├── visualization.py             # Plotting and mapping utilities
+│   ├── conversion.py                # Coordinate and format conversion
+│   ├── normalise_data.py            # Data normalization algorithms
+│   └── clustering_utils.py          # Clustering helper functions
+├── scripts/                         # Utility scripts
+│   ├── demo_web_exports.py          # Web export demonstration
+│   ├── cache_manager_cli.py         # Cache management CLI
+│   ├── upload_data.py               # Data upload utilities
+│   └── validate_web_conversion.py   # Web format validation
+├── data/                            # Data directory (auto-managed)
+│   ├── source/                      # Input datasets
+│   └── output/                      # Generated analysis results
+├── debug/                           # Log files and debugging output
+└── main.py                          # Main execution script
 ```
 
 ### Key Components
 
-- **WebOptimizedExporter**: Handles COG and MVT generation
-- **ProjectConfig**: Centralized configuration management
-- **Cache Manager**: Intelligent data caching system
-- **Risk Layers**: Modular risk assessment components
+**Core Classes**:
 
----
+- `ProjectConfig`: Centralized configuration management
+- `HazardLayer`: Sea level rise and flood risk assessment
+- `ExpositionLayer`: Building density and population exposure
+- `RelevanceLayer`: Economic factor analysis and distribution
+- `RiskLayer`: Integrated multi-scenario risk assessment
+- `ClusterLayer`: High-risk area clustering and polygon extraction
+- `EconomicImpactAnalyzer`: Quantitative economic impact assessment
 
-## 🎯 Quick Reference
+**Utility Systems**:
 
-**Most Common Commands:**
+- `WebOptimizedExporter`: COG and MVT generation
+- `CacheManager`: Intelligent data caching with automatic cleanup
+- `LayerVisualizer`: Standardized visualization and plotting
+- `RasterTransformer`: Coordinate system and resolution management
 
-```bash
-# Windows (WSL) - Recommended
-.\run_in_wsl.ps1 main          # Run complete analysis
-.\run_in_wsl.ps1 demo          # Test web exports
-
-# Any platform
-python -m eu_climate.main      # Run complete analysis
-python -m eu_climate.main --risk  # Run only risk assessment
-```
-
-**Output Locations:**
-- Traditional formats: `eu_climate/data/.output/*/tif/` and `*/gpkg/`
-- Web formats: `eu_climate/data/.output/*/web/cog/` and `*/web/mvt/`
-
-**Web Export Support:**
-- **Full support**: WSL (Windows), Linux, macOS
-- **Limited support**: Native Windows (COG only)
-
-For detailed technical documentation, see individual module docstrings and the configuration files.
-
-
-## Quick Start
-
-### Requirements
-
-- Python 3.12
-- At least 20 GB of free disk space
-- Minimum 16 GB RAM
-
-The dataset required to run the case study for the Netherlands is hosted on Hugging Face. By default, the system automatically downloads the necessary data. Manual download is also supported.
-
-### Auto-Download Setup
-
-1. Copy the environment template and configure your Hugging Face token:
-
-   ```bash
-   cd eu_climate/config
-   cp .template.env .env
-   ```
-
-2. Create a token with **at least write access** at:  
-   https://huggingface.co/settings/tokens
-
-3. Paste the token into your `.env` file:
-
-   ```env
-   HF_API_TOKEN=hf_XXXX
-   ```
-
-### Manual Download
-
-1. Visit: https://huggingface.co/datasets/TjarkGerken/eu-data
-2. Download and extract the repository
-3. Ensure the contents are placed in: `eu_climate/data/source`
-4. Update paths in `eu_climate/config/config.yaml` if needed:
-
-   ```yaml
-   data:
-     data_paths:
-       local_data_dir: "data"
-       source_data_dir: "source"
-       local_output_dir: ".output"
-   ```
-
-### Starting the Program
-
-```bash
-python3 -m venv ./.venv
-source ./.venv/bin/activate
-pip install -r requirements.txt
-python -m eu_climate.main
-```
-
-### Execution Commands
-
-```bash
-  python -m main --hazard                    # Run only hazard layer analysis
-  python -m main --exposition                # Run only exposition layer analysis
-  python -m main --relevance                 # Run only relevance layer analysis
-  python -m main --risk                      # Run only risk layer analysis
-  python -m main --hazard --exposition       # Run hazard and exposition layers
-  python -m main --all                       # Run all layers (default behavior)
-  python -m main --verbose --risk            # Run risk layer with verbose logging
-  python -m main --no-cache --hazard         # Run hazard layer without caching
-  python -m main --no-upload --all           # Run all layers without data upload
-```
-
-# 📦 Datasets Overview
+## 📦 Datasets Overview
 
 This section outlines all geospatial and statistical datasets used for the case study on climate risk in the Netherlands. Each dataset is grouped by thematic domain and includes source links and file structure.
 
@@ -530,10 +472,10 @@ This section outlines all geospatial and statistical datasets used for the case 
 
 ## 🗺️ Administrative Boundaries
 
-| Dataset                           | Description                                              | Scope/Resolution | Used in Layers  | Files                                   | Source                                                                                                     |
-| --------------------------------- | -------------------------------------------------------- | ---------------- | --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **NUTS Levels 0–3 (Netherlands)** | European statistical units for regional analysis (L0–L3) | NUTS L0-L3       | Relevance, Risk | `NUTS-L0-NL.shp`, ..., `NUTS-L3-NL.shp` | [Eurostat](https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics) |
-| **GADM Shapefiles (NL, L2)**      | Administrative boundary fallback dataset                 | GADM L2          | Relevance       | `NL-GADM-L2/`                           | [GADM](https://gadm.org/download_world.html)                                                               |
+| Dataset                           | Description                                              | Scope/Resolution | Used in Layers  | Files                                   | Source                                                                                                           |
+| --------------------------------- | -------------------------------------------------------- | ---------------- | --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **NUTS Levels 0–3 (Netherlands)** | European statistical units for regional analysis (L0–L3) | NUTS L0-L3       | Relevance, Risk | `NUTS-L0-NL.shp`, ..., `NUTS-L3-NL.shp` | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics) |
+| **GADM Shapefiles (NL, L2)**      | Administrative boundary fallback dataset                 | GADM L2          | Relevance       | `NL-GADM-L2/gadm41_NLD_2.shp`           | [GADM](https://gadm.org/download_world.html)                                                                     |
 
 ---
 
@@ -542,7 +484,7 @@ This section outlines all geospatial and statistical datasets used for the case 
 | Dataset                                  | Description                                               | Scope/Resolution | Used in Layers | Files                        | Source                                                                                    |
 | ---------------------------------------- | --------------------------------------------------------- | ---------------- | -------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
 | **GHS Population Grid (R2023)**          | Gridded population at 3 arcsecond resolution              | 3 arcsec (~100m) | Exposition     | `ClippedGHS_POP_3ss.tif`     | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=pop)    |
-| **GHS Built-up Characteristics (R2023)** | Structural type and height of buildings                   | NaN              | Exposition     | `GHS_BUILT_C/`               | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC) |
+| **GHS Built-up Characteristics (R2023)** | Structural type and height of buildings                   | Variable         | Exposition     | `GHS_BUILT_C/`               | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC) |
 | **GHS Built-up Volume (R2023)**          | Estimated 3D volume of built structures (100m resolution) | 100m             | Exposition     | `Clipped_GHS_Built-V-100m/`  | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=builtV) |
 | **Degree of Urbanisation (DUC)**         | Urban/rural classification by grid cell on GADM basis     | GADM L2          | Exposition     | `degree_of_urbanisation/`    | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=DUC)    |
 | **GHS Land Fraction (R2022)**            | Land cover based on Sentinel-2 + OSM (10m)                | 10m              | Hazard         | `Clipped_GHS_LAND-10m_Moll/` | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=land)   |
@@ -551,12 +493,12 @@ This section outlines all geospatial and statistical datasets used for the case 
 
 ## 🚛 Transportation & Infrastructure
 
-| Dataset                          | Description                       | Scope/Resolution | Used in Layers         | Files                                          | Source                                                                                   |
-| -------------------------------- | --------------------------------- | ---------------- | ---------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Freight Loading Statistics**   | Road freight loading by NUTS-3    | NUTS L3          | Relevance              | `road_go_loading/`, `unified_freight_data.csv` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table) |
-| **Freight Unloading Statistics** | Road freight unloading by NUTS-3  | NUTS L3          | Relevance              | `L3-estat_road_go_unloading/`                  | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table) |
-| **European Ports**               | Location and attributes of ports  | Point data       | Exposition & Relevance | `Port/PORT_RG_2009.shp`                        | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks)     |
-| **Zeevaart**               | Gross weight handled (1,000 tons) | Per Port         | Relevance              | `Port/PORT_RG_2009.shp`                        | [CBS](https://opendata.cbs.nl/#/CBS/nl/dataset/82850NED/table)                |
+| Dataset                          | Description                              | Scope/Resolution | Used in Layers         | Files                                                              | Source                                                                                   |
+| -------------------------------- | ---------------------------------------- | ---------------- | ---------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| **Freight Loading Statistics**   | Road freight loading by NUTS-3 region    | NUTS L3          | Relevance              | `road_go_loading/`, `unified_freight_data.csv`                     | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table) |
+| **Freight Unloading Statistics** | Road freight unloading by NUTS-3 region  | NUTS L3          | Relevance              | `L3-estat_road_go_unloading/`                                      | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table) |
+| **European Ports**               | Location and attributes of major ports   | Point data       | Exposition & Relevance | `Port/PORT_RG_2025_Updated.shp`                                    | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks)     |
+| **Zeevaart Maritime Data**       | Dutch port freight statistics (enhanced) | Per Port         | Relevance              | `Port/Zeevaart__gewicht__haven__soort_lading_19062025_160850.xlsx` | [CBS](https://opendata.cbs.nl/#/CBS/nl/dataset/82850NED/table)                           |
 
 ---
 
@@ -566,153 +508,122 @@ This section outlines all geospatial and statistical datasets used for the case 
 | ---------------------- | --------------------------------------------- | ---------------- | -------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | **Copernicus DEM**     | High-resolution elevation model               | ~30m             | Hazard         | `ClippedCopernicusHeightProfile.tif` | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/copernicus)                 |
 | **European Coastline** | Coastal geometry for flood exposure modelling | Vector polylines | Hazard         | `EEA_Coastline_Polyline_Shape/`      | [EEA](https://www.eea.europa.eu/data-and-maps/data/eea-coastline-for-analysis-1/gis-data/europe-coastline-shapefile) |
-| **Dutch Hydrography**  | Dutch river networks and water bodies         | Vector polygons  | Hazard         | `Hydrographie-Watercourse/`          | [PDOK](https://www.pdok.nl/introductie/-/article/gebieden-met-natuurrisico-s-overstromingen-risicogebied-richtlijn-overstromingsrisico-s-ror-inspire-geharmoniseerd-)                                               |
+| **Dutch Hydrography**  | Dutch river networks and water bodies         | Vector polygons  | Hazard         | `Hydrographie-Watercourse/`          | [PDOK](https://www.pdok.nl/introductie/-/article/hydrografie-inspire-geharmoniseerd-)                                |
 
 ---
 
 ## 🌊 Flood Risk
 
-| Dataset                    | Description                                       | Scope/Resolution | Used in Layers | Files          | Source                                                                |
-| -------------------------- | ------------------------------------------------- | ---------------- | -------------- | -------------- | --------------------------------------------------------------------- |
-| **Dutch Flood Risk Zones** | Zones under flood risk as per EU Floods Directive | Vector polygons  | Hazard         | `NL_Riskzone/` | [PDOK](## Quick Start
-
-### Requirements
-
-- Python 3.12
-- At least 20 GB of free disk space
-- Minimum 16 GB RAM
-
-The dataset required to run the case study for the Netherlands is hosted on Hugging Face. By default, the system automatically downloads the necessary data. Manual download is also supported.
-
-### Auto-Download Setup
-
-1. Copy the environment template and configure your Hugging Face token:
-
-   ```bash
-   cd eu_climate/config
-   cp .template.env .env
-   ```
-
-2. Create a token with **at least write access** at:  
-   https://huggingface.co/settings/tokens
-
-3. Paste the token into your `.env` file:
-
-   ```env
-   HF_API_TOKEN=hf_XXXX
-   ```
-
-### Manual Download
-
-1. Visit: https://huggingface.co/datasets/TjarkGerken/eu-data
-2. Download and extract the repository
-3. Ensure the contents are placed in: `eu_climate/data/source`
-4. Update paths in `eu_climate/config/config.yaml` if needed:
-
-   ```yaml
-   data:
-     data_paths:
-       local_data_dir: "data"
-       source_data_dir: "source"
-       local_output_dir: ".output"
-   ```
-
-### Starting the Program
-
-```bash
-python3 -m venv ./.venv
-source ./.venv/bin/activate
-pip install -r requirements.txt
-python -m eu_climate.main
-```
-
-### Execution Commands
-
-```bash
-  python -m main --hazard                    # Run only hazard layer analysis
-  python -m main --exposition                # Run only exposition layer analysis
-  python -m main --relevance                 # Run only relevance layer analysis
-  python -m main --risk                      # Run only risk layer analysis
-  python -m main --hazard --exposition       # Run hazard and exposition layers
-  python -m main --all                       # Run all layers (default behavior)
-  python -m main --verbose --risk            # Run risk layer with verbose logging
-  python -m main --no-cache --hazard         # Run hazard layer without caching
-  python -m main --no-upload --all           # Run all layers without data upload
-```
-
-# 📦 Datasets Overview
-
-This section outlines all geospatial and statistical datasets used for the case study on climate risk in the Netherlands. Each dataset is grouped by thematic domain and includes source links and file structure.
-
----
-
-## 🗺️ Administrative Boundaries
-
-| Dataset                           | Description                                              | Scope/Resolution | Used in Layers  | Files                                   | Source                                                                                                     |
-| --------------------------------- | -------------------------------------------------------- | ---------------- | --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **NUTS Levels 0–3 (Netherlands)** | European statistical units for regional analysis (L0–L3) | NUTS L0-L3       | Relevance, Risk | `NUTS-L0-NL.shp`, ..., `NUTS-L3-NL.shp` | [Eurostat](https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics) |
-| **GADM Shapefiles (NL, L2)**      | Administrative boundary fallback dataset                 | GADM L2          | Relevance       | `NL-GADM-L2/`                           | [GADM](https://gadm.org/download_world.html)                                                               |
-
----
-
-## 👥 Population & Urban Development
-
-| Dataset                                  | Description                                               | Scope/Resolution | Used in Layers | Files                        | Source                                                                                    |
-| ---------------------------------------- | --------------------------------------------------------- | ---------------- | -------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
-| **GHS Population Grid (R2023)**          | Gridded population at 3 arcsecond resolution              | 3 arcsec (~100m) | Exposition     | `ClippedGHS_POP_3ss.tif`     | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=pop)    |
-| **GHS Built-up Characteristics (R2023)** | Structural type and height of buildings                   | NaN              | Exposition     | `GHS_BUILT_C/`               | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC) |
-| **GHS Built-up Volume (R2023)**          | Estimated 3D volume of built structures (100m resolution) | 100m             | Exposition     | `Clipped_GHS_Built-V-100m/`  | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=builtV) |
-| **Degree of Urbanisation (DUC)**         | Urban/rural classification by grid cell on GADM basis     | GADM L2          | Exposition     | `degree_of_urbanisation/`    | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=DUC)    |
-| **GHS Land Fraction (R2022)**            | Land cover based on Sentinel-2 + OSM (10m)                | 10m              | Hazard         | `Clipped_GHS_LAND-10m_Moll/` | [Copernicus EMS](https://human-settlement.emergency.copernicus.eu/download.php?ds=land)   |
-
----
-
-## 🚛 Transportation & Infrastructure
-
-| Dataset                          | Description                       | Scope/Resolution | Used in Layers         | Files                                          | Source                                                                                   |
-| -------------------------------- | --------------------------------- | ---------------- | ---------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Freight Loading Statistics**   | Road freight loading by NUTS-3    | NUTS L3          | Relevance              | `road_go_loading/`, `unified_freight_data.csv` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_rl3g/default/table) |
-| **Freight Unloading Statistics** | Road freight unloading by NUTS-3  | NUTS L3          | Relevance              | `L3-estat_road_go_unloading/`                  | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/road_go_na_ru3g/default/table) |
-| **European Ports**               | Location and attributes of ports  | Point data       | Exposition & Relevance | `Port/PORT_RG_2009.shp`                        | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/transport-networks)     |
-| **Zeevaart**               | Gross weight handled (1,000 tons) | Per Port         | Relevance              | `Port/PORT_RG_2009.shp`                        | [CBS](https://opendata.cbs.nl/#/CBS/nl/dataset/82850NED/table)                |
-
----
-
-## 🌍 Physical Geography & Environment
-
-| Dataset                | Description                                   | Scope/Resolution | Used in Layers | Files                                | Source                                                                                                               |
-| ---------------------- | --------------------------------------------- | ---------------- | -------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| **Copernicus DEM**     | High-resolution elevation model               | ~30m             | Hazard         | `ClippedCopernicusHeightProfile.tif` | [Eurostat GISCO](https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/copernicus)                 |
-| **European Coastline** | Coastal geometry for flood exposure modelling | Vector polylines | Hazard         | `EEA_Coastline_Polyline_Shape/`      | [EEA](https://www.eea.europa.eu/data-and-maps/data/eea-coastline-for-analysis-1/gis-data/europe-coastline-shapefile) |
-| **Dutch Hydrography**  | Dutch river networks and water bodies         | Vector polygons  | Hazard         | `Hydrographie-Watercourse/`          | [PDOK](https://www.pdok.nl/introductie/-/article/hydrografie-inspire-geharmoniseerd-)                                               |
-
----
-
-## 🌊 Flood Risk
-
-| Dataset                    | Description                                       | Scope/Resolution | Used in Layers | Files          | Source                                                                |
-| -------------------------- | ------------------------------------------------- | ---------------- | -------------- | -------------- | --------------------------------------------------------------------- |
+| Dataset                    | Description                                       | Scope/Resolution | Used in Layers | Files          | Source                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------- | ---------------- | -------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Dutch Flood Risk Zones** | Zones under flood risk as per EU Floods Directive | Vector polygons  | Hazard         | `NL_Riskzone/` | [PDOK](https://www.pdok.nl/introductie/-/article/gebieden-met-natuurrisico-s-overstromingen-risicogebied-richtlijn-overstromingsrisico-s-ror-inspire-geharmoniseerd-) |
 
 ---
 
-## 💶 Socioeconomic Data
+## 💼 Socioeconomic Data
 
-| Dataset                          | Description                                         | Scope/Resolution | Used in Layers        | Files                                | Source                                                                                         |
-| -------------------------------- | --------------------------------------------------- | ---------------- | --------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **GDP Statistics (NUTS-3)**      | Regional GDP by administrative region               | NUTS L3          | Relevance             | `L3-estat_gdp.csv/`                  | —                                                                                              |
-| **Electricity Consumption Grid** | 1 km² global grid electricity estimates (1992–2019) | 1 km             | Exposition, Relevance | `Electricity/Electricity.0.tif`      | [Figshare](https://figshare.com/articles/dataset/17004523)                                     |
-| **Vierkantstatistieken (100m)**  | Dutch socio-demographic grid at 100m                | 100m             | Exposition            | `Vierkantstatistieken/`              | [PDOK](https://service.pdok.nl/cbs/vierkantstatistieken100m/atom/vierkantstatistieken100m.xml) |
-| **HRST Statistics**              | Human capital in science and tech sectors           | NUTS L2          | Relevance             | `L2_estat_hrst_st_rcat_filtered_en/` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/hrst_st_rcat/default/table)          |
-) |
+| Dataset                          | Description                                         | Scope/Resolution | Used in Layers | Files                                      | Source                                                                                         |
+| -------------------------------- | --------------------------------------------------- | ---------------- | -------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **GDP Statistics (NUTS-3)**      | Regional GDP by administrative region               | NUTS L3          | Relevance      | `L3-estat_gdp.csv`                         | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/nama_10r_3gdp/default/table)         |
+| **Electricity Consumption Grid** | Global 1 km² grid electricity estimates (1992–2019) | 1 km             | Relevance      | `Electricity/Electricity.vrt`              | [Figshare](https://figshare.com/articles/dataset/17004523)                                     |
+| **Vierkantstatistieken (100m)**  | Dutch socio-demographic grid at 100m resolution     | 100m             | Relevance      | `Vierkantstatistieken/cbs_vk100_2023.gpkg` | [PDOK](https://service.pdok.nl/cbs/vierkantstatistieken100m/atom/vierkantstatistieken100m.xml) |
+| **HRST Statistics**              | Human capital in science and technology sectors     | NUTS L2          | Relevance      | `L2_estat_hrst_st_rcat_filtered_en/`       | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/hrst_st_rcat/default/table)          |
 
----
+## 🔬 Technical Details
 
-## 💶 Socioeconomic Data
+### Risk Assessment Methodology
 
-| Dataset                          | Description                                         | Scope/Resolution | Used in Layers        | Files                                | Source                                                                                         |
-| -------------------------------- | --------------------------------------------------- | ---------------- | --------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **GDP Statistics (NUTS-3)**      | Regional GDP by administrative region               | NUTS L3          | Relevance             | `L3-estat_gdp.csv/`                  | —                                                                                              |
-| **Electricity Consumption Grid** | 1 km² global grid electricity estimates (1992–2019) | 1 km             | Exposition, Relevance | `Electricity/Electricity.0.tif`      | [Figshare](https://figshare.com/articles/dataset/17004523)                                     |
-| **Vierkantstatistieken (100m)**  | Dutch socio-demographic grid at 100m                | 100m             | Exposition            | `Vierkantstatistieken/`              | [PDOK](https://service.pdok.nl/cbs/vierkantstatistieken100m/atom/vierkantstatistieken100m.xml) |
-| **HRST Statistics**              | Human capital in science and tech sectors           | NUTS L2          | Relevance             | `L2_estat_hrst_st_rcat_filtered_en/` | [Eurostat](https://ec.europa.eu/eurostat/databrowser/view/hrst_st_rcat/default/table)          |
+The framework implements a four-layer approach following established climate risk assessment principles:
+
+1. **Hazard Layer**: Quantifies physical climate hazards (sea level rise, coastal proximity, elevation)
+2. **Exposition Layer**: Measures assets and population exposed to hazards (buildings, infrastructure, people)
+3. **Relevance Layer**: Assesses economic and social importance of exposed assets (GDP, freight, human capital)
+4. **Risk Layer**: Integrates all factors using weighted algorithms to produce final risk scores
+
+### Data Processing Pipeline
+
+**Coordinate System Standardization**:
+
+- All data reprojected to EPSG:3035 (ETRS89-extended / LAEA Europe)
+- Consistent 30m resolution grid for all raster outputs
+- Bilinear resampling for continuous data, nearest neighbor for categorical
+
+**Normalization Strategy**:
+
+- Min-max normalization for individual indicators
+- Quantile-based normalization for heavy-tailed distributions
+- Mass-conserving normalization for economic indicators
+- Weighted aggregation using configurable importance weights
+
+**Quality Assurance**:
+
+- Automated data integrity checks
+- Consistent coordinate reference systems
+- Standardized no-data handling
+- Comprehensive logging and error reporting
+
+### Web Export Optimization
+
+**Cloud-Optimized GeoTIFF (COG)**:
+
+- Internal tiling (512x512 pixel tiles)
+- Multiple overview levels for efficient zooming
+- LZW compression with horizontal predictor
+- Optimized for HTTP range requests
+
+**Mapbox Vector Tiles (MVT)**:
+
+- Zoom-dependent simplification using Douglas-Peucker algorithm
+- Topology preservation for accurate boundaries
+- Attribute filtering to reduce file size
+- Optimized for modern web mapping libraries
+
+### Performance Characteristics
+
+**Processing Speed**:
+
+- Full Netherlands analysis: ~45-90 minutes (depending on hardware)
+- Individual layers: ~5-15 minutes each
+- Web conversion: ~10-20 minutes for complete dataset
+- Clustering analysis: ~15-30 minutes per scenario
+
+**Memory Usage**:
+
+- Peak memory: ~8-12 GB for full analysis
+- Individual layers: ~2-4 GB peak usage
+- Streaming I/O for large rasters to minimize memory footprint
+- Automatic garbage collection and memory optimization
+
+## 🎯 Quick Reference
+
+**Most Common Commands**:
+
+```bash
+# Complete analysis with web exports
+python -m eu_climate.main
+
+# Risk assessment only
+python -m eu_climate.main --risk
+
+# Freight analysis with enhanced maritime data
+python -m eu_climate.main --freight-only
+
+# Convert existing outputs to web formats
+python -m eu_climate.main --web-conversion
+```
+
+**Output Locations**:
+
+- Standard formats: `eu_climate/data/output/*/tif/` and `*/gpkg/`
+- Web formats: `eu_climate/data/output/*/web/cog/` and `*/web/mvt/`
+
+**Web Export Support**:
+
+- **Full support**: WSL (Windows), Linux, macOS
+- **Limited support**: Native Windows (COG only, no tippecanoe)
+
+**Configuration**: `eu_climate/config/config.yaml`  
+**Logs**: `eu_climate/debug/risk_assessment.log`  
+**Data Repository**: [Hugging Face Dataset](https://huggingface.co/datasets/TjarkGerken/eu-data)
+
+For technical support and detailed implementation information, refer to individual module docstrings and the configuration files.

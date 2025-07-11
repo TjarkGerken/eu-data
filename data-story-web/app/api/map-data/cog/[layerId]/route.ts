@@ -52,7 +52,7 @@ async function findFileByLayerId(layerId: string): Promise<string | null> {
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ layerId: string }> }
+  { params }: { params: Promise<{ layerId: string }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -64,7 +64,7 @@ export async function GET(
     if (!actualFileName) {
       return NextResponse.json(
         { error: `COG file not found for layer ${layerId}` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -82,7 +82,7 @@ export async function GET(
     if (!response.Body) {
       return NextResponse.json(
         { error: `COG file not found in storage` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -124,7 +124,7 @@ export async function GET(
     console.error("Error serving COG file:", error);
     return NextResponse.json(
       { error: "Failed to serve COG file" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

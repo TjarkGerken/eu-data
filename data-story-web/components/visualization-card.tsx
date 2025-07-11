@@ -61,7 +61,7 @@ export function VisualizationCard({
   const resolveReferenceTitle = (refId: string) => {
     if (globalCitationData && globalCitationData.orderedReferences) {
       const ref = globalCitationData.orderedReferences.find(
-        (r) => r.id === refId
+        (r) => r.id === refId,
       );
       return ref ? ref.title : refId;
     }

@@ -30,7 +30,7 @@ function validateR2Config() {
 
   if (missing.length > 0) {
     throw new Error(
-      `Missing required R2 environment variables: ${missing.join(", ")}`
+      `Missing required R2 environment variables: ${missing.join(", ")}`,
     );
   }
 }

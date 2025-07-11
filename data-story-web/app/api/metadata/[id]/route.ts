@@ -4,7 +4,7 @@ const METADATA_BASE_URL = process.env.R2_PUBLIC_URL_BASE;
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   if (!id) {
@@ -19,7 +19,7 @@ export async function GET(
     if (!res.ok) {
       return NextResponse.json(
         { error: `Failed to fetch metadata (${res.status})` },
-        { status: res.status }
+        { status: res.status },
       );
     }
 
@@ -36,7 +36,7 @@ export async function GET(
         error:
           error instanceof Error ? error.message : "Unable to fetch metadata",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

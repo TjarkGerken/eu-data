@@ -11,7 +11,7 @@ const s3Client = new S3Client(R2_CONFIG);
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  { params }: { params: Promise<{ layerId: string }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -20,7 +20,7 @@ export async function GET(
     if (!layerId) {
       return NextResponse.json(
         { error: "Layer ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -30,7 +30,7 @@ export async function GET(
     if (!actualFileName) {
       return NextResponse.json(
         { error: `Layer ${layerId} not found for download` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -45,13 +45,13 @@ export async function GET(
       if (!response.Body) {
         return NextResponse.json(
           { error: `Layer ${layerId} not found for download` },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
       const fileBuffer = await response.Body.transformToByteArray();
       const extension = actualFileName.substring(
-        actualFileName.lastIndexOf(".")
+        actualFileName.lastIndexOf("."),
       );
       const contentType = getContentType(extension);
 
@@ -66,14 +66,14 @@ export async function GET(
       console.error(`Could not download ${actualFileName}:`, downloadError);
       return NextResponse.json(
         { error: `Layer ${layerId} not found for download` },
-        { status: 404 }
+        { status: 404 },
       );
     }
   } catch (error) {
     console.error("Error downloading layer:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

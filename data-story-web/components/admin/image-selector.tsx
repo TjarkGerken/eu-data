@@ -60,7 +60,7 @@ export default function ImageSelector({
 
       if (category && category !== "all") {
         imageData = await CloudflareR2Manager.getImagesByCategory(
-          category as ImageCategory
+          category as ImageCategory,
         );
       } else {
         imageData = await CloudflareR2Manager.getAllImages();
@@ -69,7 +69,7 @@ export default function ImageSelector({
       // Filter by scenario if specified
       if (scenario && scenario !== "all") {
         imageData = imageData.filter(
-          (img) => img.metadata.scenario === scenario
+          (img) => img.metadata.scenario === scenario,
         );
       }
 
@@ -88,7 +88,7 @@ export default function ImageSelector({
   useEffect(() => {
     if (value && images.length > 0) {
       const found = images.find(
-        (img) => img.metadata.id === value || img.url === value
+        (img) => img.metadata.id === value || img.url === value,
       );
       setSelectedImageData(found || null);
     }
@@ -171,7 +171,7 @@ export default function ImageSelector({
                 <div className="flex items-center gap-2">
                   <Badge
                     className={getCategoryColor(
-                      selectedImageData.metadata.category
+                      selectedImageData.metadata.category,
                     )}
                   >
                     {selectedImageData.metadata.category}

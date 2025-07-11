@@ -84,7 +84,7 @@ function getAllReferencesFromBlocks(blocks: DataStoryBlock[]): Reference[] {
 
 export function processGlobalCitations(
   blocks: DataStoryBlock[],
-  globalReferences: Reference[] = []
+  globalReferences: Reference[] = [],
 ): GlobalCitationData {
   const citationMap = new Map<string, number>();
   const referenceToNumberMap = new Map<string, number>(); // Maps reference ID to citation number
@@ -102,7 +102,7 @@ export function processGlobalCitations(
 
   // Create readable ID mapping from globalReferences (not just block references)
   const readableIdMap = createReadableIdMap(
-    safeGlobalReferences.length > 0 ? safeGlobalReferences : allReferences
+    safeGlobalReferences.length > 0 ? safeGlobalReferences : allReferences,
   );
 
   // Process blocks in order to maintain citation sequence
@@ -180,7 +180,7 @@ export interface ProcessedCitationData {
 export function processContentWithGlobalCitations(
   content: string,
   globalCitationMap: Map<string, number>,
-  readableIdMap: Map<string, string>
+  readableIdMap: Map<string, string>,
 ): ProcessedCitationData {
   if (!content || typeof content !== "string") {
     return {
@@ -196,7 +196,7 @@ export function processContentWithGlobalCitations(
   globalCitationMap.forEach((number, citationId) => {
     const regex = new RegExp(
       `\\\\cite\\{${citationId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\}`,
-      "g"
+      "g",
     );
 
     // Determine the actual reference ID for click handling

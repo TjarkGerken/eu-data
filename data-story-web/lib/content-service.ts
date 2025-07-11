@@ -39,7 +39,7 @@ export interface ContentData {
 }
 
 export async function fetchContentByLanguage(
-  languageCode: string = "en"
+  languageCode: string = "en",
 ): Promise<ContentData | null> {
   try {
     const { data: story, error: storyError } = await supabase
@@ -64,7 +64,7 @@ export async function fetchContentByLanguage(
           reference_id,
           content_references(*)
         )
-      `
+      `,
       )
       .eq("story_id", story.id)
       .order("order_index");
@@ -83,19 +83,21 @@ export async function fetchContentByLanguage(
       return null;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const processedBlocks: ContentBlock[] = (blocksData || []).map((block: any) => ({
-      id: block.id,
-      storyId: block.story_id,
-      blockType: block.block_type,
-      orderIndex: block.order_index,
-      title: block.title || undefined,
-      content: block.content || undefined,
-      data: (block.data as Record<string, unknown>) || null,
-      references:
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        block.block_references?.map((br: any) => br.content_references) || [],
-    }));
+    const processedBlocks: ContentBlock[] = (blocksData || []).map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (block: any) => ({
+        id: block.id,
+        storyId: block.story_id,
+        blockType: block.block_type,
+        orderIndex: block.order_index,
+        title: block.title || undefined,
+        content: block.content || undefined,
+        data: (block.data as Record<string, unknown>) || null,
+        references:
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          block.block_references?.map((br: any) => br.content_references) || [],
+      }),
+    );
 
     const transformedStory: ContentStory = {
       id: story.id,
@@ -139,7 +141,7 @@ export async function fetchAllReferences(): Promise<ContentReference[]> {
 
 export async function fetchBlocksByType(
   blockType: string,
-  languageCode: string = "en"
+  languageCode: string = "en",
 ): Promise<ContentBlock[]> {
   try {
     const { data: story } = await supabase
@@ -158,7 +160,7 @@ export async function fetchBlocksByType(
         block_references(
           content_references(*)
         )
-      `
+      `,
       )
       .eq("story_id", story.id)
       .eq("block_type", blockType)

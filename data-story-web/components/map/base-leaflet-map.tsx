@@ -72,7 +72,7 @@ export default function BaseLeafletMap({
   // Generate unique map ID to avoid conflicts between multiple map instances
   const mapId = useMemo(
     () => `leaflet-map-${Math.random().toString(36).substr(2, 9)}`,
-    []
+    [],
   );
 
   const mapRef = useRef<L.Map | null>(null);
@@ -108,7 +108,7 @@ export default function BaseLeafletMap({
   useEffect(() => {
     if (typeof window !== "undefined") {
       const existingStyle = document.getElementById(
-        "leaflet-custom-popup-style"
+        "leaflet-custom-popup-style",
       );
       if (!existingStyle) {
         const style = document.createElement("style");
@@ -265,7 +265,7 @@ export default function BaseLeafletMap({
 
       return layerId;
     },
-    []
+    [],
   );
 
   // Load vector layers with popups for GeoJSON data
@@ -293,7 +293,7 @@ export default function BaseLeafletMap({
             console.error(
               "Failed to load vector layer:",
               response.status,
-              response.statusText
+              response.statusText,
             );
             return;
           }
@@ -352,7 +352,7 @@ export default function BaseLeafletMap({
 
                 const formatPropertyValue = (
                   key: string,
-                  value: unknown
+                  value: unknown,
                 ): string => {
                   if (typeof value === "number") {
                     if (
@@ -388,14 +388,14 @@ export default function BaseLeafletMap({
                     .map(
                       (word) =>
                         word.charAt(0).toUpperCase() +
-                        word.slice(1).toLowerCase()
+                        word.slice(1).toLowerCase(),
                     )
                     .join(" ");
 
                   if (formattedName.toLowerCase().includes("square meters")) {
                     formattedName = formattedName.replace(
                       /Square Meters/gi,
-                      "Square Kilometers"
+                      "Square Kilometers",
                     );
                   }
 
@@ -405,13 +405,13 @@ export default function BaseLeafletMap({
                 const propertyEntries = Object.entries(feature.properties)
                   .filter(
                     ([, value]) =>
-                      value !== null && value !== undefined && value !== ""
+                      value !== null && value !== undefined && value !== "",
                   )
                   .filter(
                     ([key]) =>
                       !key.toLowerCase().includes("pixel_count") &&
                       !key.toLowerCase().includes("risk_density") &&
-                      !key.toLowerCase().includes("cluster_id")
+                      !key.toLowerCase().includes("cluster_id"),
                   )
                   .map(([key, value]) => {
                     const formattedKey = formatPropertyName(key);
@@ -459,19 +459,19 @@ export default function BaseLeafletMap({
                           key.toLowerCase().includes("risk")
                             ? "#fef2f2"
                             : key.toLowerCase().includes("area")
-                            ? "#f0fdf4"
-                            : key.toLowerCase().includes("density")
-                            ? "#f7fee7"
-                            : "#f9fafb"
+                              ? "#f0fdf4"
+                              : key.toLowerCase().includes("density")
+                                ? "#f7fee7"
+                                : "#f9fafb"
                         };
                         border-left: 3px solid ${
                           key.toLowerCase().includes("risk")
                             ? "#ef4444"
                             : key.toLowerCase().includes("area")
-                            ? "#22c55e"
-                            : key.toLowerCase().includes("density")
-                            ? "#84cc16"
-                            : "#6b7280"
+                              ? "#22c55e"
+                              : key.toLowerCase().includes("density")
+                                ? "#84cc16"
+                                : "#6b7280"
                         };
                         border-radius: 4px;
                         font-size: 13px;
@@ -492,7 +492,7 @@ export default function BaseLeafletMap({
                           border: 1px solid #e5e7eb;
                         ">${value}</span>
                       </div>
-                    `
+                    `,
                       )
                       .join("")}
                   </div>
@@ -523,7 +523,7 @@ export default function BaseLeafletMap({
         console.error("Failed to load vector layer:", error);
       }
     },
-    [customPopupStyle, enableDataLayers]
+    [customPopupStyle, enableDataLayers],
   );
 
   // Load COG layers using dynamic georaster imports
@@ -538,7 +538,7 @@ export default function BaseLeafletMap({
           import("georaster").then((module) => module.default),
           // @ts-expect-error - georaster-layer-for-leaflet library doesn't have TypeScript definitions
           import("georaster-layer-for-leaflet").then(
-            (module) => module.default
+            (module) => module.default,
           ),
         ]);
 
@@ -586,7 +586,7 @@ export default function BaseLeafletMap({
             if (rasterScheme) {
               const colorFunction = createLeafletColorFunction(
                 rasterScheme,
-                valueRange
+                valueRange,
               );
               return colorFunction(pixelValue);
             }
@@ -629,7 +629,7 @@ export default function BaseLeafletMap({
               const clampedNormalized = Math.max(0, Math.min(1, normalized));
 
               const colorIndex = Math.floor(
-                clampedNormalized * (colorScale.length - 1)
+                clampedNormalized * (colorScale.length - 1),
               );
               const color =
                 colorScale[colorIndex] || colorScale[colorScale.length - 1];
@@ -655,7 +655,7 @@ export default function BaseLeafletMap({
         console.error(`Failed to load COG layer ${layer.id}:`, error);
       }
     },
-    [enableDataLayers]
+    [enableDataLayers],
   );
 
   const updateMapLayers = useCallback(() => {
@@ -672,7 +672,7 @@ export default function BaseLeafletMap({
       layers.map((layer) => [
         layer.id,
         { visible: layer.visible, opacity: layer.opacity },
-      ])
+      ]),
     );
     const loadedLayers = loadedLayersRef.current;
 
@@ -756,7 +756,7 @@ export default function BaseLeafletMap({
         if (layer.metadata.format === "mbtiles") {
           if (L && VectorGrid) {
             const cachedLayerName = dataCacheRef.current.get(
-              `${layer.id}_layername`
+              `${layer.id}_layername`,
             );
 
             const createVectorTileLayer = (actualLayerName: string) => {
@@ -835,7 +835,7 @@ export default function BaseLeafletMap({
                   maxZoom: 18,
                   pane: "overlayPane",
                   attribution: "EU Climate Risk Data",
-                }
+                },
               );
 
               vectorLayerGroupRef.current?.addLayer(vectorTileLayer);
@@ -846,13 +846,13 @@ export default function BaseLeafletMap({
               const cachedOutline = dataCacheRef.current.get(outlineCacheKey);
 
               const addOutlineFromGeoJson = (
-                geoJson: GeoJSON.FeatureCollection
+                geoJson: GeoJSON.FeatureCollection,
               ) => {
                 if (!vectorLayerGroupRef.current) return;
 
                 // Remove previous outline if present
                 const existing = loadedLayersRef.current.get(
-                  `${layer.id}_outline`
+                  `${layer.id}_outline`,
                 );
                 if (
                   existing &&
@@ -892,7 +892,7 @@ export default function BaseLeafletMap({
                     geoJson = cachedOutline.data as GeoJSON.FeatureCollection;
                   } else {
                     const res = await fetch(
-                      `/api/map-data/vector/${layer.id}?outline=1`
+                      `/api/map-data/vector/${layer.id}?outline=1`,
                     );
                     if (res.ok) {
                       geoJson = (await res.json()) as GeoJSON.FeatureCollection;
@@ -936,7 +936,7 @@ export default function BaseLeafletMap({
                 .catch((error) => {
                   console.error(
                     `Failed to get layer name for ${layer.id}:`,
-                    error
+                    error,
                   );
                   createVectorTileLayer(layer.id);
                 });
@@ -954,7 +954,7 @@ export default function BaseLeafletMap({
             {
               opacity: layer.opacity || 0.8,
               maxZoom: 18,
-            }
+            },
           );
           layerGroupRef.current?.addLayer(tileLayer);
 
@@ -973,7 +973,7 @@ export default function BaseLeafletMap({
     // Auto-fit bounds if enabled
     if (autoFitBounds && sortedVisibleLayers.length > 0) {
       const allBounds = sortedVisibleLayers.map(
-        (layer) => layer.metadata.bounds
+        (layer) => layer.metadata.bounds,
       );
       const combinedBounds = allBounds.reduce((acc, bounds) => {
         const [minLng, minLat, maxLng, maxLat] = bounds;

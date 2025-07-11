@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching content:", error);
     return NextResponse.json(
       { error: "Failed to fetch content" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     if (!storyId || !content) {
       return NextResponse.json(
         { error: "Story ID and content are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     console.error("Error saving content:", error);
     return NextResponse.json(
       { error: "Failed to save content" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -90,7 +90,7 @@ export async function PUT(request: NextRequest) {
     if (!storyId || !enBlock || !deBlock) {
       return NextResponse.json(
         { error: "Story ID and block data are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -144,10 +144,11 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("Error creating content block:", error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       { error: "Failed to create content block", details: errorMessage },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

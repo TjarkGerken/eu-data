@@ -29,7 +29,7 @@ interface ImageDropdownProps {
       category: string;
       scenario?: string;
       caption?: { en: string; de: string };
-    }
+    },
   ) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -93,7 +93,7 @@ export function ImageDropdown({
               scenario: img.metadata?.scenario,
               caption: img.metadata?.caption,
             };
-          }
+          },
         )
         .filter((img: ImageOption) => img.url && img.name !== "unknown");
 
@@ -113,7 +113,7 @@ export function ImageDropdown({
     : images;
 
   const selectedImage = filteredImages.find(
-    (img) => img.id === selectedImageId
+    (img) => img.id === selectedImageId,
   );
 
   if (loading) {
@@ -203,7 +203,9 @@ export function ImageDropdown({
                   <Check
                     className={cn(
                       "h-4 w-4 shrink-0",
-                      selectedImageId === image.id ? "opacity-100" : "opacity-0"
+                      selectedImageId === image.id
+                        ? "opacity-100"
+                        : "opacity-0",
                     )}
                   />
                   <Image

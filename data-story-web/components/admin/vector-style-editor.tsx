@@ -52,10 +52,14 @@ export function VectorStyleEditor({
   layerType,
   currentStyle,
   onStyleChange,
-  onReset
+  onReset,
 }: VectorStyleEditorProps) {
-  const [customFillColor, setCustomFillColor] = useState(currentStyle?.fillColor || "#3b82f6");
-  const [customBorderColor, setCustomBorderColor] = useState(currentStyle?.borderColor || "#ffffff");
+  const [customFillColor, setCustomFillColor] = useState(
+    currentStyle?.fillColor || "#3b82f6",
+  );
+  const [customBorderColor, setCustomBorderColor] = useState(
+    currentStyle?.borderColor || "#ffffff",
+  );
 
   const handleStyleUpdate = (updates: Partial<VectorStyle>) => {
     const updatedStyle: VectorStyle = {
@@ -65,31 +69,42 @@ export function VectorStyleEditor({
       borderWidth: currentStyle?.borderWidth || 2,
       borderOpacity: currentStyle?.borderOpacity || 1.0,
       borderDashArray: currentStyle?.borderDashArray,
-      ...updates
+      ...updates,
     };
     onStyleChange(updatedStyle);
   };
 
   const handleReset = () => {
     const defaultKey = layerType as keyof typeof DEFAULT_VECTOR_STYLES;
-    const defaultStyle = DEFAULT_VECTOR_STYLES[defaultKey] || DEFAULT_VECTOR_STYLES.default;
+    const defaultStyle =
+      DEFAULT_VECTOR_STYLES[defaultKey] || DEFAULT_VECTOR_STYLES.default;
     onStyleChange(defaultStyle);
     setCustomFillColor(defaultStyle.fillColor);
     setCustomBorderColor(defaultStyle.borderColor);
     if (onReset) onReset();
   };
 
-  const ColorPreview = ({ color, opacity = 1 }: { color: string; opacity?: number }) => (
+  const ColorPreview = ({
+    color,
+    opacity = 1,
+  }: {
+    color: string;
+    opacity?: number;
+  }) => (
     <div
       className="w-6 h-6 rounded border border-gray-300 flex-shrink-0"
-      style={{ 
+      style={{
         backgroundColor: color === "transparent" ? "transparent" : color,
         opacity: color === "transparent" ? 1 : opacity,
-        backgroundImage: color === "transparent" 
-          ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
-          : undefined,
+        backgroundImage:
+          color === "transparent"
+            ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
+            : undefined,
         backgroundSize: color === "transparent" ? "8px 8px" : undefined,
-        backgroundPosition: color === "transparent" ? "0 0, 0 4px, 4px -4px, -4px 0px" : undefined
+        backgroundPosition:
+          color === "transparent"
+            ? "0 0, 0 4px, 4px -4px, -4px 0px"
+            : undefined,
       }}
     />
   );
@@ -104,7 +119,11 @@ export function VectorStyleEditor({
             y="5"
             width="50"
             height="30"
-            fill={currentStyle?.fillColor === "transparent" ? "none" : currentStyle?.fillColor}
+            fill={
+              currentStyle?.fillColor === "transparent"
+                ? "none"
+                : currentStyle?.fillColor
+            }
             fillOpacity={currentStyle?.fillOpacity || 0.6}
             stroke={currentStyle?.borderColor}
             strokeWidth={currentStyle?.borderWidth || 2}
@@ -124,23 +143,28 @@ export function VectorStyleEditor({
           Vector Style - {layerName}
         </CardTitle>
       </CardHeader>
-      
+
       <CardContent className="space-y-6">
         <StylePreview />
 
         <div className="space-y-3">
           <Label className="text-sm font-medium">Fill Color</Label>
-          
+
           <div className="grid grid-cols-4 gap-2">
             {PREDEFINED_COLORS.map((color) => (
               <button
                 key={color.value}
                 className={`flex items-center gap-2 p-2 rounded border text-xs hover:bg-gray-100 ${
-                  currentStyle?.fillColor === color.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                  currentStyle?.fillColor === color.value
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200"
                 }`}
                 onClick={() => handleStyleUpdate({ fillColor: color.value })}
               >
-                <ColorPreview color={color.value} opacity={currentStyle?.fillOpacity} />
+                <ColorPreview
+                  color={color.value}
+                  opacity={currentStyle?.fillOpacity}
+                />
                 <span className="truncate">{color.name}</span>
               </button>
             ))}
@@ -177,8 +201,12 @@ export function VectorStyleEditor({
               </span>
             </div>
             <Slider
-              value={[currentStyle?.fillOpacity ? currentStyle.fillOpacity * 100 : 60]}
-              onValueChange={([value]) => handleStyleUpdate({ fillOpacity: value / 100 })}
+              value={[
+                currentStyle?.fillOpacity ? currentStyle.fillOpacity * 100 : 60,
+              ]}
+              onValueChange={([value]) =>
+                handleStyleUpdate({ fillOpacity: value / 100 })
+              }
               max={100}
               step={5}
               className="w-full"
@@ -188,7 +216,7 @@ export function VectorStyleEditor({
 
         <div className="space-y-3">
           <Label className="text-sm font-medium">Border</Label>
-          
+
           <div className="space-y-2">
             <Label className="text-xs">Border Color</Label>
             <div className="grid grid-cols-4 gap-2">
@@ -196,16 +224,23 @@ export function VectorStyleEditor({
                 <button
                   key={color.value}
                   className={`flex items-center gap-2 p-2 rounded border text-xs hover:bg-gray-100 ${
-                    currentStyle?.borderColor === color.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                    currentStyle?.borderColor === color.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200"
                   }`}
-                  onClick={() => handleStyleUpdate({ borderColor: color.value })}
+                  onClick={() =>
+                    handleStyleUpdate({ borderColor: color.value })
+                  }
                 >
-                  <ColorPreview color={color.value} opacity={currentStyle?.borderOpacity} />
+                  <ColorPreview
+                    color={color.value}
+                    opacity={currentStyle?.borderOpacity}
+                  />
                   <span className="truncate">{color.name}</span>
                 </button>
               ))}
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Label className="text-xs">Custom:</Label>
               <Input
@@ -239,7 +274,9 @@ export function VectorStyleEditor({
             </div>
             <Slider
               value={[currentStyle?.borderWidth || 2]}
-              onValueChange={([value]) => handleStyleUpdate({ borderWidth: value })}
+              onValueChange={([value]) =>
+                handleStyleUpdate({ borderWidth: value })
+              }
               max={10}
               min={0}
               step={0.5}
@@ -255,8 +292,14 @@ export function VectorStyleEditor({
               </span>
             </div>
             <Slider
-              value={[currentStyle?.borderOpacity ? currentStyle.borderOpacity * 100 : 100]}
-              onValueChange={([value]) => handleStyleUpdate({ borderOpacity: value / 100 })}
+              value={[
+                currentStyle?.borderOpacity
+                  ? currentStyle.borderOpacity * 100
+                  : 100,
+              ]}
+              onValueChange={([value]) =>
+                handleStyleUpdate({ borderOpacity: value / 100 })
+              }
               max={100}
               step={5}
               className="w-full"
@@ -267,9 +310,9 @@ export function VectorStyleEditor({
             <Label className="text-xs">Border Style</Label>
             <Select
               value={currentStyle?.borderDashArray || "solid"}
-              onValueChange={(value) => 
-                handleStyleUpdate({ 
-                  borderDashArray: value === "solid" ? undefined : value 
+              onValueChange={(value) =>
+                handleStyleUpdate({
+                  borderDashArray: value === "solid" ? undefined : value,
                 })
               }
             >
@@ -278,7 +321,10 @@ export function VectorStyleEditor({
               </SelectTrigger>
               <SelectContent>
                 {BORDER_STYLES.map((style) => (
-                  <SelectItem key={style.value || "solid"} value={style.value || "solid"}>
+                  <SelectItem
+                    key={style.value || "solid"}
+                    value={style.value || "solid"}
+                  >
                     {style.name}
                   </SelectItem>
                 ))}
@@ -305,13 +351,21 @@ export function VectorStyleEditor({
             <span className="font-medium">Style Options:</span>
           </div>
           <ul className="space-y-1 ml-6">
-            <li>• <strong>Fill:</strong> Interior color and transparency of shapes</li>
-            <li>• <strong>Border:</strong> Outline color, thickness, and style</li>
-            <li>• <strong>Opacity:</strong> 0% = invisible, 100% = solid</li>
-            <li>• <strong>Transparent fill:</strong> Shows only the border outline</li>
+            <li>
+              • <strong>Fill:</strong> Interior color and transparency of shapes
+            </li>
+            <li>
+              • <strong>Border:</strong> Outline color, thickness, and style
+            </li>
+            <li>
+              • <strong>Opacity:</strong> 0% = invisible, 100% = solid
+            </li>
+            <li>
+              • <strong>Transparent fill:</strong> Shows only the border outline
+            </li>
           </ul>
         </div>
       </CardContent>
     </Card>
   );
-} 
+}

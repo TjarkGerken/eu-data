@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       console.error("R2 storage error:", error);
       return NextResponse.json(
         { error: "Failed to upload file to R2" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     console.error("Upload error:", error);
     return NextResponse.json(
       { error: "Failed to process upload" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
         try {
           const metaKey = `metadata/${fileName.split(".")[0]}.json`;
           const metaResp = await s3Client.send(
-            new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: metaKey })
+            new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: metaKey }),
           );
           if (metaResp.Body) {
             const text = await metaResp.Body.transformToString();
@@ -195,7 +195,7 @@ export async function GET(request: NextRequest) {
           size: object.Size || 0,
           created_at: object.LastModified?.toISOString(),
         };
-      })
+      }),
     );
 
     return NextResponse.json({ files });
@@ -203,7 +203,7 @@ export async function GET(request: NextRequest) {
     console.error("List error:", error);
     return NextResponse.json(
       { error: "Failed to list files" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -243,7 +243,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Delete error:", error);
     return NextResponse.json(
       { error: "Failed to delete file" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -268,7 +268,7 @@ export async function PUT(request: NextRequest) {
     // Extract the actual S3 key from the path (in case it's a full URL)
     const actualPath = extractKeyFromPath(path);
     console.log(
-      `PUT request to update image metadata for path: ${path} -> ${actualPath}`
+      `PUT request to update image metadata for path: ${path} -> ${actualPath}`,
     );
 
     const pathParts = actualPath.split("/");
@@ -282,7 +282,7 @@ export async function PUT(request: NextRequest) {
     const basePrefix = hasPrefix ? "climate-images/" : "";
 
     console.log(
-      `Parsed path - category: ${currentCategory}, scenario: ${currentScenario}, file: ${fileName}`
+      `Parsed path - category: ${currentCategory}, scenario: ${currentScenario}, file: ${fileName}`,
     );
 
     let newPath = actualPath;
@@ -321,12 +321,12 @@ export async function PUT(request: NextRequest) {
         await s3Client.send(delCmd);
 
         console.log(
-          `Successfully moved object from ${actualPath} to ${newPath}`
+          `Successfully moved object from ${actualPath} to ${newPath}`,
         );
       } catch (e) {
         console.warn(
           `Failed to move object from ${actualPath} to ${newPath}:`,
-          e
+          e,
         );
         // If source doesn't exist or copy fails, continue with metadata update only
         // Reset newPath to original path since move failed
@@ -366,7 +366,7 @@ export async function PUT(request: NextRequest) {
       error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       { error: `Failed to update metadata: ${errorMessage}` },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

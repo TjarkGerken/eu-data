@@ -59,15 +59,15 @@ export function MultiSelectReferences({
   };
 
   const selectedReferences = references.filter((ref) =>
-    selectedReferenceIds.includes(ref.id)
+    selectedReferenceIds.includes(ref.id),
   );
 
   const filteredReferences = references.filter(
     (ref) =>
       ref.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ref.authors.some((author) =>
-        author.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+        author.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
   );
 
   const handleReferenceToggle = (referenceId: string) => {
@@ -156,7 +156,7 @@ export function MultiSelectReferences({
                         "mr-2 h-4 w-4",
                         selectedReferenceIds.includes(reference.id)
                           ? "opacity-100"
-                          : "opacity-0"
+                          : "opacity-0",
                       )}
                     />
                     <div className="flex-1 min-w-0">

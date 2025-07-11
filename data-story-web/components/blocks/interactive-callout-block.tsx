@@ -162,8 +162,8 @@ export function InteractiveCalloutBlock({
                         ? "Klicken zum Einklappen"
                         : "Click to collapse"
                       : language === "de"
-                      ? "Klicken zum Ausklappen"
-                      : "Click to expand"}
+                        ? "Klicken zum Ausklappen"
+                        : "Click to expand"}
                   </motion.div>
                 )}
               </div>

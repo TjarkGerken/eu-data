@@ -50,7 +50,7 @@ export class CloudflareR2Manager {
 
   static async uploadImage(
     file: File,
-    metadata: Omit<ImageMetadata, "uploadedAt" | "size">
+    metadata: Omit<ImageMetadata, "uploadedAt" | "size">,
   ): Promise<{ url: string; metadata: ImageMetadata }> {
     const fileExt = file.name.split(".").pop();
     const filename = `${metadata.category}/${metadata.scenario || "default"}/${
@@ -138,7 +138,7 @@ export class CloudflareR2Manager {
 
       return await Promise.all(
         response.Contents.filter(
-          (object) => object.Key && !object.Key.endsWith(".json")
+          (object) => object.Key && !object.Key.endsWith(".json"),
         ).map(async (object) => {
           const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
           const pathParts = object.Key!.split("/");
@@ -179,7 +179,7 @@ export class CloudflareR2Manager {
               size: object.Size || 0,
             },
           };
-        })
+        }),
       );
     } catch (error) {
       console.error("Failed to get all images:", error);
@@ -188,7 +188,7 @@ export class CloudflareR2Manager {
   }
 
   static async getImagesByCategory(
-    category: ImageCategory
+    category: ImageCategory,
   ): Promise<Array<{ url: string; path: string; metadata: ImageMetadata }>> {
     try {
       const command = new ListObjectsV2Command({
@@ -205,7 +205,7 @@ export class CloudflareR2Manager {
 
       return await Promise.all(
         response.Contents.filter(
-          (object) => object.Key && !object.Key.endsWith(".json")
+          (object) => object.Key && !object.Key.endsWith(".json"),
         ).map(async (object) => {
           const publicUrl = `${R2_PUBLIC_URL_BASE}/${object.Key}`;
           const pathParts = object.Key!.split("/");
@@ -225,9 +225,7 @@ export class CloudflareR2Manager {
             path: object.Key!,
             metadata: {
               id: fileNameWithoutExt,
-              category:
-                (meta?.category as ImageCategory) ||
-                category,
+              category: (meta?.category as ImageCategory) || category,
               scenario:
                 (meta?.scenario as ImageScenario) ||
                 (pathParts[2] && pathParts[2] !== "default"
@@ -246,7 +244,7 @@ export class CloudflareR2Manager {
               size: object.Size || 0,
             },
           };
-        })
+        }),
       );
     } catch (error) {
       console.error(`Failed to get images for category ${category}:`, error);
@@ -295,7 +293,7 @@ export class CloudflareR2Manager {
 
   private static async saveMetadata(
     imageId: string,
-    metadata: ImageMetadata
+    metadata: ImageMetadata,
   ): Promise<void> {
     const metadataKey = `metadata/${imageId}.json`;
     const metadataContent = JSON.stringify(metadata, null, 2);
@@ -318,7 +316,7 @@ export class CloudflareR2Manager {
   static async getImageByIdAndCategory(
     id: string,
     category: ImageCategory,
-    scenario?: ImageScenario
+    scenario?: ImageScenario,
   ): Promise<CloudflareR2Image | null> {
     const searchPrefix = scenario ? `${category}/${scenario}/` : `${category}/`;
 
@@ -337,7 +335,7 @@ export class CloudflareR2Manager {
         (object) =>
           object.Key &&
           object.Key.includes(`${id}.`) &&
-          !object.Key.endsWith(".json")
+          !object.Key.endsWith(".json"),
       );
 
       if (!matchingObject?.Key) return null;
@@ -360,7 +358,7 @@ export class CloudflareR2Manager {
   }
 
   private static async getMetadata(
-    id: string
+    id: string,
   ): Promise<ImageMetadata | undefined> {
     try {
       const metadataPath = `metadata/${id}.json`;

@@ -142,7 +142,7 @@ export function CitationInsertionButton({
                         "h-4 w-4 mt-1 shrink-0",
                         selectedReference === reference.id
                           ? "opacity-100"
-                          : "opacity-0"
+                          : "opacity-0",
                       )}
                     />
                     <div className="flex-1 min-w-0">

@@ -42,7 +42,7 @@ export function MultiSelectLayers({
   const [isOpen, setIsOpen] = useState(false);
 
   const selectedLayers = layers.filter((layer) =>
-    selectedLayerIds.includes(layer.id)
+    selectedLayerIds.includes(layer.id),
   );
 
   const handleLayerToggle = (layerId: string) => {
@@ -60,13 +60,13 @@ export function MultiSelectLayers({
   // Simplified keyword-based grouping
   const getEconomicIndicatorForLayer = (layerName: string): string | null => {
     const name = layerName.toLowerCase();
-    
-    if (name.includes('freight')) return 'Freight';
-    if (name.includes('gdp')) return 'GDP';
-    if (name.includes('hrst')) return 'HRST';
-    if (name.includes('population')) return 'Population';
-    if (name.includes('combined')) return 'Combined';
-    
+
+    if (name.includes("freight")) return "Freight";
+    if (name.includes("gdp")) return "GDP";
+    if (name.includes("hrst")) return "HRST";
+    if (name.includes("population")) return "Population";
+    if (name.includes("combined")) return "Combined";
+
     return null;
   };
 
@@ -84,13 +84,13 @@ export function MultiSelectLayers({
   // Extract SLR scenario from layer name
   const getSLRScenario = (layerName: string): string | null => {
     const name = layerName.toLowerCase();
-    
+
     // Match both "SLR 0", "SLR-0", "SLR 1", "SLR-1", etc.
     const slrMatch = name.match(/slr[-\s]?(\d+)/);
     if (slrMatch) {
       return `SLR ${slrMatch[1]}`;
     }
-    
+
     return null;
   };
 
@@ -100,13 +100,15 @@ export function MultiSelectLayers({
     }
 
     // Create nested structure: Economic Indicator -> SLR Scenarios -> Layers
-    const nestedGroups: { [indicator: string]: { [scenario: string]: MapLayerMetadata[] } } = {};
+    const nestedGroups: {
+      [indicator: string]: { [scenario: string]: MapLayerMetadata[] };
+    } = {};
     const otherLayers: MapLayerMetadata[] = [];
 
     layers.forEach((layer) => {
       const indicator = getEconomicIndicatorForLayer(layer.name);
       const slrScenario = getSLRScenario(layer.name) || "No SLR";
-      
+
       if (indicator) {
         if (!nestedGroups[indicator]) {
           nestedGroups[indicator] = {};
@@ -122,13 +124,19 @@ export function MultiSelectLayers({
 
     // Flatten for Command component (since Command doesn't support true nesting)
     const flattenedGroups: { [key: string]: MapLayerMetadata[] } = {};
-    const economicIndicators = ["Combined", "Freight", "Population", "HRST", "GDP"];
-    
+    const economicIndicators = [
+      "Combined",
+      "Freight",
+      "Population",
+      "HRST",
+      "GDP",
+    ];
+
     economicIndicators.forEach((indicator) => {
       if (nestedGroups[indicator]) {
         // Always add main indicator header (empty if no non-SLR layers)
         flattenedGroups[`${indicator}__header`] = [];
-        
+
         const scenarios = Object.keys(nestedGroups[indicator]).sort((a, b) => {
           // Sort so "No SLR" comes first, then SLR scenarios numerically
           if (a === "No SLR") return -1;
@@ -137,21 +145,23 @@ export function MultiSelectLayers({
           const bNum = parseInt(b.replace("SLR ", ""));
           return aNum - bNum;
         });
-        
+
         scenarios.forEach((scenario) => {
           if (nestedGroups[indicator][scenario].length > 0) {
             if (scenario === "No SLR") {
               // Add non-SLR layers directly under the main indicator
-              flattenedGroups[`${indicator}__header`] = nestedGroups[indicator][scenario];
+              flattenedGroups[`${indicator}__header`] =
+                nestedGroups[indicator][scenario];
             } else {
               // Add SLR scenarios as subgroups
-              flattenedGroups[`${indicator} → ${scenario}`] = nestedGroups[indicator][scenario];
+              flattenedGroups[`${indicator} → ${scenario}`] =
+                nestedGroups[indicator][scenario];
             }
           }
         });
       }
     });
-    
+
     // Add other layers at the end
     if (otherLayers.length > 0) {
       flattenedGroups["Other Layers"] = otherLayers;
@@ -215,76 +225,93 @@ export function MultiSelectLayers({
               <CommandInput placeholder="Search layers..." />
               <CommandList className="max-h-[60vh] overflow-y-auto">
                 <CommandEmpty>No layers found.</CommandEmpty>
-                {Object.entries(groupedLayers()).map(([groupName, groupLayers]) => {
-                  const isNestedGroup = groupName.includes(' → ');
-                  const isHeaderGroup = groupName.includes('__header');
-                  const parts = groupName.split(' → ');
-                  const economicIndicator = isHeaderGroup ? groupName.replace('__header', '') : parts[0];
-                  const slrScenario = parts[1];
-                  
-                  return (
-                    <CommandGroup key={groupName} heading={
-                      <div className="flex items-center gap-2">
-                        {isNestedGroup ? (
-                          // SLR scenario subgroup with indentation
-                          <div className="flex items-center gap-2 ml-6">
-                            <span className="text-xs text-muted-foreground">└─</span>
-                            <span className="text-sm font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
-                              {slrScenario}
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              {groupLayers.length}
-                            </Badge>
-                          </div>
-                        ) : (
-                          // Main economic indicator group
+                {Object.entries(groupedLayers()).map(
+                  ([groupName, groupLayers]) => {
+                    const isNestedGroup = groupName.includes(" → ");
+                    const isHeaderGroup = groupName.includes("__header");
+                    const parts = groupName.split(" → ");
+                    const economicIndicator = isHeaderGroup
+                      ? groupName.replace("__header", "")
+                      : parts[0];
+                    const slrScenario = parts[1];
+
+                    return (
+                      <CommandGroup
+                        key={groupName}
+                        heading={
                           <div className="flex items-center gap-2">
-                            {groupByEconomicIndicator && economicIndicator !== "Other Layers" && (
-                              <span>{getEconomicIndicatorIcon(economicIndicator)}</span>
-                            )}
-                            <span className="font-medium">
-                              {isHeaderGroup ? economicIndicator : groupName}
-                            </span>
-                            {groupLayers.length > 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                {groupLayers.length}
-                              </Badge>
+                            {isNestedGroup ? (
+                              // SLR scenario subgroup with indentation
+                              <div className="flex items-center gap-2 ml-6">
+                                <span className="text-xs text-muted-foreground">
+                                  └─
+                                </span>
+                                <span className="text-sm font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                                  {slrScenario}
+                                </span>
+                                <Badge variant="outline" className="text-xs">
+                                  {groupLayers.length}
+                                </Badge>
+                              </div>
+                            ) : (
+                              // Main economic indicator group
+                              <div className="flex items-center gap-2">
+                                {groupByEconomicIndicator &&
+                                  economicIndicator !== "Other Layers" && (
+                                    <span>
+                                      {getEconomicIndicatorIcon(
+                                        economicIndicator,
+                                      )}
+                                    </span>
+                                  )}
+                                <span className="font-medium">
+                                  {isHeaderGroup
+                                    ? economicIndicator
+                                    : groupName}
+                                </span>
+                                {groupLayers.length > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {groupLayers.length}
+                                  </Badge>
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    }>
-                      {groupLayers.map((layer) => (
-                        <CommandItem
-                          key={layer.id}
-                          value={layer.name}
-                          onSelect={() => handleLayerToggle(layer.id)}
-                          className={isNestedGroup ? "ml-8" : ""}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedLayerIds.includes(layer.id)
-                                ? "opacity-100"
-                                : "opacity-0"
-                            )}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm line-clamp-1">
-                              {layer.name}
+                        }
+                      >
+                        {groupLayers.map((layer) => (
+                          <CommandItem
+                            key={layer.id}
+                            value={layer.name}
+                            onSelect={() => handleLayerToggle(layer.id)}
+                            className={isNestedGroup ? "ml-8" : ""}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedLayerIds.includes(layer.id)
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm line-clamp-1">
+                                {layer.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {layer.dataType} • {layer.format}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Range: {layer.valueRange[0].toFixed(2)} -{" "}
+                                {layer.valueRange[1].toFixed(2)}
+                              </div>
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              {layer.dataType} • {layer.format}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Range: {layer.valueRange[0].toFixed(2)} - {layer.valueRange[1].toFixed(2)}
-                            </div>
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  );
-                })}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    );
+                  },
+                )}
               </CommandList>
             </Command>
           </div>

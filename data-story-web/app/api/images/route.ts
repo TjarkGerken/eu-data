@@ -17,7 +17,7 @@ export async function GET() {
         error:
           error instanceof Error ? error.message : "Failed to fetch images",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -41,7 +41,7 @@ export async function DELETE(request: NextRequest) {
         error:
           error instanceof Error ? error.message : "Failed to delete image",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

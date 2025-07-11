@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     if (!file || !layerName) {
       return NextResponse.json(
         { error: "File and layer name are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
           error:
             "Unsupported file type. Please upload .cog, .mbtiles, .tif, or .tiff files only",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const optimizedBuffer = await fs.readFile(processingResult.outputPath);
     const finalFileName = `map-layers/${path.basename(
-      processingResult.outputPath
+      processingResult.outputPath,
     )}`;
 
     const command = new PutObjectCommand({
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
         error: "Failed to process and upload file",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   } finally {
     if (tempInputPath) {

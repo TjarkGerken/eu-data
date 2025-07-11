@@ -5,7 +5,7 @@ class ContentCacheService {
   // Subscribe to cache invalidation events
   subscribe(callback: () => void) {
     this.subscribers.add(callback);
-    
+
     // Return unsubscribe function
     return () => {
       this.subscribers.delete(callback);
@@ -14,11 +14,11 @@ class ContentCacheService {
 
   // Notify all subscribers that content has changed
   invalidate() {
-    this.subscribers.forEach(callback => {
+    this.subscribers.forEach((callback) => {
       try {
         callback();
       } catch (error) {
-        console.error('Error in cache invalidation callback:', error);
+        console.error("Error in cache invalidation callback:", error);
       }
     });
   }

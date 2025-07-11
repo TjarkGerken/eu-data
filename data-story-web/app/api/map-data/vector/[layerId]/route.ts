@@ -15,7 +15,7 @@ const s3Client = new S3Client(R2_CONFIG);
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  { params }: { params: Promise<{ layerId: string }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -24,7 +24,7 @@ export async function GET(
     if (!layerId) {
       return NextResponse.json(
         { error: "Layer ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -34,7 +34,7 @@ export async function GET(
     if (!actualFileName) {
       return NextResponse.json(
         { error: `Layer ${layerId} not found` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -58,7 +58,7 @@ export async function GET(
       if (!response.Body) {
         return NextResponse.json(
           { error: `Layer ${layerId} not found` },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
@@ -77,7 +77,7 @@ export async function GET(
         const geoJson = await analyzeMBTilesCoverage(
           buffer,
           layerId,
-          actualFileName
+          actualFileName,
         );
         return NextResponse.json(geoJson);
       }
@@ -87,20 +87,20 @@ export async function GET(
         {
           error: `Unsupported vector format for ${actualFileName}. Expected .geojson or .mbtiles`,
         },
-        { status: 400 }
+        { status: 400 },
       );
     } catch (error) {
       console.error("Error processing vector data:", error);
       return NextResponse.json(
         { error: "Failed to process vector data" },
-        { status: 500 }
+        { status: 500 },
       );
     }
   } catch (error) {
     console.error("Error serving vector data:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -182,7 +182,7 @@ interface CoverageAnalysis {
 async function analyzeMBTilesCoverage(
   mbtileBuffer: Buffer,
   layerId: string,
-  fileName: string
+  fileName: string,
 ): Promise<CoverageAnalysis> {
   let tempFilePath: string | null = null;
 
@@ -358,7 +358,7 @@ async function analyzeMBTilesCoverage(
         } catch {
           console.warn(
             "Could not parse bounds from metadata:",
-            metadata.bounds
+            metadata.bounds,
           );
         }
       }
@@ -401,7 +401,7 @@ async function analyzeMBTilesCoverage(
   } catch (error) {
     console.error("Error analyzing MBTiles coverage:", error);
     throw new Error(
-      `Failed to analyze MBTiles coverage: ${(error as Error).message}`
+      `Failed to analyze MBTiles coverage: ${(error as Error).message}`,
     );
   } finally {
     // Clean up temporary file
@@ -433,7 +433,7 @@ async function extractVectorFeaturesFromMBTiles(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _layerId: string,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _fileName: string
+  _fileName: string,
 ): Promise<GeoJSON.FeatureCollection | null> {
   let tempFilePath: string | null = null;
 
@@ -481,7 +481,7 @@ async function extractVectorFeaturesFromMBTiles(
         console.log(
           "Vector tile query failed:",
           query,
-          (error as Error).message
+          (error as Error).message,
         );
       }
     }
@@ -515,7 +515,7 @@ async function extractVectorFeaturesFromMBTiles(
               const geom = feature.toGeoJSON(
                 tileRow.tile_column || tileRow.x || 0,
                 tileRow.tile_row || tileRow.y || 0,
-                tileRow.zoom_level || tileRow.z || 0
+                tileRow.zoom_level || tileRow.z || 0,
               );
 
               if (geom && geom.geometry) {
@@ -525,12 +525,20 @@ async function extractVectorFeaturesFromMBTiles(
               // Handle individual feature extraction errors
               if (featureError instanceof Error) {
                 if (featureError.message.includes("Unimplemented type")) {
-                  console.warn(`Skipping feature ${i} in layer ${layerName}: Unsupported geometry type (${featureError.message})`);
+                  console.warn(
+                    `Skipping feature ${i} in layer ${layerName}: Unsupported geometry type (${featureError.message})`,
+                  );
                 } else {
-                  console.warn(`Failed to extract feature ${i} in layer ${layerName}:`, featureError.message);
+                  console.warn(
+                    `Failed to extract feature ${i} in layer ${layerName}:`,
+                    featureError.message,
+                  );
                 }
               } else {
-                console.warn(`Failed to extract feature ${i} in layer ${layerName}:`, featureError);
+                console.warn(
+                  `Failed to extract feature ${i} in layer ${layerName}:`,
+                  featureError,
+                );
               }
               // Continue processing other features
               continue;
@@ -540,7 +548,9 @@ async function extractVectorFeaturesFromMBTiles(
       } catch (error) {
         if (error instanceof Error) {
           if (error.message.includes("Unimplemented type")) {
-            console.warn(`Skipping tile due to unsupported geometry type: ${error.message}`);
+            console.warn(
+              `Skipping tile due to unsupported geometry type: ${error.message}`,
+            );
           } else {
             console.warn("Failed to decode vector tile:", error.message);
           }
@@ -577,14 +587,14 @@ async function extractVectorFeaturesFromMBTiles(
 
 // Dynamic turf import helper to avoid bundling turf in edge environment until needed
 async function dissolvePolygons(
-  featureCollection: GeoJSON.FeatureCollection
+  featureCollection: GeoJSON.FeatureCollection,
 ): Promise<GeoJSON.FeatureCollection> {
   try {
     // Filter to only polygon/multipolygon features for dissolve
     const polygonFeatures = featureCollection.features.filter(
       (feature) =>
         feature.geometry?.type === "Polygon" ||
-        feature.geometry?.type === "MultiPolygon"
+        feature.geometry?.type === "MultiPolygon",
     );
 
     if (polygonFeatures.length === 0) {
@@ -601,7 +611,7 @@ async function dissolvePolygons(
 
     // Type assertion since we've filtered to only polygons
     const result = dissolve(
-      polygonCollection as GeoJSON.FeatureCollection<GeoJSON.Polygon>
+      polygonCollection as GeoJSON.FeatureCollection<GeoJSON.Polygon>,
     );
 
     // turf/dissolve sometimes returns a FeatureCollection and sometimes a single Feature
@@ -623,7 +633,7 @@ async function dissolvePolygons(
 
 // Generate a dissolved outline for the given layer. Returns null on failure.
 async function getLayerOutline(
-  layerId: string
+  layerId: string,
 ): Promise<GeoJSON.FeatureCollection | null> {
   try {
     // Locate the file first
@@ -643,7 +653,7 @@ async function getLayerOutline(
 
     if (actualFileName.endsWith(".geojson")) {
       const geoJson = JSON.parse(
-        buffer.toString()
+        buffer.toString(),
       ) as GeoJSON.FeatureCollection;
       return await dissolvePolygons(geoJson);
     }
@@ -653,7 +663,7 @@ async function getLayerOutline(
       const vectorFeatures = await extractVectorFeaturesFromMBTiles(
         buffer,
         layerId,
-        actualFileName
+        actualFileName,
       );
       if (vectorFeatures && vectorFeatures.features.length > 0) {
         return await dissolvePolygons(vectorFeatures);
@@ -662,7 +672,7 @@ async function getLayerOutline(
         const coverage = await analyzeMBTilesCoverage(
           buffer,
           layerId,
-          actualFileName
+          actualFileName,
         );
         const fc: GeoJSON.FeatureCollection = {
           type: "FeatureCollection",

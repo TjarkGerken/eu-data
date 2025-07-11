@@ -72,7 +72,7 @@ const interactiveMapTranslations = {
     layerControls: "Layer Controls",
     opacity: "Opacity",
     range: "Range",
-    zIndex: "z-index"
+    zIndex: "z-index",
   },
   de: {
     title: "Interaktive Klimakarte",
@@ -83,8 +83,8 @@ const interactiveMapTranslations = {
     layerControls: "Ebenen-Steuerung",
     opacity: "Deckkraft",
     range: "Bereich",
-    zIndex: "Z-Index"
-  }
+    zIndex: "Z-Index",
+  },
 };
 
 export function InteractiveMap({
@@ -108,17 +108,18 @@ export function InteractiveMap({
 }: InteractiveMapProps) {
   const { language } = useLanguage();
   const t = interactiveMapTranslations[language];
-  
+
   const [availableLayers, setAvailableLayers] = useState<MapLayerMetadata[]>(
-    []
+    [],
   );
   const [layerStates, setLayerStates] = useState<LayerState[]>([]);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [selectedScenario, setSelectedScenario] = useState<string>(
-    clusterGroups?.[0]?.id || ""
+    clusterGroups?.[0]?.id || "",
   );
-  const [selectedEconomicIndicator, setSelectedEconomicIndicator] = useState<string>("Combined");
+  const [selectedEconomicIndicator, setSelectedEconomicIndicator] =
+    useState<string>("Combined");
 
   const initializeLayerStates = useCallback(() => {
     if (!Array.isArray(availableLayers)) {
@@ -132,20 +133,26 @@ export function InteractiveMap({
       if (enableClusterGroups && clusterGroups && clusterGroups.length > 0) {
         // If cluster groups are enabled, show layers from the selected scenario
         const currentGroup = clusterGroups.find(
-          (group) => group.id === selectedScenario
+          (group) => group.id === selectedScenario,
         );
-        
+
         if (currentGroup) {
           // Start with base SLR layers from the group
           const isFromSLR = currentGroup.layerIds.includes(layer.id);
           let isFromEconomicIndicator = false;
-          
+
           // Check if economic indicators are configured and add those layers too
-          if (currentGroup.economicIndicators && currentGroup.economicIndicators[selectedEconomicIndicator]) {
-            const indicator = currentGroup.economicIndicators[selectedEconomicIndicator];
-            isFromEconomicIndicator = indicator.layers.includes(layer.id) || (indicator.clusterLayer === layer.id);
+          if (
+            currentGroup.economicIndicators &&
+            currentGroup.economicIndicators[selectedEconomicIndicator]
+          ) {
+            const indicator =
+              currentGroup.economicIndicators[selectedEconomicIndicator];
+            isFromEconomicIndicator =
+              indicator.layers.includes(layer.id) ||
+              indicator.clusterLayer === layer.id;
           }
-          
+
           // Show layer if it's either from SLR or economic indicator (or both)
           isVisible = isFromSLR || isFromEconomicIndicator;
         } else {
@@ -201,16 +208,16 @@ export function InteractiveMap({
   const toggleLayerVisibility = (layerId: string) => {
     setLayerStates((prev) =>
       prev.map((layer) =>
-        layer.id === layerId ? { ...layer, visible: !layer.visible } : layer
-      )
+        layer.id === layerId ? { ...layer, visible: !layer.visible } : layer,
+      ),
     );
   };
 
   const updateLayerOpacity = (layerId: string, opacity: number) => {
     setLayerStates((prev) =>
       prev.map((layer) =>
-        layer.id === layerId ? { ...layer, opacity: opacity / 100 } : layer
-      )
+        layer.id === layerId ? { ...layer, opacity: opacity / 100 } : layer,
+      ),
     );
   };
 
@@ -269,7 +276,9 @@ export function InteractiveMap({
               {title || t.title}
             </CardTitle>
             {(description || t.description) && (
-              <p className="text-muted-foreground mt-2">{description || t.description}</p>
+              <p className="text-muted-foreground mt-2">
+                {description || t.description}
+              </p>
             )}
           </div>
           {enableLayerControls && (
@@ -314,10 +323,10 @@ export function InteractiveMap({
                         style={{
                           background: layer.metadata.styleConfig?.rasterScheme
                             ? createGradientFromStops(
-                                layer.metadata.styleConfig.rasterScheme.colors
+                                layer.metadata.styleConfig.rasterScheme.colors,
                               )
                             : `linear-gradient(to right, ${layer.metadata.colorScale.join(
-                                ", "
+                                ", ",
                               )})`,
                           opacity: layer.opacity,
                         }}
@@ -331,24 +340,30 @@ export function InteractiveMap({
           </div>
 
           {/* Economic Indicator Selector */}
-          {enableClusterGroups && clusterGroups && clusterGroups.length > 0 && (
+          {enableClusterGroups &&
+            clusterGroups &&
+            clusterGroups.length > 0 &&
             (() => {
               // Check if any scenario has economic indicators configured
-              const hasAnyEconomicIndicators = clusterGroups.some(group => 
-                group.economicIndicators && Object.keys(group.economicIndicators).length > 0
+              const hasAnyEconomicIndicators = clusterGroups.some(
+                (group) =>
+                  group.economicIndicators &&
+                  Object.keys(group.economicIndicators).length > 0,
               );
-              
+
               if (hasAnyEconomicIndicators) {
                 // Get all unique economic indicators across all scenarios
                 const allIndicators = new Set<string>();
-                clusterGroups.forEach(group => {
+                clusterGroups.forEach((group) => {
                   if (group.economicIndicators) {
-                    Object.keys(group.economicIndicators).forEach(indicator => {
-                      allIndicators.add(indicator);
-                    });
+                    Object.keys(group.economicIndicators).forEach(
+                      (indicator) => {
+                        allIndicators.add(indicator);
+                      },
+                    );
                   }
                 });
-                
+
                 return (
                   <div className="w-full">
                     <EconomicIndicatorSelector
@@ -360,8 +375,7 @@ export function InteractiveMap({
                 );
               }
               return null;
-            })()
-          )}
+            })()}
 
           {/* SLR Scenario Slider */}
           {enableClusterGroups && clusterGroups && clusterGroups.length > 0 && (
@@ -436,7 +450,8 @@ export function InteractiveMap({
                               {layer.zIndex ?? layer.metadata.zIndex ?? 50}
                             </Badge>
                             <span className="text-xs text-muted-foreground">
-                              {t.range}: {layer.metadata.valueRange[0].toFixed(2)} -{" "}
+                              {t.range}:{" "}
+                              {layer.metadata.valueRange[0].toFixed(2)} -{" "}
                               {layer.metadata.valueRange[1].toFixed(2)}
                             </span>
                           </div>

@@ -1,83 +1,200 @@
-# Data Story Web Application
+# EU Climate Data Story Web Application
 
-This Next.js application provides an interactive data story interface with comprehensive admin management capabilities.
+A sophisticated Next.js application for interactive climate data storytelling with comprehensive content management capabilities. This platform combines modern web technologies with specialized scientific data visualization for European climate risk assessment communication.
 
-## Features
+## 🎯 Overview
 
-### Admin Panel (`/admin`)
+This application serves as an interactive data story platform that transforms complex climate risk assessment data into compelling, accessible narratives. Built with Next.js 15 and React 19, it features a dynamic block-based content system, advanced mapping capabilities, and a powerful admin interface for content management.
 
-#### Content Management (`/admin/content`)
+### Core Capabilities
 
-- **Multi-language support**: Edit content in English and German
-- **Basic Content**: Hero section and main introduction text
-- **Visualizations Management**: Create and edit visualization cards
-- **References Management**: Full CRUD operations for bibliography
+- **Interactive Data Storytelling**: Dynamic, block-based content system with 15+ specialized visualization types
+- **Advanced Mapping**: Multiple map layers with scientific data overlays xand real-time interaction
+- **Multilingual CMS**: Complete bilingual content management (English/German) with admin interface
+- **Scientific Visualization**: Specialized components for climate dashboards, statistics, and impact analysis
+- **Academic Integration**: Citation management system with global reference processing
+- **Cloud Storage**: Cloudflare R2 integration supporting large geospatial files up to 500MB
 
-#### Visualizations Features
+## 🏗️ Architecture
 
-- **Rich Editor**: Title, description, content, and type selection
-- **Image Integration**: Visual dropdown with thumbnail previews
-- **Reference Linking**: Multi-select dropdown for bibliography
-- **Dynamic Preview**: Changes reflect immediately on main page
+### Technology Stack
 
-#### References Management
+**Core Framework:**
 
-- **Complete Bibliography**: ID, title, authors, year, journal, URL
-- **Type Categories**: Journal, Report, Dataset, Book with color coding
-- **Search & Filter**: Searchable dropdown across all visualizations
-- **Auto-linking**: References automatically appear in sidebar
+- **Next.js 15.2.4** with App Router and React 19
+- **TypeScript** with strict configuration for type safety
+- **Tailwind CSS** with shadcn/ui component library
+- **Turbopack** for optimized development
 
-#### Image Management (`/admin/images`)
+**Data & Storage:**
 
-- **Multi-category Support**: Hazard, Risk, Exposition, Combined
-- **Scenario Detection**: Automatic current/severe scenario recognition
-- **Thumbnail Previews**: Visual selection with category badges
-- **Dynamic Loading**: Real-time image availability
+- **Supabase** for database management and real-time features
+- **Cloudflare R2** for large file storage (S3-compatible)
 
-## Architecture
+**Mapping & Geospatial:**
 
-### Data Structure
+- **Leaflet** with advanced plugins for interactive maps
+- **Turf.js** for geospatial data processing
+- **Proj4** for coordinate system transformations
+- **Vector tiles** with dynamic styling support
 
-```
-Supabase Database
-├── content_stories       # Story containers (EN/DE)
-├── content_blocks        # Individual content blocks
-│   ├── block_type       # Type of content block
-│   ├── order_index      # Display order
-│   ├── data             # Block-specific data
-│   ├── title            # Optional title
-│   ├── content          # Optional content
-│   └── language         # Language code
-├── content_references   # Global bibliography
-└── block_references     # Block-reference associations
-```
+**Additional Libraries:**
 
-### Component Hierarchy
+- **Framer Motion** for animations and transitions
+- **React Hook Form** with Zod validation
+- **Recharts** for data visualization
+- **AWS SDK** for Cloudflare R2 integration
+
+### Application Structure
 
 ```
-AdminPanel
-├── ContentManagement
-│   ├── BasicContent (per language)
-│   ├── VisualizationsEditor
-│   │   ├── ReferencesDropdown
-│   │   └── ImageDropdown
-│   └── ReferencesManager
-└── ImageManagement
+data-story-web/
+├── app/                          # Next.js App Router
+│   ├── (main)/                   # Main story pages
+│   ├── admin/                    # Admin interface
+│   ├── api/                      # API routes
+│   │   ├── content/              # Content management endpoints
+│   │   ├── map-data/             # Map data serving
+│   │   ├── map-layers/           # Layer management
+│   │   ├── images/               # Image handling
+│   │   └── storage/              # File storage operations
+│   └── gallery/                  # Image gallery
+├── components/                   # React components
+│   ├── admin/                    # Admin-specific components
+│   ├── blocks/                   # Content block components
+│   ├── maps/                     # Mapping components
+│   └── ui/                       # Reusable UI components
+├── contexts/                     # React contexts (i18n, auth)
+├── lib/                          # Utilities and services
+├── database/                     # Database migrations
+├── hooks/                        # Custom React hooks
+└── public/                       # Static assets
 ```
 
-### Type System (`lib/types.ts`)
+## 🧩 Content Management System
 
-- `Reference`: Bibliography entries
-- `Visualization`: Content cards with media
-- `LanguageContent`: Per-language content structure
-- `ContentData`: Complete data model
-- `ImageOption`: Image metadata with previews
+### Dynamic Block System
 
-## Development Commands
+The application features a sophisticated block-based content architecture with 15+ specialized block types:
+
+**Core Content Blocks:**
+
+- **Markdown Block**: Rich text with markdown support
+- **Callout Block**: Highlighted information boxes
+- **Animated Quote**: Dynamic quotations with visual effects
+- **Animated Statistics**: Interactive statistical displays
+- **Climate Dashboard**: Comprehensive climate data visualization
+- **Interactive Callout**: Engaging interactive content
+- **Impact Comparison**: Side-by-side impact analysis
+- **KPI Showcase**: Key performance indicator displays
+
+**Advanced Visualization Blocks:**
+
+- **Interactive Maps**: Leaflet-based mapping with custom layers
+- **Infrastructure Maps**: Transportation and infrastructure visualization
+- **Economic Indicators**: Financial impact visualization
+- **Hero Video**: Landing page video integration
+
+### Admin Interface (`/admin`)
+
+**Content Management (`/admin/content`):**
+
+- Multilingual story editing (English/German)
+- Visual block editor with real-time preview
+- Reference management with citation linking
+- Block ordering and content validation
+
+**Image Management (`/admin/images`):**
+
+- Multi-category support (Hazard, Risk, Exposition, Combined)
+- Automatic scenario detection
+- Thumbnail generation and preview
+- Cloudflare R2 integration for large files
+
+**Layer Management:**
+
+- Interactive map layer administration
+- Vector and raster layer styling
+- Upload support for .tif, .cog, .mbtiles files
+- Dynamic layer ordering and visibility controls
+
+## 🗺️ Advanced Mapping System
+
+### Map Components
+
+**Interactive Map (`components/maps/interactive-map.tsx`):**
+
+- Multi-layer climate data visualization
+- Economic indicator overlay
+- Dynamic styling and filtering
+- Real-time data interaction
+
+**Infrastructure Map (`components/maps/infrastructure-map.tsx`):**
+
+- Transportation network visualization
+- Port and logistics data display
+- Economic impact analysis
+
+### Map Data APIs
+
+**Vector Tile Serving:**
+
+- Dynamic tile generation at `/api/map-data/vector/[layerId]/[z]/[x]/[y]`
+- Style management for vector layers
+- Real-time layer updates
+
+**Raster Data Handling:**
+
+- Cloud Optimized GeoTIFF (COG) support
+- Color scheme management
+- Multi-resolution tile serving
+
+**Cluster Analysis:**
+
+- Dynamic cluster data at `/api/map-data/clusters/[scenario]`
+- DBSCAN algorithm integration
+- Alpha-shape polygon generation
+
+## 📊 Database Schema
+
+### Core Tables (Supabase)
+
+**Content Management:**
+
+```sql
+content_stories       # Story metadata (titles, descriptions, language)
+content_blocks        # Dynamic content blocks with JSON data
+content_references    # Academic citations and bibliography
+block_references      # Many-to-many block-citation relationships
+```
+
+**Asset Management:**
+
+```sql
+climate_images        # Image metadata with blob storage URLs
+layer_styles          # Map layer styling configurations
+```
+
+### Migration System
+
+Automated database migrations in `database/migrations/`:
+
+- Schema evolution tracking
+- Layer style management
+- Reference system enhancements
+- Content block field additions
+
+## 🔧 Development
+
+### Quick Start
 
 ```bash
 # Install dependencies
 pnpm install
+
+# Set up environment variables
+cp .env.example .env.local
+# Edit .env.local with your configuration
 
 # Start development server
 pnpm dev
@@ -89,117 +206,111 @@ pnpm build
 pnpm type-check
 ```
 
-## Admin Authentication
-
-Access admin panel at `/admin` with session-based authentication.
-
-## API Endpoints
-
-- `GET /api/content` - Fetch content blocks from database
-- `POST /api/content` - Create new content blocks
-- `PUT /api/content` - Create block pairs (EN/DE)
-- `GET /api/images/[category]` - Fetch category images
-- `POST /api/images/upload` - Upload new images
-
-## Key Features
-
-✅ **References Tab**: Complete bibliography management
-✅ **Reference Dropdowns**: Visual selection for visualizations  
-✅ **Image Previews**: Thumbnail-based image selection
-✅ **Multi-language**: English/German content editing
-✅ **Real-time Updates**: Changes appear immediately
-✅ **Type Safety**: Full TypeScript coverage
-
-## Storage Migration: Supabase → Cloudflare R2
-
-The application has been migrated from Supabase storage to Cloudflare R2 for better scalability and larger file support.
-
-### Key Changes:
-
-- **File Size Limit**: Increased from 50MB to 500MB
-- **Supported File Types**: Added support for `.tif` and `.tiff` files for cluster layer processing
-- **Storage Backend**: Migrated to Cloudflare R2 with S3-compatible API
-- **URL Structure**: Files now served from `tjarkgerken.com/eu-data/` custom domain
-
 ### Environment Configuration
 
-Create a `.env.local` file in the `data-story-web` directory with the following variables:
+Create `.env.local` with the following variables:
 
 ```env
-# Cloudflare R2 Storage Configuration (Required)
-R2_ENDPOINT=https://daa96ebb0b3ee7e44349906f0f752c94.r2.cloudflarestorage.com
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Cloudflare R2 Storage (Required)
+R2_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
 R2_ACCESS_KEY_ID=your_r2_access_key_id
 R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 R2_BUCKET_NAME=eu-data
 
-# Custom Domain (Optional - fallback to development URL if not set)
+# Custom Domain (Optional)
 R2_PUBLIC_URL_BASE=https://tjarkgerken.com/eu-data
+
+# Authentication
+AUTH_SECRET=your_auth_secret
 ```
 
-**Required Environment Variables:**
+### Development Commands
 
-- `R2_ENDPOINT` - Your Cloudflare R2 S3-compatible API endpoint
-- `R2_ACCESS_KEY_ID` - Your R2 access key ID
-- `R2_SECRET_ACCESS_KEY` - Your R2 secret access key
-- `R2_BUCKET_NAME` - The name of your R2 bucket (`eu-data`)
+```bash
+# Package management with pnpm
+pnpm install                    # Install dependencies
+pnpm dev                       # Development server with Turbopack
+pnpm build                     # Production build
+pnpm start                     # Start production server
+pnpm lint                      # ESLint checking
+pnpm type-check               # TypeScript validation
+pnpm db:migrate               # Run database migrations
+pnpm db:generate              # Generate database types
+```
 
-**Optional Environment Variables:**
+## 📋 API Reference
 
-- `R2_PUBLIC_URL_BASE` - Custom domain for public file access. If not set, falls back to development URL: `https://pub-d032794d3f654d3eb7dfb097724ded50.r2.dev`
+### Content Management APIs
 
-### Supported File Types
+```
+GET  /api/content              # Fetch content blocks
+POST /api/content              # Create new content blocks
+PUT  /api/content              # Update content blocks
+GET  /api/stories              # Fetch story metadata
+POST /api/stories              # Create new stories
+```
 
-#### Map Layers:
+### File Management APIs
+
+```
+POST /api/images/upload        # Upload climate images
+GET  /api/images/[category]    # Fetch category images
+POST /api/storage/upload       # General file upload
+GET  /api/storage/upload       # List stored files
+```
+
+### Map Data APIs
+
+```
+GET  /api/map-data/vector/[layerId]/[z]/[x]/[y]  # Vector tiles
+GET  /api/map-data/cog/[layerId]                 # Raster tiles
+GET  /api/map-data/clusters/[scenario]           # Cluster data
+POST /api/map-layers/upload                      # Layer upload
+GET  /api/map-layers/[layerId]                   # Layer metadata
+```
+
+## 🗂️ File Support
+
+### Supported Formats
+
+**Map Layers:**
 
 - `.cog` - Cloud Optimized GeoTIFF (raster data)
 - `.mbtiles` - Vector tiles for interactive maps
 - `.tif`, `.tiff` - TIFF raster data for cluster processing
+- `.gpkg` - GeoPackage vector data
 
-#### Climate Images:
+**Climate Images:**
 
 - `.png`, `.jpg`, `.jpeg`, `.webp` - Standard image formats
 - `.tiff` - High-resolution climate data visualizations
 
-### Cluster Layer Workflow
+### Storage Capabilities
 
-The cluster layer approach processes risk assessment data through the following pipeline:
+- **File Size Limit**: Up to 500MB per file
+- **Storage Backend**: Cloudflare R2 with S3-compatible API
+- **CDN Integration**: Custom domain support for fast delivery
+- **Metadata Tracking**: Comprehensive file metadata and versioning
 
-1. **Input**: `.tif` files containing risk assessment results from eu_climate
-2. **Processing**: Cluster extraction using DBSCAN and alpha-shape algorithms
-3. **Output**: Web-optimized formats (`.gpkg`, `.mbtiles`, `.png`) for visualization
+### Docker Deployment
 
-### Storage Structure
+```dockerfile
+# Build container
+docker build -t eu-climate-web .
 
-```
-eu-data/
-├── map-layers/           # Uploaded map layers (.cog, .mbtiles, .tif)
-├── climate-images/       # Climate visualization images
-│   ├── risk/            # Risk scenario images
-│   ├── hazard/          # Hazard layer visualizations
-│   ├── exposition/      # Exposition data images
-│   └── combined/        # Combined assessment results
-└── metadata/            # JSON metadata for all assets
+# Run with environment file
+docker run --env-file .env.local -p 3000:3000 eu-climate-web
 ```
 
-### API Endpoints
+## 📖 Further Documentation
 
-- `POST /api/map-layers/upload` - Upload map layers (supports .tif files)
-- `POST /api/storage/upload` - Upload climate images
-- `GET /api/storage/upload` - List stored files by category/scenario
+- **EU Climate Framework**: See `../eu_climate/README.md` for data processing
+- **Database Schema**: Check `database/migrations/` for structure
+- **Component Library**: Explore `components/ui/` for reusable components
+- **API Documentation**: Review individual endpoint files in `app/api/`
 
-### Testing the Migration
-
-To verify the migration is working correctly:
-
-1. **Test .tif Upload**: Visit `/admin` and try uploading a `.tif` file
-2. **Verify R2 Storage**: Check that files appear in the Cloudflare R2 bucket
-3. **Test Large Files**: Upload files larger than 50MB (up to 500MB supported)
-
-### Development
-
-```bash
-pnpm install
-pnpm dev
-```
-
-The application will start on `http://localhost:3000` with the layer manager accessible at `/admin`.
+For technical support and detailed implementation information, refer to individual component documentation and the configuration files.

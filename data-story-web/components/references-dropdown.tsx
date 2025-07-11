@@ -73,7 +73,7 @@ export function ReferencesDropdown({
       .map((id) => references.find((ref) => ref.id === id))
       .filter(Boolean)
       .map((ref) => {
-        if (!ref || !ref.id || !ref.title) return '';
+        if (!ref || !ref.id || !ref.title) return "";
         return `[${ref.id}] ${ref.title.substring(0, 30)}${
           ref.title.length > 30 ? "..." : ""
         }`;
@@ -143,7 +143,7 @@ export function ReferencesDropdown({
                       "h-4 w-4 mt-1 shrink-0",
                       selectedReferences.includes(reference.id)
                         ? "opacity-100"
-                        : "opacity-0"
+                        : "opacity-0",
                     )}
                   />
                   <div className="flex-1 min-w-0">

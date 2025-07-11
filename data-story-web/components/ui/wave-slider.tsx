@@ -19,13 +19,13 @@ const waveSliderTranslations = {
   en: {
     title: "Sea Level Rise Scenarios",
     current: "Current",
-    none: "None"
+    none: "None",
   },
   de: {
     title: "Meeresspiegelanstieg-Szenarien",
     current: "Aktuell",
-    none: "Keine"
-  }
+    none: "Keine",
+  },
 };
 
 export function WaveSlider({
@@ -90,9 +90,7 @@ export function WaveSlider({
 
   return (
     <div className={cn("w-full space-y-3", className)}>
-      <div className="text-sm font-medium text-center">
-        {t.title}
-      </div>
+      <div className="text-sm font-medium text-center">{t.title}</div>
 
       <div className="relative bg-stone-100 rounded-lg p-4 overflow-hidden border border-stone-200">
         {/* Wave background animation - earthy colors */}
@@ -164,15 +162,15 @@ export function WaveSlider({
                   "border-2 backdrop-blur-sm hover:backdrop-blur-md",
                   isSelected
                     ? `${colors.bgSelected} ${colors.textSelected} ${colors.border} shadow-lg`
-                    : `${colors.bg} ${colors.text} border-white/50 hover:border-white/80 hover:bg-white/80`
+                    : `${colors.bg} ${colors.text} border-white/50 hover:border-white/80 hover:bg-white/80`,
                 )}
                 style={{
                   transform: isHovered ? "translateY(-2px)" : "none",
                   boxShadow: isSelected
                     ? `0 4px 20px ${colors.shadow}`
                     : isHovered
-                    ? "0 2px 10px rgba(0, 0, 0, 0.1)"
-                    : "none",
+                      ? "0 2px 10px rgba(0, 0, 0, 0.1)"
+                      : "none",
                 }}
               >
                 <div className="space-y-1">
@@ -186,7 +184,7 @@ export function WaveSlider({
                 <div
                   className={cn(
                     "absolute bottom-0 left-0 right-0 rounded-b-lg transition-all duration-300",
-                    isSelected ? colors.waterLevel : colors.waterLevelInactive
+                    isSelected ? colors.waterLevel : colors.waterLevelInactive,
                   )}
                   style={{
                     height: `${Math.min(waveHeight / 2, 30)}px`,

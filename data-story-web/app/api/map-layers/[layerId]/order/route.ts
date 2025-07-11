@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ layerId: string }> }
+  { params }: { params: Promise<{ layerId: string }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -13,14 +13,14 @@ export async function PUT(
     if (!layerId) {
       return NextResponse.json(
         { error: "Layer ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (typeof zIndex !== "number") {
       return NextResponse.json(
         { error: "Valid zIndex number is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -46,7 +46,7 @@ export async function PUT(
     console.error("Error updating layer order:", error);
     return NextResponse.json(
       { error: "Failed to update layer order" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

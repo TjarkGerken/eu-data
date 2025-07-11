@@ -67,14 +67,14 @@ export default function MultilingualStoryEditor() {
 
       if (error) throw error;
 
-      const mappedStories: Story[] = (data || []).map(story => ({
+      const mappedStories: Story[] = (data || []).map((story) => ({
         id: story.id,
         languageCode: story.language_code,
-        heroTitle: story.hero_title || '',
-        heroDescription: story.hero_description || '',
-        dataStoryTitle: story.data_story_title || '',
-        dataStorySubtitle: '', // Not in database, using default
-        introText: story.intro_text_1 || '', // Using intro_text_1 as introText
+        heroTitle: story.hero_title || "",
+        heroDescription: story.hero_description || "",
+        dataStoryTitle: story.data_story_title || "",
+        dataStorySubtitle: "", // Not in database, using default
+        introText: story.intro_text_1 || "", // Using intro_text_1 as introText
       }));
 
       setStories(mappedStories);
@@ -115,7 +115,7 @@ export default function MultilingualStoryEditor() {
 
     try {
       const existingStory = stories.find(
-        (s) => s.languageCode === languageCode
+        (s) => s.languageCode === languageCode,
       );
 
       const storyData = {
@@ -161,7 +161,7 @@ export default function MultilingualStoryEditor() {
     data: StoryData,
     setData: (data: StoryData) => void,
     language: string,
-    languageCode: string
+    languageCode: string,
   ) => (
     <div className="space-y-6">
       <div className="space-y-2">

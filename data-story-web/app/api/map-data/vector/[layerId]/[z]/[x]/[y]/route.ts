@@ -18,7 +18,7 @@ export async function GET(
   request: NextRequest,
   {
     params,
-  }: { params: Promise<{ layerId: string; z: string; x: string; y: string }> }
+  }: { params: Promise<{ layerId: string; z: string; x: string; y: string }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -34,7 +34,7 @@ export async function GET(
     if (isNaN(zoom) || isNaN(tileX) || isNaN(tileY)) {
       return NextResponse.json(
         { error: "Invalid tile coordinates" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -44,7 +44,7 @@ export async function GET(
     if (!actualFileName) {
       return NextResponse.json(
         { error: `Layer ${layerId} not found` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -59,7 +59,7 @@ export async function GET(
     if (!response.Body) {
       return NextResponse.json(
         { error: `MBTiles file not found` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -73,7 +73,7 @@ export async function GET(
     if (!tileData) {
       return NextResponse.json(
         { error: `Tile not found: ${z}/${x}/${y}` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -97,7 +97,7 @@ export async function GET(
     console.error("Error serving vector tile:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -159,14 +159,14 @@ async function getTileFromMBTiles(
   mbtileBuffer: Buffer,
   zoom: number,
   x: number,
-  y: number
+  y: number,
 ): Promise<Buffer | null> {
   let tempFilePath: string | null = null;
 
   try {
     tempFilePath = join(
       tmpdir(),
-      `temp_${Date.now()}_${zoom}_${x}_${y}.mbtiles`
+      `temp_${Date.now()}_${zoom}_${x}_${y}.mbtiles`,
     );
     writeFileSync(tempFilePath, mbtileBuffer);
 

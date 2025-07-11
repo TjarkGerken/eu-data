@@ -54,13 +54,13 @@ export function ReferencesSidebar({ references = [] }: ReferencesSidebarProps) {
 
     window.addEventListener(
       "highlightReference",
-      handleHighlightReference as EventListener
+      handleHighlightReference as EventListener,
     );
 
     return () => {
       window.removeEventListener(
         "highlightReference",
-        handleHighlightReference as EventListener
+        handleHighlightReference as EventListener,
       );
     };
   }, []);

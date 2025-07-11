@@ -17,7 +17,7 @@ const s3Client = new S3Client(R2_CONFIG);
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ params: string[] }> }
+  { params }: { params: Promise<{ params: string[] }> },
 ) {
   try {
     const resolvedParams = await params;
@@ -25,7 +25,7 @@ export async function GET(
     if (!resolvedParams.params || resolvedParams.params.length < 4) {
       return NextResponse.json(
         { error: "Invalid tile request" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -41,7 +41,7 @@ export async function GET(
     if (isNaN(zoom) || isNaN(x) || isNaN(y)) {
       return NextResponse.json(
         { error: "Invalid coordinates" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -66,7 +66,7 @@ export async function GET(
           recommendation:
             "Use a mapping library like Leaflet with georaster-layer-for-leaflet or OpenLayers with ol-source-geotiff",
         },
-        { status: 410 }
+        { status: 410 },
       );
     }
 
@@ -84,7 +84,7 @@ export async function GET(
         if (!response.Body) {
           return NextResponse.json(
             { error: "MBTiles file not found in storage" },
-            { status: 404 }
+            { status: 404 },
           );
         }
 
@@ -124,7 +124,7 @@ export async function GET(
                 "X-Layer-Format": metadata.format || "unknown",
                 "X-Layer-Type": "vector",
               },
-            }
+            },
           );
         }
 
@@ -135,7 +135,7 @@ export async function GET(
         // If tile not found at requested zoom, try lower zoom levels down to 6
         if (!tileData && zoom > 6) {
           console.log(
-            `Tile not found at zoom ${zoom}, trying lower zoom levels...`
+            `Tile not found at zoom ${zoom}, trying lower zoom levels...`,
           );
 
           for (let fallbackZoom = zoom - 1; fallbackZoom >= 6; fallbackZoom--) {
@@ -147,12 +147,12 @@ export async function GET(
               buffer,
               fallbackZoom,
               parentX,
-              parentY
+              parentY,
             );
             if (tileData) {
               actualZoom = fallbackZoom;
               console.log(
-                `Found tile at fallback zoom ${fallbackZoom} (${parentX}/${parentY})`
+                `Found tile at fallback zoom ${fallbackZoom} (${parentX}/${parentY})`,
               );
               break;
             }
@@ -167,7 +167,7 @@ export async function GET(
               suggestion:
                 "This layer may have limited zoom coverage or incorrect bounds",
             },
-            { status: 404 }
+            { status: 404 },
           );
         }
 
@@ -207,20 +207,20 @@ export async function GET(
         console.error("Error extracting tile from MBTiles:", error);
         return NextResponse.json(
           { error: "Failed to extract tile from MBTiles" },
-          { status: 500 }
+          { status: 500 },
         );
       }
     }
 
     return NextResponse.json(
       { error: "Layer not found or not in supported format (COG/MBTiles)" },
-      { status: 404 }
+      { status: 404 },
     );
   } catch (error) {
     console.error("Error serving tile:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -282,7 +282,7 @@ function convertFilenameToLayerId(fileName: string): string {
 }
 
 async function getMBTilesMetadata(
-  mbtileBuffer: Buffer
+  mbtileBuffer: Buffer,
 ): Promise<Record<string, string>> {
   let tempFilePath: string | null = null;
   let db: Database.Database | null = null;
@@ -335,7 +335,7 @@ async function getTileFromMBTiles(
   mbtileBuffer: Buffer,
   zoom: number,
   x: number,
-  y: number
+  y: number,
 ): Promise<Buffer | null> {
   let tempFilePath: string | null = null;
   let db: Database.Database | null = null;
@@ -343,7 +343,7 @@ async function getTileFromMBTiles(
   try {
     tempFilePath = join(
       tmpdir(),
-      `temp_${Date.now()}_${zoom}_${x}_${y}.mbtiles`
+      `temp_${Date.now()}_${zoom}_${x}_${y}.mbtiles`,
     );
     writeFileSync(tempFilePath, mbtileBuffer);
 
@@ -432,7 +432,7 @@ async function getTileFromMBTiles(
           console.log(
             `Found tile ${zoom}/${x}/${y} using query ${
               i + 1
-            } with coordinates ${z}/${tx}/${ty}`
+            } with coordinates ${z}/${tx}/${ty}`,
           );
           return row.tile_data;
         }
@@ -445,7 +445,7 @@ async function getTileFromMBTiles(
     // If no tile found, check if any tiles exist at this zoom level
     try {
       const zoomCheckStmt = db.prepare(
-        "SELECT COUNT(*) as count FROM tiles WHERE zoom_level = ?"
+        "SELECT COUNT(*) as count FROM tiles WHERE zoom_level = ?",
       );
       const zoomCount = zoomCheckStmt.get(zoom) as
         | { count: number }
@@ -480,7 +480,7 @@ async function getTileFromMBTiles(
 
 function detectTileContentType(
   tileData: Buffer,
-  metadata?: Record<string, string>
+  metadata?: Record<string, string>,
 ): string {
   // First check metadata format if available
   if (metadata?.format) {

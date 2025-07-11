@@ -7,7 +7,7 @@ import { promisify } from "util";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ scenario: string }> }
+  { params }: { params: Promise<{ scenario: string }> },
 ) {
   try {
     const { scenario } = await params;
@@ -15,7 +15,7 @@ export async function GET(
     if (!scenario) {
       return NextResponse.json(
         { error: "Scenario parameter is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -37,7 +37,7 @@ export async function GET(
       if (!geoJsonData) {
         return NextResponse.json(
           { error: "No cluster data found for scenario" },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
@@ -59,7 +59,7 @@ export async function GET(
         if (!localGeoJsonData) {
           return NextResponse.json(
             { error: "Cluster data not available" },
-            { status: 404 }
+            { status: 404 },
           );
         }
 
@@ -73,7 +73,7 @@ export async function GET(
         console.error("Local file error:", localError);
         return NextResponse.json(
           { error: "Cluster data not available" },
-          { status: 404 }
+          { status: 404 },
         );
       }
     }
@@ -81,7 +81,7 @@ export async function GET(
     console.error("Error serving cluster data:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -96,12 +96,12 @@ function getLocalClusterFilePath(scenario: string): string {
     "public",
     "clusters",
     scenario,
-    `clusters_${scenario}_COMBINED.geojson`
+    `clusters_${scenario}_COMBINED.geojson`,
   );
 }
 
 async function convertGeoPackageToGeoJSON(
-  buffer: Buffer
+  buffer: Buffer,
 ): Promise<object | null> {
   try {
     const execAsync = promisify(exec);

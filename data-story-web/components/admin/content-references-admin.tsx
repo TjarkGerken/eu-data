@@ -116,7 +116,7 @@ export default function ContentReferencesAdmin() {
     try {
       const result = await validateReadableIdUniqueness(
         readableId,
-        editingId || undefined
+        editingId || undefined,
       );
 
       setReadableIdValidation({
@@ -446,8 +446,8 @@ export default function ContentReferencesAdmin() {
                     readableIdValidation.isValid === false
                       ? "border-red-500"
                       : readableIdValidation.isValid === true
-                      ? "border-green-500"
-                      : ""
+                        ? "border-green-500"
+                        : ""
                   }
                 />
                 <Button
@@ -478,8 +478,8 @@ export default function ContentReferencesAdmin() {
                       readableIdValidation.isValid === true
                         ? "text-green-600"
                         : readableIdValidation.isValid === false
-                        ? "text-red-600"
-                        : "text-gray-600"
+                          ? "text-red-600"
+                          : "text-gray-600"
                     }
                   >
                     {readableIdValidation.message}

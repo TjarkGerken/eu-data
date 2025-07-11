@@ -87,8 +87,8 @@ export default function KpiShowcaseBlockComponent({
                       kpi.trend === "up"
                         ? "text-green-600"
                         : kpi.trend === "down"
-                        ? "text-red-600"
-                        : "text-gray-600"
+                          ? "text-red-600"
+                          : "text-gray-600"
                     }`}
                   >
                     {kpi.changeValue}

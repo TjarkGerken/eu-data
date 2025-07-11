@@ -61,7 +61,7 @@ export default function ClimateImagesAdmin() {
   const [captionEn, setCaptionEn] = useState("");
   const [captionDe, setCaptionDe] = useState("");
   const [editingImage, setEditingImage] = useState<CloudflareR2Image | null>(
-    null
+    null,
   );
   const [editIndicators, setEditIndicators] = useState<EconomicIndicator[]>([]);
   const [editCategory, setEditCategory] = useState<ImageCategory>("risk");
@@ -452,7 +452,7 @@ export default function ClimateImagesAdmin() {
                       {formatDate(
                         image.metadata?.uploadedAt
                           ? image.metadata.uploadedAt.toString()
-                          : null
+                          : null,
                       )}
                     </TableCell>
                     <TableCell>

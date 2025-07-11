@@ -19,10 +19,10 @@ const economicIndicatorTranslations = {
     indicators: {
       Combined: "Combined",
       Freight: "Freight",
-      Population: "Population", 
+      Population: "Population",
       HRST: "HRST",
-      GDP: "GDP"
-    }
+      GDP: "GDP",
+    },
   },
   de: {
     title: "Wirtschaftsindikatoren",
@@ -32,9 +32,9 @@ const economicIndicatorTranslations = {
       Freight: "Fracht",
       Population: "Bevölkerung",
       HRST: "HRST",
-      GDP: "BIP"
-    }
-  }
+      GDP: "BIP",
+    },
+  },
 };
 
 export function EconomicIndicatorSelector({
@@ -105,9 +105,7 @@ export function EconomicIndicatorSelector({
 
   return (
     <div className={cn("w-full space-y-3", className)}>
-      <div className="text-sm font-medium text-center">
-        {t.title}
-      </div>
+      <div className="text-sm font-medium text-center">{t.title}</div>
 
       <div className="relative bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-4 border border-slate-200">
         {/* Background pattern */}
@@ -149,15 +147,15 @@ export function EconomicIndicatorSelector({
                   "border-2 backdrop-blur-sm hover:backdrop-blur-md min-h-[80px] flex flex-col items-center justify-center",
                   isSelected
                     ? `${styles.bgSelected} ${styles.textSelected} ${styles.border} shadow-lg`
-                    : `${styles.bg} ${styles.text} border-white/50 hover:border-white/80 hover:bg-white/80`
+                    : `${styles.bg} ${styles.text} border-white/50 hover:border-white/80 hover:bg-white/80`,
                 )}
                 style={{
                   transform: isHovered ? "translateY(-2px)" : "none",
                   boxShadow: isSelected
                     ? `0 4px 20px ${styles.shadow}`
                     : isHovered
-                    ? "0 2px 10px rgba(0, 0, 0, 0.1)"
-                    : "none",
+                      ? "0 2px 10px rgba(0, 0, 0, 0.1)"
+                      : "none",
                 }}
               >
                 <div className="space-y-1 text-center">

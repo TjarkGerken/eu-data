@@ -165,7 +165,7 @@ export function useDynamicContent() {
       // Add cache busting for forced reloads
       const cacheParam = forceReload ? `&_t=${Date.now()}` : "";
       const response = await fetch(
-        `/api/content?language=${language}${cacheParam}`
+        `/api/content?language=${language}${cacheParam}`,
       );
       if (!response.ok) {
         throw new Error("Failed to fetch content");

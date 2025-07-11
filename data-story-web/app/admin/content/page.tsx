@@ -37,11 +37,7 @@ import {
   Move,
   BookOpen,
 } from "lucide-react";
-import {
-  DataStoryBlock,
-  Reference,
-  ContentData,
-} from "@/lib/types";
+import { DataStoryBlock, Reference, ContentData } from "@/lib/types";
 import { MultiSelectReferences } from "@/components/ui/multi-select-references";
 import { ImageDropdown } from "@/components/image-dropdown";
 
@@ -49,10 +45,10 @@ export default function ContentAdminPage() {
   const [content, setContent] = useState<ContentData | null>(null);
   const [activeLanguage, setActiveLanguage] = useState<"en" | "de">("en");
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(
-    null
+    null,
   );
   const [newBlock, setNewBlock] = useState<Partial<DataStoryBlock> | null>(
-    null
+    null,
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -80,7 +76,7 @@ export default function ContentAdminPage() {
 
       // Load content for this story
       const contentResponse = await fetch(
-        `/api/content?storyId=${currentStoryId}`
+        `/api/content?storyId=${currentStoryId}`,
       );
       const data = await contentResponse.json();
       setContent(data);
@@ -133,7 +129,7 @@ export default function ContentAdminPage() {
         throw new Error(
           `HTTP error! status: ${response.status}, details: ${
             errorData.details || errorData.error
-          }`
+          }`,
         );
       }
 
@@ -147,7 +143,7 @@ export default function ContentAdminPage() {
       alert(
         `Failed to save content: ${
           error instanceof Error ? error.message : "Unknown error"
-        }`
+        }`,
       );
     } finally {
       setSaving(false);
@@ -277,14 +273,14 @@ export default function ContentAdminPage() {
 
   const ensureBlocksSynchronized = (
     targetBlocks: DataStoryBlock[],
-    sourceBlocks: DataStoryBlock[]
+    sourceBlocks: DataStoryBlock[],
   ) => {
     // If target has fewer blocks, add placeholder blocks of the same type
     while (targetBlocks.length < sourceBlocks.length) {
       const sourceBlock = sourceBlocks[targetBlocks.length];
       const placeholderBlock = createPlaceholderBlock(
         sourceBlock.type,
-        activeLanguage === "en" ? "de" : "en"
+        activeLanguage === "en" ? "de" : "en",
       );
       targetBlocks.push(placeholderBlock);
     }
@@ -299,7 +295,7 @@ export default function ContentAdminPage() {
       if (targetBlocks[i].type !== sourceBlocks[i].type) {
         targetBlocks[i] = createPlaceholderBlock(
           sourceBlocks[i].type,
-          activeLanguage === "en" ? "de" : "en"
+          activeLanguage === "en" ? "de" : "en",
         );
       }
     }
@@ -307,7 +303,7 @@ export default function ContentAdminPage() {
 
   const createPlaceholderBlock = (
     type: DataStoryBlock["type"],
-    language: "en" | "de"
+    language: "en" | "de",
   ): DataStoryBlock => {
     const isGerman = language === "de";
 
@@ -437,7 +433,7 @@ export default function ContentAdminPage() {
         };
 
       case "climate-dashboard":
-        return        {
+        return {
           type: "climate-dashboard",
           title: isGerman ? "Klima-Dashboard" : "Climate Dashboard",
           metrics: [
@@ -499,10 +495,6 @@ export default function ContentAdminPage() {
             },
           ],
         };
-
-
-
-
 
       case "interactive-map":
         return {
@@ -570,7 +562,7 @@ export default function ContentAdminPage() {
         throw new Error(
           `Failed to add block. Status: ${response.status}. ${
             errorData.error || ""
-          }`
+          }`,
         );
       }
 
@@ -597,7 +589,7 @@ export default function ContentAdminPage() {
       alert(
         `Failed to add block: ${
           error instanceof Error ? error.message : "Unknown error"
-        }`
+        }`,
       );
     }
   };
@@ -610,7 +602,7 @@ export default function ContentAdminPage() {
     // Also delete the corresponding block from the other language
     const otherLanguage = activeLanguage === "en" ? "de" : "en";
     const otherBlocks = content[otherLanguage].blocks.filter(
-      (_, i) => i !== index
+      (_, i) => i !== index,
     );
 
     setContent({
@@ -662,7 +654,7 @@ export default function ContentAdminPage() {
         throw new Error(
           `HTTP error! status: ${response.status}, details: ${
             errorData.details || errorData.error
-          }`
+          }`,
         );
       }
 
@@ -672,7 +664,7 @@ export default function ContentAdminPage() {
       alert(
         `Failed to save block: ${
           error instanceof Error ? error.message : "Unknown error"
-        }`
+        }`,
       );
     } finally {
       setSaving(false);
@@ -682,7 +674,7 @@ export default function ContentAdminPage() {
   const updateReference = (
     index: number,
     field: keyof Reference,
-    value: string | string[] | number
+    value: string | string[] | number,
   ) => {
     if (!content) return;
 
@@ -723,13 +715,16 @@ export default function ContentAdminPage() {
   };
 
   const renderBlockEditor = (block: DataStoryBlock, isNew = false) => {
-    const updateField = (field: string, value: string | number | boolean | object) => {
+    const updateField = (
+      field: string,
+      value: string | number | boolean | object,
+    ) => {
       if (isNew && newBlock) {
         setNewBlock({ ...newBlock, [field]: value });
       } else if (!isNew) {
         const updatedBlock = { ...block, [field]: value };
         const index = content![activeLanguage].blocks.findIndex(
-          (b, i) => i === editingBlockIndex
+          (b, i) => i === editingBlockIndex,
         );
         if (index !== -1) {
           updateBlock(index, updatedBlock);
@@ -824,40 +819,45 @@ export default function ContentAdminPage() {
         return (
           <div className="space-y-4">
             <Label>Statistics</Label>
-            {blockData.stats?.map((stat: { label: string; value: string; description?: string }, index: number) => (
-              <div key={index} className="grid grid-cols-3 gap-2">
-                <Input
-                  placeholder="Label"
-                  value={stat.label}
-                  onChange={(e) => {
-                    const stats = [...(blockData.stats || [])];
-                    stats[index] = { ...stats[index], label: e.target.value };
-                    updateField("stats", stats);
-                  }}
-                />
-                <Input
-                  placeholder="Value"
-                  value={stat.value}
-                  onChange={(e) => {
-                    const stats = [...(blockData.stats || [])];
-                    stats[index] = { ...stats[index], value: e.target.value };
-                    updateField("stats", stats);
-                  }}
-                />
-                <Input
-                  placeholder="Description"
-                  value={stat.description || ""}
-                  onChange={(e) => {
-                    const stats = [...(blockData.stats || [])];
-                    stats[index] = {
-                      ...stats[index],
-                      description: e.target.value,
-                    };
-                    updateField("stats", stats);
-                  }}
-                />
-              </div>
-            ))}
+            {blockData.stats?.map(
+              (
+                stat: { label: string; value: string; description?: string },
+                index: number,
+              ) => (
+                <div key={index} className="grid grid-cols-3 gap-2">
+                  <Input
+                    placeholder="Label"
+                    value={stat.label}
+                    onChange={(e) => {
+                      const stats = [...(blockData.stats || [])];
+                      stats[index] = { ...stats[index], label: e.target.value };
+                      updateField("stats", stats);
+                    }}
+                  />
+                  <Input
+                    placeholder="Value"
+                    value={stat.value}
+                    onChange={(e) => {
+                      const stats = [...(blockData.stats || [])];
+                      stats[index] = { ...stats[index], value: e.target.value };
+                      updateField("stats", stats);
+                    }}
+                  />
+                  <Input
+                    placeholder="Description"
+                    value={stat.description || ""}
+                    onChange={(e) => {
+                      const stats = [...(blockData.stats || [])];
+                      stats[index] = {
+                        ...stats[index],
+                        description: e.target.value,
+                      };
+                      updateField("stats", stats);
+                    }}
+                  />
+                </div>
+              ),
+            )}
             <Button
               type="button"
               variant="outline"
@@ -879,40 +879,51 @@ export default function ContentAdminPage() {
         return (
           <div className="space-y-4">
             <Label>Timeline Events</Label>
-            {blockData.events?.map((event: { year: string; title: string; description: string }, index: number) => (
-              <div key={index} className="grid grid-cols-3 gap-2">
-                <Input
-                  placeholder="Year"
-                  value={event.year}
-                  onChange={(e) => {
-                    const events = [...(blockData.events || [])];
-                    events[index] = { ...events[index], year: e.target.value };
-                    updateField("events", events);
-                  }}
-                />
-                <Input
-                  placeholder="Title"
-                  value={event.title}
-                  onChange={(e) => {
-                    const events = [...(blockData.events || [])];
-                    events[index] = { ...events[index], title: e.target.value };
-                    updateField("events", events);
-                  }}
-                />
-                <Input
-                  placeholder="Description"
-                  value={event.description}
-                  onChange={(e) => {
-                    const events = [...(blockData.events || [])];
-                    events[index] = {
-                      ...events[index],
-                      description: e.target.value,
-                    };
-                    updateField("events", events);
-                  }}
-                />
-              </div>
-            ))}
+            {blockData.events?.map(
+              (
+                event: { year: string; title: string; description: string },
+                index: number,
+              ) => (
+                <div key={index} className="grid grid-cols-3 gap-2">
+                  <Input
+                    placeholder="Year"
+                    value={event.year}
+                    onChange={(e) => {
+                      const events = [...(blockData.events || [])];
+                      events[index] = {
+                        ...events[index],
+                        year: e.target.value,
+                      };
+                      updateField("events", events);
+                    }}
+                  />
+                  <Input
+                    placeholder="Title"
+                    value={event.title}
+                    onChange={(e) => {
+                      const events = [...(blockData.events || [])];
+                      events[index] = {
+                        ...events[index],
+                        title: e.target.value,
+                      };
+                      updateField("events", events);
+                    }}
+                  />
+                  <Input
+                    placeholder="Description"
+                    value={event.description}
+                    onChange={(e) => {
+                      const events = [...(blockData.events || [])];
+                      events[index] = {
+                        ...events[index],
+                        description: e.target.value,
+                      };
+                      updateField("events", events);
+                    }}
+                  />
+                </div>
+              ),
+            )}
             <Button
               type="button"
               variant="outline"
@@ -1005,7 +1016,9 @@ export default function ContentAdminPage() {
             <div>
               <Label>References</Label>
               <MultiSelectReferences
-                selectedReferenceIds={(blockData.data.references as string[]) || []}
+                selectedReferenceIds={
+                  (blockData.data.references as string[]) || []
+                }
                 onSelectionChange={(selectedIds) => {
                   updateField("data", {
                     ...blockData.data,
@@ -1066,68 +1079,92 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>Statistics</Label>
-              {(blockData.stats || []).map((stat: { icon: string; value: string; label: string; change?: string; trend?: "up" | "down"; color: string }, index: number) => (
-                <Card key={index} className="p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium">Statistic {index + 1}</h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const newStats = [...(blockData.stats || [])];
-                        newStats.splice(index, 1);
-                        updateField("stats", newStats);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Icon"
-                      value={stat.icon || ""}
-                      onChange={(e) => {
-                        const newStats = [...(blockData.stats || [])];
-                        newStats[index] = { ...newStats[index], icon: e.target.value };
-                        updateField("stats", newStats);
-                      }}
-                    />
-                    <Input
-                      placeholder="Value"
-                      value={stat.value || ""}
-                      onChange={(e) => {
-                        const newStats = [...(blockData.stats || [])];
-                        newStats[index] = { ...newStats[index], value: e.target.value };
-                        updateField("stats", newStats);
-                      }}
-                    />
-                    <Input
-                      placeholder="Label"
-                      value={stat.label || ""}
-                      onChange={(e) => {
-                        const newStats = [...(blockData.stats || [])];
-                        newStats[index] = { ...newStats[index], label: e.target.value };
-                        updateField("stats", newStats);
-                      }}
-                    />
-                    <Input
-                      placeholder="Color"
-                      value={stat.color || ""}
-                      onChange={(e) => {
-                        const newStats = [...(blockData.stats || [])];
-                        newStats[index] = { ...newStats[index], color: e.target.value };
-                        updateField("stats", newStats);
-                      }}
-                    />
-                  </div>
-                </Card>
-              ))}
+              {(blockData.stats || []).map(
+                (
+                  stat: {
+                    icon: string;
+                    value: string;
+                    label: string;
+                    change?: string;
+                    trend?: "up" | "down";
+                    color: string;
+                  },
+                  index: number,
+                ) => (
+                  <Card key={index} className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-medium">Statistic {index + 1}</h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newStats = [...(blockData.stats || [])];
+                          newStats.splice(index, 1);
+                          updateField("stats", newStats);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Icon"
+                        value={stat.icon || ""}
+                        onChange={(e) => {
+                          const newStats = [...(blockData.stats || [])];
+                          newStats[index] = {
+                            ...newStats[index],
+                            icon: e.target.value,
+                          };
+                          updateField("stats", newStats);
+                        }}
+                      />
+                      <Input
+                        placeholder="Value"
+                        value={stat.value || ""}
+                        onChange={(e) => {
+                          const newStats = [...(blockData.stats || [])];
+                          newStats[index] = {
+                            ...newStats[index],
+                            value: e.target.value,
+                          };
+                          updateField("stats", newStats);
+                        }}
+                      />
+                      <Input
+                        placeholder="Label"
+                        value={stat.label || ""}
+                        onChange={(e) => {
+                          const newStats = [...(blockData.stats || [])];
+                          newStats[index] = {
+                            ...newStats[index],
+                            label: e.target.value,
+                          };
+                          updateField("stats", newStats);
+                        }}
+                      />
+                      <Input
+                        placeholder="Color"
+                        value={stat.color || ""}
+                        onChange={(e) => {
+                          const newStats = [...(blockData.stats || [])];
+                          newStats[index] = {
+                            ...newStats[index],
+                            color: e.target.value,
+                          };
+                          updateField("stats", newStats);
+                        }}
+                      />
+                    </div>
+                  </Card>
+                ),
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
                   const newStats = [
                     ...(blockData.stats || []),
-                    { icon: "", value: "", label: "", color: "text-red-500" }
+                    { icon: "", value: "", label: "", color: "text-red-500" },
                   ];
                   updateField("stats", newStats);
                 }}
@@ -1137,8 +1174,6 @@ export default function ContentAdminPage() {
             </div>
           </div>
         );
-
-
 
       case "climate-dashboard":
         return (
@@ -1152,50 +1187,76 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>Metrics</Label>
-              {(blockData.metrics || []).map((metric: { title: string; value: string; change: string; trend: "up" | "down"; status: "success" | "warning" | "danger"; progress: number; target: string; description: string }, index: number) => (
-                <Card key={index} className="p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium">Metric {index + 1}</h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const newMetrics = [...(blockData.metrics || [])];
-                        newMetrics.splice(index, 1);
-                        updateField("metrics", newMetrics);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Title"
-                      value={metric.title || ""}
-                      onChange={(e) => {
-                        const newMetrics = [...(blockData.metrics || [])];
-                        newMetrics[index] = { ...newMetrics[index], title: e.target.value };
-                        updateField("metrics", newMetrics);
-                      }}
-                    />
-                    <Input
-                      placeholder="Value"
-                      value={metric.value || ""}
-                      onChange={(e) => {
-                        const newMetrics = [...(blockData.metrics || [])];
-                        newMetrics[index] = { ...newMetrics[index], value: e.target.value };
-                        updateField("metrics", newMetrics);
-                      }}
-                    />
-                  </div>
-                </Card>
-              ))}
+              {(blockData.metrics || []).map(
+                (
+                  metric: {
+                    title: string;
+                    value: string;
+                    change: string;
+                    trend: "up" | "down";
+                    status: "success" | "warning" | "danger";
+                    progress: number;
+                    target: string;
+                    description: string;
+                  },
+                  index: number,
+                ) => (
+                  <Card key={index} className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-medium">Metric {index + 1}</h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newMetrics = [...(blockData.metrics || [])];
+                          newMetrics.splice(index, 1);
+                          updateField("metrics", newMetrics);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Title"
+                        value={metric.title || ""}
+                        onChange={(e) => {
+                          const newMetrics = [...(blockData.metrics || [])];
+                          newMetrics[index] = {
+                            ...newMetrics[index],
+                            title: e.target.value,
+                          };
+                          updateField("metrics", newMetrics);
+                        }}
+                      />
+                      <Input
+                        placeholder="Value"
+                        value={metric.value || ""}
+                        onChange={(e) => {
+                          const newMetrics = [...(blockData.metrics || [])];
+                          newMetrics[index] = {
+                            ...newMetrics[index],
+                            value: e.target.value,
+                          };
+                          updateField("metrics", newMetrics);
+                        }}
+                      />
+                    </div>
+                  </Card>
+                ),
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
                   const newMetrics = [
                     ...(blockData.metrics || []),
-                    { title: "", value: "", change: "", trend: "up", status: "success" }
+                    {
+                      title: "",
+                      value: "",
+                      change: "",
+                      trend: "up",
+                      status: "success",
+                    },
                   ];
                   updateField("metrics", newMetrics);
                 }}
@@ -1205,8 +1266,6 @@ export default function ContentAdminPage() {
             </div>
           </div>
         );
-
-
 
       case "interactive-callout":
         return (
@@ -1254,8 +1313,6 @@ export default function ContentAdminPage() {
           </div>
         );
 
-
-
       case "impact-comparison":
         return (
           <div className="space-y-4">
@@ -1268,70 +1325,110 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>Comparisons</Label>
-              {(blockData.comparisons || []).map((comparison: { category: string; currentValue: number; projectedValue: number; unit: string; severity: "low" | "medium" | "high"; description?: string }, index: number) => (
-                <Card key={index} className="p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium">Comparison {index + 1}</h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const newComparisons = [...(blockData.comparisons || [])];
-                        newComparisons.splice(index, 1);
-                        updateField("comparisons", newComparisons);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Category"
-                      value={comparison.category || ""}
-                      onChange={(e) => {
-                        const newComparisons = [...(blockData.comparisons || [])];
-                        newComparisons[index] = { ...newComparisons[index], category: e.target.value };
-                        updateField("comparisons", newComparisons);
-                      }}
-                    />
-                    <Input
-                      placeholder="Unit"
-                      value={comparison.unit || ""}
-                      onChange={(e) => {
-                        const newComparisons = [...(blockData.comparisons || [])];
-                        newComparisons[index] = { ...newComparisons[index], unit: e.target.value };
-                        updateField("comparisons", newComparisons);
-                      }}
-                    />
-                    <Input
-                      placeholder="Current Value"
-                      type="number"
-                      value={comparison.currentValue || ""}
-                      onChange={(e) => {
-                        const newComparisons = [...(blockData.comparisons || [])];
-                        newComparisons[index] = { ...newComparisons[index], currentValue: parseFloat(e.target.value) };
-                        updateField("comparisons", newComparisons);
-                      }}
-                    />
-                    <Input
-                      placeholder="Projected Value"
-                      type="number"
-                      value={comparison.projectedValue || ""}
-                      onChange={(e) => {
-                        const newComparisons = [...(blockData.comparisons || [])];
-                        newComparisons[index] = { ...newComparisons[index], projectedValue: parseFloat(e.target.value) };
-                        updateField("comparisons", newComparisons);
-                      }}
-                    />
-                  </div>
-                </Card>
-              ))}
+              {(blockData.comparisons || []).map(
+                (
+                  comparison: {
+                    category: string;
+                    currentValue: number;
+                    projectedValue: number;
+                    unit: string;
+                    severity: "low" | "medium" | "high";
+                    description?: string;
+                  },
+                  index: number,
+                ) => (
+                  <Card key={index} className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-medium">Comparison {index + 1}</h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newComparisons = [
+                            ...(blockData.comparisons || []),
+                          ];
+                          newComparisons.splice(index, 1);
+                          updateField("comparisons", newComparisons);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Category"
+                        value={comparison.category || ""}
+                        onChange={(e) => {
+                          const newComparisons = [
+                            ...(blockData.comparisons || []),
+                          ];
+                          newComparisons[index] = {
+                            ...newComparisons[index],
+                            category: e.target.value,
+                          };
+                          updateField("comparisons", newComparisons);
+                        }}
+                      />
+                      <Input
+                        placeholder="Unit"
+                        value={comparison.unit || ""}
+                        onChange={(e) => {
+                          const newComparisons = [
+                            ...(blockData.comparisons || []),
+                          ];
+                          newComparisons[index] = {
+                            ...newComparisons[index],
+                            unit: e.target.value,
+                          };
+                          updateField("comparisons", newComparisons);
+                        }}
+                      />
+                      <Input
+                        placeholder="Current Value"
+                        type="number"
+                        value={comparison.currentValue || ""}
+                        onChange={(e) => {
+                          const newComparisons = [
+                            ...(blockData.comparisons || []),
+                          ];
+                          newComparisons[index] = {
+                            ...newComparisons[index],
+                            currentValue: parseFloat(e.target.value),
+                          };
+                          updateField("comparisons", newComparisons);
+                        }}
+                      />
+                      <Input
+                        placeholder="Projected Value"
+                        type="number"
+                        value={comparison.projectedValue || ""}
+                        onChange={(e) => {
+                          const newComparisons = [
+                            ...(blockData.comparisons || []),
+                          ];
+                          newComparisons[index] = {
+                            ...newComparisons[index],
+                            projectedValue: parseFloat(e.target.value),
+                          };
+                          updateField("comparisons", newComparisons);
+                        }}
+                      />
+                    </div>
+                  </Card>
+                ),
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
                   const newComparisons = [
                     ...(blockData.comparisons || []),
-                    { category: "", currentValue: 0, projectedValue: 0, unit: "", severity: "medium" }
+                    {
+                      category: "",
+                      currentValue: 0,
+                      projectedValue: 0,
+                      unit: "",
+                      severity: "medium",
+                    },
                   ];
                   updateField("comparisons", newComparisons);
                 }}
@@ -1354,68 +1451,98 @@ export default function ContentAdminPage() {
             </div>
             <div>
               <Label>KPIs</Label>
-              {(blockData.kpis || []).map((kpi: { title: string; value: string; unit?: string; trend?: "up" | "down" | "stable"; changeValue?: string; color?: string }, index: number) => (
-                <Card key={index} className="p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium">KPI {index + 1}</h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const newKpis = [...(blockData.kpis || [])];
-                        newKpis.splice(index, 1);
-                        updateField("kpis", newKpis);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Title"
-                      value={kpi.title || ""}
-                      onChange={(e) => {
-                        const newKpis = [...(blockData.kpis || [])];
-                        newKpis[index] = { ...newKpis[index], title: e.target.value };
-                        updateField("kpis", newKpis);
-                      }}
-                    />
-                    <Input
-                      placeholder="Value"
-                      value={kpi.value || ""}
-                      onChange={(e) => {
-                        const newKpis = [...(blockData.kpis || [])];
-                        newKpis[index] = { ...newKpis[index], value: e.target.value };
-                        updateField("kpis", newKpis);
-                      }}
-                    />
-                    <Input
-                      placeholder="Unit"
-                      value={kpi.unit || ""}
-                      onChange={(e) => {
-                        const newKpis = [...(blockData.kpis || [])];
-                        newKpis[index] = { ...newKpis[index], unit: e.target.value };
-                        updateField("kpis", newKpis);
-                      }}
-                    />
-                    <Input
-                      placeholder="Change Value"
-                      value={kpi.changeValue || ""}
-                      onChange={(e) => {
-                        const newKpis = [...(blockData.kpis || [])];
-                        newKpis[index] = { ...newKpis[index], changeValue: e.target.value };
-                        updateField("kpis", newKpis);
-                      }}
-                    />
-                  </div>
-                </Card>
-              ))}
+              {(blockData.kpis || []).map(
+                (
+                  kpi: {
+                    title: string;
+                    value: string;
+                    unit?: string;
+                    trend?: "up" | "down" | "stable";
+                    changeValue?: string;
+                    color?: string;
+                  },
+                  index: number,
+                ) => (
+                  <Card key={index} className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-medium">KPI {index + 1}</h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newKpis = [...(blockData.kpis || [])];
+                          newKpis.splice(index, 1);
+                          updateField("kpis", newKpis);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Title"
+                        value={kpi.title || ""}
+                        onChange={(e) => {
+                          const newKpis = [...(blockData.kpis || [])];
+                          newKpis[index] = {
+                            ...newKpis[index],
+                            title: e.target.value,
+                          };
+                          updateField("kpis", newKpis);
+                        }}
+                      />
+                      <Input
+                        placeholder="Value"
+                        value={kpi.value || ""}
+                        onChange={(e) => {
+                          const newKpis = [...(blockData.kpis || [])];
+                          newKpis[index] = {
+                            ...newKpis[index],
+                            value: e.target.value,
+                          };
+                          updateField("kpis", newKpis);
+                        }}
+                      />
+                      <Input
+                        placeholder="Unit"
+                        value={kpi.unit || ""}
+                        onChange={(e) => {
+                          const newKpis = [...(blockData.kpis || [])];
+                          newKpis[index] = {
+                            ...newKpis[index],
+                            unit: e.target.value,
+                          };
+                          updateField("kpis", newKpis);
+                        }}
+                      />
+                      <Input
+                        placeholder="Change Value"
+                        value={kpi.changeValue || ""}
+                        onChange={(e) => {
+                          const newKpis = [...(blockData.kpis || [])];
+                          newKpis[index] = {
+                            ...newKpis[index],
+                            changeValue: e.target.value,
+                          };
+                          updateField("kpis", newKpis);
+                        }}
+                      />
+                    </div>
+                  </Card>
+                ),
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
                   const newKpis = [
                     ...(blockData.kpis || []),
-                    { title: "", value: "", unit: "", trend: "stable", color: "text-[#2d5a3d]" }
+                    {
+                      title: "",
+                      value: "",
+                      unit: "",
+                      trend: "stable",
+                      color: "text-[#2d5a3d]",
+                    },
                   ];
                   updateField("kpis", newKpis);
                 }}
@@ -1459,10 +1586,6 @@ export default function ContentAdminPage() {
             </div>
           </div>
         );
-
-
-
-
 
       default:
         return null;
@@ -1818,7 +1941,6 @@ export default function ContentAdminPage() {
                         KPI Showcase
                       </Button>
 
-
                       <Button
                         onClick={() => addBlock("interactive-map")}
                         variant="outline"
@@ -1927,7 +2049,7 @@ export default function ContentAdminPage() {
                             updateReference(
                               index,
                               "authors",
-                              e.target.value.split(", ")
+                              e.target.value.split(", "),
                             )
                           }
                         />
@@ -1941,7 +2063,7 @@ export default function ContentAdminPage() {
                             updateReference(
                               index,
                               "year",
-                              parseInt(e.target.value)
+                              parseInt(e.target.value),
                             )
                           }
                         />

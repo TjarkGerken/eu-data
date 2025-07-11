@@ -13,13 +13,11 @@ export interface Reference {
   readable_id: string;
 }
 
-
-
 export function parseCitationsFromText(text: string): CitationMatch[] {
-  if (!text || typeof text !== 'string') {
+  if (!text || typeof text !== "string") {
     return [];
   }
-  
+
   const citationPattern = /\\cite\{([^}]+)\}/g;
   const matches: CitationMatch[] = [];
   const seenRefs = new Set<string>();
@@ -28,7 +26,7 @@ export function parseCitationsFromText(text: string): CitationMatch[] {
 
   while ((match = citationPattern.exec(text)) !== null) {
     const referenceId = match[1];
-    
+
     if (referenceId && !seenRefs.has(referenceId)) {
       seenRefs.add(referenceId);
       matches.push({
@@ -45,7 +43,7 @@ export function parseCitationsFromText(text: string): CitationMatch[] {
 
 export function orderReferencesByCitation(
   references: Reference[],
-  citationMatches: CitationMatch[]
+  citationMatches: CitationMatch[],
 ): Reference[] {
   if (!Array.isArray(references) || !Array.isArray(citationMatches)) {
     return references || [];
@@ -53,8 +51,8 @@ export function orderReferencesByCitation(
 
   const orderedRefs: Reference[] = [];
   const refMap = new Map<string, Reference>();
-  
-  references.forEach(ref => {
+
+  references.forEach((ref) => {
     if (ref && ref.id) {
       refMap.set(ref.id, ref);
     }
@@ -63,13 +61,13 @@ export function orderReferencesByCitation(
   citationMatches.forEach(({ referenceId }) => {
     if (!referenceId) return;
     const ref = refMap.get(referenceId);
-    if (ref && !orderedRefs.find(r => r.id === ref.id)) {
+    if (ref && !orderedRefs.find((r) => r.id === ref.id)) {
       orderedRefs.push(ref);
     }
   });
 
-  references.forEach(ref => {
-    if (ref && ref.id && !orderedRefs.find(r => r.id === ref.id)) {
+  references.forEach((ref) => {
+    if (ref && ref.id && !orderedRefs.find((r) => r.id === ref.id)) {
       orderedRefs.push(ref);
     }
   });
@@ -79,24 +77,24 @@ export function orderReferencesByCitation(
 
 export function getCitationNumber(
   referenceId: string,
-  citationMatches: CitationMatch[]
+  citationMatches: CitationMatch[],
 ): number | null {
-  const match = citationMatches.find(m => m.referenceId === referenceId);
+  const match = citationMatches.find((m) => m.referenceId === referenceId);
   return match ? match.citationNumber : null;
 }
 
 export function renderTextWithCitations(
   text: string,
-  citationMatches: CitationMatch[]
+  citationMatches: CitationMatch[],
 ): string {
   if (citationMatches.length === 0) return text;
 
   const refNumberMap = new Map(
-    citationMatches.map(m => [m.referenceId, m.citationNumber])
+    citationMatches.map((m) => [m.referenceId, m.citationNumber]),
   );
 
   return text.replace(/\\cite\{([^}]+)\}/g, (match, referenceId) => {
     const citationNumber = refNumberMap.get(referenceId);
     return citationNumber ? `[${citationNumber}]` : match;
   });
-} 
+}

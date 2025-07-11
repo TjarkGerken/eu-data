@@ -109,8 +109,8 @@ export default function ImpactComparisonBlockComponent({
                           ? "Anstieg erwartet"
                           : "Increase expected"
                         : language === "de"
-                        ? "Rückgang erwartet"
-                        : "Decrease expected"}
+                          ? "Rückgang erwartet"
+                          : "Decrease expected"}
                     </p>
                   </div>
                 </CardContent>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -34,7 +34,14 @@ interface InfrastructureMapProps {
   seamarkOpacity?: number;
   enableSeamarkLayer?: boolean;
   tileServerOption?: "openseamap" | "hybrid";
-  infrastructureFocus?: "rotterdam" | "groningen" | "amsterdam" | "schiphol" | "sloehaven" | "full" | "custom";
+  infrastructureFocus?:
+    | "rotterdam"
+    | "groningen"
+    | "amsterdam"
+    | "schiphol"
+    | "sloehaven"
+    | "full"
+    | "custom";
   showControls?: boolean;
   enableRailwayLayer?: boolean;
   railwayOpacity?: number;
@@ -49,8 +56,8 @@ interface InfrastructureMapProps {
 }
 
 const INFRASTRUCTURE_COORDINATES = {
-  rotterdam: { lat: 51.93971438866205, lng: 4.1296399384512394, zoom: 12 }, 
-  groningen: { lat: 53.44610707492235, lng: 6.8335077397728945, zoom: 13 }, 
+  rotterdam: { lat: 51.93971438866205, lng: 4.1296399384512394, zoom: 12 },
+  groningen: { lat: 53.44610707492235, lng: 6.8335077397728945, zoom: 13 },
   amsterdam: { lat: 52.41698553531954, lng: 4.804527798530235, zoom: 12 },
   schiphol: { lat: 52.3105, lng: 4.7683, zoom: 13 },
   sloehaven: { lat: 51.3774, lng: 3.5952, zoom: 13 },
@@ -62,7 +69,8 @@ const INFRASTRUCTURE_COORDINATES = {
 const infrastructureTranslations = {
   en: {
     title: "Interactive Infrastructure Map",
-    description: "Explore transportation infrastructure and connectivity networks",
+    description:
+      "Explore transportation infrastructure and connectivity networks",
     controlsTitle: "Infrastructure Map Controls",
     focusLabel: "Infrastructure Focus",
     mapStyleLabel: "Map Style",
@@ -86,11 +94,11 @@ const infrastructureTranslations = {
       amsterdam: "Amsterdam (NL)",
       schiphol: "Schiphol Airport (NL)",
       sloehaven: "Sloehaven Port (NL)",
-      full: "Full View (NL)"
+      full: "Full View (NL)",
     },
     focusArea: "Focus Area",
     seaMarkLayerStatus: "Sea Marks Layer",
-    railwayLayerStatus: "Railway Layer"
+    railwayLayerStatus: "Railway Layer",
   },
   de: {
     title: "Interaktive Infrastrukturkarte",
@@ -118,12 +126,12 @@ const infrastructureTranslations = {
       amsterdam: "Amsterdam (NL)",
       schiphol: "Schiphol Flughafen (NL)",
       sloehaven: "Sloehaven Hafen (NL)",
-      full: "Vollansicht (NL)"
+      full: "Vollansicht (NL)",
     },
     focusArea: "Fokusbereich",
     seaMarkLayerStatus: "Seezeichen-Schicht",
-    railwayLayerStatus: "Eisenbahn-Schicht"
-  }
+    railwayLayerStatus: "Eisenbahn-Schicht",
+  },
 };
 
 export function InfrastructureMap({
@@ -151,7 +159,7 @@ export function InfrastructureMap({
 }: InfrastructureMapProps) {
   const { language } = useLanguage();
   const t = infrastructureTranslations[language];
-  
+
   const [mapControls, setMapControls] = useState({
     seamarkOpacity: seamarkOpacity,
     enableSeamarkLayer: enableSeamarkLayer,
@@ -168,7 +176,10 @@ export function InfrastructureMap({
     if (centerLat && centerLng && zoom) {
       return { lat: centerLat, lng: centerLng, zoom: zoom };
     }
-    return INFRASTRUCTURE_COORDINATES[mapControls.infrastructureFocus] || INFRASTRUCTURE_COORDINATES.rotterdam;
+    return (
+      INFRASTRUCTURE_COORDINATES[mapControls.infrastructureFocus] ||
+      INFRASTRUCTURE_COORDINATES.rotterdam
+    );
   };
 
   const coordinates = getMapCoordinates();
@@ -177,7 +188,8 @@ export function InfrastructureMap({
     const baseConfig = {
       baseTileLayer: {
         url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 18,
       },
       overlayTileLayers: [] as Array<{
@@ -191,7 +203,8 @@ export function InfrastructureMap({
     if (mapControls.enableSeamarkLayer) {
       baseConfig.overlayTileLayers.push({
         url: "https://t1.openseamap.org/seamark/{z}/{x}/{y}.png",
-        attribution: 'Sea marks &copy; <a href="http://www.openseamap.org">OpenSeaMap</a> contributors',
+        attribution:
+          'Sea marks &copy; <a href="http://www.openseamap.org">OpenSeaMap</a> contributors',
         maxZoom: 18,
         opacity: mapControls.seamarkOpacity / 100,
       });
@@ -201,7 +214,8 @@ export function InfrastructureMap({
     if (mapControls.enableRailwayLayer) {
       baseConfig.overlayTileLayers.push({
         url: `https://{s}.tiles.openrailwaymap.org/${mapControls.railwayStyle}/{z}/{x}/{y}.png`,
-        attribution: 'Railways: <a href="https://www.openstreetmap.org/copyright">&copy; OpenStreetMap contributors</a>, Style: <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA 2.0</a> <a href="http://www.openrailwaymap.org/">OpenRailwayMap</a>',
+        attribution:
+          'Railways: <a href="https://www.openstreetmap.org/copyright">&copy; OpenStreetMap contributors</a>, Style: <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA 2.0</a> <a href="http://www.openrailwaymap.org/">OpenRailwayMap</a>',
         maxZoom: 19,
         opacity: mapControls.railwayOpacity / 100,
       });
@@ -211,7 +225,8 @@ export function InfrastructureMap({
       // Use satellite imagery as base for hybrid view
       baseConfig.baseTileLayer = {
         url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attribution: "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+        attribution:
+          "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
         maxZoom: 18,
       };
     }
@@ -221,8 +236,11 @@ export function InfrastructureMap({
 
   const tileConfig = getTileConfiguration();
 
-  const updateControl = (key: keyof typeof mapControls, value: string | number | boolean) => {
-    setMapControls(prev => ({ ...prev, [key]: value }));
+  const updateControl = (
+    key: keyof typeof mapControls,
+    value: string | number | boolean,
+  ) => {
+    setMapControls((prev) => ({ ...prev, [key]: value }));
   };
 
   const getLocationDisplayName = (location: string) => {
@@ -231,10 +249,14 @@ export function InfrastructureMap({
 
   const getRailwayStyleDisplayName = (style: string) => {
     switch (style) {
-      case "standard": return t.infrastructureSignals;
-      case "signals": return t.railwaySignals;
-      case "maxspeed": return t.speedLimits;
-      default: return style;
+      case "standard":
+        return t.infrastructureSignals;
+      case "signals":
+        return t.railwaySignals;
+      case "maxspeed":
+        return t.speedLimits;
+      default:
+        return style;
     }
   };
 
@@ -248,7 +270,9 @@ export function InfrastructureMap({
               {title || t.title}
             </CardTitle>
             {(description || t.description) && (
-              <p className="text-muted-foreground mt-2">{description || t.description}</p>
+              <p className="text-muted-foreground mt-2">
+                {description || t.description}
+              </p>
             )}
           </div>
           {showControls && (
@@ -324,26 +348,41 @@ export function InfrastructureMap({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Infrastructure Focus Selection */}
                     {showInfrastructureFocusControl && (
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium">{t.focusLabel}</Label>
+                        <Label className="text-sm font-medium">
+                          {t.focusLabel}
+                        </Label>
                         <Select
                           value={mapControls.infrastructureFocus}
-                          onValueChange={(value) => updateControl("infrastructureFocus", value)}
+                          onValueChange={(value) =>
+                            updateControl("infrastructureFocus", value)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="rotterdam">{t.locations.rotterdam}</SelectItem>
-                            <SelectItem value="groningen">{t.locations.groningen}</SelectItem>
-                            <SelectItem value="amsterdam">{t.locations.amsterdam}</SelectItem>
-                            <SelectItem value="schiphol">{t.locations.schiphol}</SelectItem>
-                            <SelectItem value="sloehaven">{t.locations.sloehaven}</SelectItem>
-                            <SelectItem value="full">{t.locations.full}</SelectItem>
+                            <SelectItem value="rotterdam">
+                              {t.locations.rotterdam}
+                            </SelectItem>
+                            <SelectItem value="groningen">
+                              {t.locations.groningen}
+                            </SelectItem>
+                            <SelectItem value="amsterdam">
+                              {t.locations.amsterdam}
+                            </SelectItem>
+                            <SelectItem value="schiphol">
+                              {t.locations.schiphol}
+                            </SelectItem>
+                            <SelectItem value="sloehaven">
+                              {t.locations.sloehaven}
+                            </SelectItem>
+                            <SelectItem value="full">
+                              {t.locations.full}
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -352,17 +391,25 @@ export function InfrastructureMap({
                     {/* Tile Server Selection */}
                     {showMapStyleControl && (
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium">{t.mapStyleLabel}</Label>
+                        <Label className="text-sm font-medium">
+                          {t.mapStyleLabel}
+                        </Label>
                         <Select
                           value={mapControls.tileServerOption}
-                          onValueChange={(value) => updateControl("tileServerOption", value)}
+                          onValueChange={(value) =>
+                            updateControl("tileServerOption", value)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="openseamap">{t.openseamapStandard}</SelectItem>
-                            <SelectItem value="hybrid">{t.satelliteSeaMarks}</SelectItem>
+                            <SelectItem value="openseamap">
+                              {t.openseamapStandard}
+                            </SelectItem>
+                            <SelectItem value="hybrid">
+                              {t.satelliteSeaMarks}
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -377,27 +424,34 @@ export function InfrastructureMap({
                           <div className="flex items-center gap-2">
                             <Switch
                               checked={mapControls.enableSeamarkLayer}
-                              onCheckedChange={(checked) => updateControl("enableSeamarkLayer", checked)}
+                              onCheckedChange={(checked) =>
+                                updateControl("enableSeamarkLayer", checked)
+                              }
                             />
-                            <Label className="text-sm font-medium">{t.seaMarkLayerLabel}</Label>
+                            <Label className="text-sm font-medium">
+                              {t.seaMarkLayerLabel}
+                            </Label>
                           </div>
                         </div>
 
-                        {mapControls.enableSeamarkLayer && showSeamarkOpacityControl && (
-                          <div className="space-y-2">
-                            <Label className="text-xs text-blue-700">
-                              {t.opacityLabel}: {mapControls.seamarkOpacity}%
-                            </Label>
-                            <Slider
-                              value={[mapControls.seamarkOpacity]}
-                              onValueChange={([value]) => updateControl("seamarkOpacity", value)}
-                              max={100}
-                              min={10}
-                              step={10}
-                              className="w-full"
-                            />
-                          </div>
-                        )}
+                        {mapControls.enableSeamarkLayer &&
+                          showSeamarkOpacityControl && (
+                            <div className="space-y-2">
+                              <Label className="text-xs text-blue-700">
+                                {t.opacityLabel}: {mapControls.seamarkOpacity}%
+                              </Label>
+                              <Slider
+                                value={[mapControls.seamarkOpacity]}
+                                onValueChange={([value]) =>
+                                  updateControl("seamarkOpacity", value)
+                                }
+                                max={100}
+                                min={10}
+                                step={10}
+                                className="w-full"
+                              />
+                            </div>
+                          )}
                       </div>
                     )}
 
@@ -408,7 +462,9 @@ export function InfrastructureMap({
                           <div className="flex items-center gap-2">
                             <Switch
                               checked={mapControls.enableRailwayLayer}
-                              onCheckedChange={(checked) => updateControl("enableRailwayLayer", checked)}
+                              onCheckedChange={(checked) =>
+                                updateControl("enableRailwayLayer", checked)
+                              }
                             />
                             <Label className="text-sm font-medium flex items-center gap-2">
                               <Train className="h-4 w-4" />
@@ -422,18 +478,28 @@ export function InfrastructureMap({
                             {/* Railway Style Selection */}
                             {showRailwayStyleControl && (
                               <div className="space-y-2">
-                                <Label className="text-xs text-gray-700">{t.railwayStyleLabel}</Label>
+                                <Label className="text-xs text-gray-700">
+                                  {t.railwayStyleLabel}
+                                </Label>
                                 <Select
                                   value={mapControls.railwayStyle}
-                                  onValueChange={(value) => updateControl("railwayStyle", value)}
+                                  onValueChange={(value) =>
+                                    updateControl("railwayStyle", value)
+                                  }
                                 >
                                   <SelectTrigger className="h-8 text-xs">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="standard">{t.infrastructureSignals}</SelectItem>
-                                    <SelectItem value="signals">{t.railwaySignals}</SelectItem>
-                                    <SelectItem value="maxspeed">{t.speedLimits}</SelectItem>
+                                    <SelectItem value="standard">
+                                      {t.infrastructureSignals}
+                                    </SelectItem>
+                                    <SelectItem value="signals">
+                                      {t.railwaySignals}
+                                    </SelectItem>
+                                    <SelectItem value="maxspeed">
+                                      {t.speedLimits}
+                                    </SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -443,11 +509,14 @@ export function InfrastructureMap({
                             {showRailwayOpacityControl && (
                               <div className="space-y-2">
                                 <Label className="text-xs text-gray-700">
-                                  {t.opacityLabel}: {mapControls.railwayOpacity}%
+                                  {t.opacityLabel}: {mapControls.railwayOpacity}
+                                  %
                                 </Label>
                                 <Slider
                                   value={[mapControls.railwayOpacity]}
-                                  onValueChange={([value]) => updateControl("railwayOpacity", value)}
+                                  onValueChange={([value]) =>
+                                    updateControl("railwayOpacity", value)
+                                  }
                                   max={100}
                                   min={10}
                                   step={10}
