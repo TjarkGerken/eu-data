@@ -296,16 +296,6 @@ GET  /api/map-layers/[layerId]                   # Layer metadata
 - **CDN Integration**: Custom domain support for fast delivery
 - **Metadata Tracking**: Comprehensive file metadata and versioning
 
-### Docker Deployment
-
-```dockerfile
-# Build container
-docker build -t eu-climate-web .
-
-# Run with environment file
-docker run --env-file .env.local -p 3000:3000 eu-climate-web
-```
-
 ## 📖 Further Documentation
 
 - **EU Climate Framework**: See `../eu_climate/README.md` for data processing
