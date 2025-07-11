@@ -67,162 +67,258 @@ data:
     ghs_native_resolution_meters_equator: 92.8 # Resolution at equator (meters)
     ghs_native_resolution_meters_netherlands: 57.1 # Resolution at 52°N Netherlands (meters)
     ghs_latitude_resolution_meters: 92.8 # Latitude resolution (constant globally)
+  # =================================================================
+  # HAZARD ASSESSMENT PARAMETERS
+  # =================================================================
+  # Configuration for physical hazard and risk factor assessment
   hazard:
+    # River/water body proximity risk zones
     river_zones:
-      high_risk_distance_m: 50
-      high_risk_weight: 1.15
-      moderate_risk_distance_m: 200
-      moderate_risk_weight: 1.1
-      low_risk_distance_m: 500
-      low_risk_weight: 1.05
+      high_risk_distance_m: 50 # Distance for high risk zone (meters)
+      high_risk_weight: 1.15 # Risk multiplier for high risk zone
+      moderate_risk_distance_m: 200 # Distance for moderate risk zone (meters)
+      moderate_risk_weight: 1.1 # Risk multiplier for moderate risk zone
+      low_risk_distance_m: 500 # Distance for low risk zone (meters)
+      low_risk_weight: 1.05 # Risk multiplier for low risk zone
+
+    # River risk decay parameters (how risk decreases with distance)
     river_risk_decay:
-      decay_distance_m: 7500
-      enhanced_decay_factor: 6
-      min_river_area_m2: 50000
+      decay_distance_m: 7500 # Distance over which risk decays (meters)
+      enhanced_decay_factor: 6 # Factor for enhanced decay calculation
+      min_river_area_m2: 50000 # Minimum river area to consider for risk (square meters)
+
+    # Elevation-based risk assessment
     elevation_risk:
-      max_safe_elevation_m: 25.0
-      risk_decay_factor: 1.4
+      max_safe_elevation_m: 25.0 # Elevation above which risk starts decreasing (meters)
+      risk_decay_factor: 1.4 # Rate of risk decrease with elevation
+
+    # Flood risk thresholds
     flood_risk:
-      max_safe_flood_risk: 0.3
+      max_safe_flood_risk: 0.3 # Maximum acceptable flood risk threshold
+
+    # Coastline proximity risk
     coastline_risk:
-      coastline_multiplier: 1.1
-      coastline_distance_m: 5000
+      coastline_multiplier: 1.1 # Risk multiplier for coastal areas
+      coastline_distance_m: 5000 # Distance from coast for risk calculation (meters)
+  # =================================================================
+  # CACHING CONFIGURATION
+  # =================================================================
+  # Configuration for data caching to improve performance
   caching:
-    enabled: false
-    cache_dir: ".cache"
-    max_cache_size_gb: 10
-    auto_cleanup: true
-    max_age_days: 7
+    enabled: false # Enable/disable caching system
+    cache_dir: ".cache" # Directory for cache files
+    max_cache_size_gb: 10 # Maximum cache size in GB
+    auto_cleanup: true # Automatically clean old cache files
+    max_age_days: 7 # Maximum age of cache files in days
+
+    # Cache strategies for different data types
     cache_strategies:
-      raster_data: "persistent"
-      calculations: "persistent"
-      final_results: "persistent"
+      raster_data: "persistent" # Cache strategy for raster data
+      calculations: "persistent" # Cache strategy for calculations
+      final_results: "persistent" # Cache strategy for final results
+
+    # Logging configuration for cache operations
     logging:
-      cache_operations: true
-      cache_statistics: true
+      cache_operations: true # Log cache operations
+      cache_statistics: true # Log cache statistics
+  # =================================================================
+  # EXPOSITION ASSESSMENT PARAMETERS
+  # =================================================================
+  # Configuration for exposure factor weighting and assessment
   exposition:
-    ghs_built_c_weight: 0.30
-    ghs_built_v_weight: 0.30
-    population_weight: 0.13
-    electricity_consumption_weight: 0.12
-    vierkant_stats_weight: 0.15
+    # Main exposition factor weights (must sum to 1.0)
+    ghs_built_c_weight: 0.30 # Weight for built-up area coverage
+    ghs_built_v_weight: 0.30 # Weight for built-up volume
+    population_weight: 0.13 # Weight for population density
+    electricity_consumption_weight: 0.12 # Weight for electricity consumption
+    vierkant_stats_weight: 0.15 # Weight for Dutch census statistics
+
+    # Urbanization level multipliers
     urbanisation_multipliers:
-      urban_threshold: 0.6
-      semi_urban_threshold: 0.4
-      urban_multiplier: 1.15
-      semi_urban_multiplier: 1.05
-      rural_multiplier: 0.5
-      urban_weight: 0.7
-      semi_urban_weight: 0.3
+      urban_threshold: 0.6 # Threshold for urban classification
+      semi_urban_threshold: 0.4 # Threshold for semi-urban classification
+      urban_multiplier: 1.15 # Risk multiplier for urban areas
+      semi_urban_multiplier: 1.05 # Risk multiplier for semi-urban areas
+      rural_multiplier: 0.5 # Risk multiplier for rural areas
+      urban_weight: 0.7 # Weight for urban classification
+      semi_urban_weight: 0.3 # Weight for semi-urban classification
+
+    # Port proximity multipliers
     port_multipliers:
-      port_polygon_multiplier: 1.15
-      port_buffer_multiplier: 1.05
-      port_buffer_distance_m: 500
+      port_polygon_multiplier: 1.15 # Risk multiplier within port polygons
+      port_buffer_multiplier: 1.05 # Risk multiplier in port buffer zones
+      port_buffer_distance_m: 500 # Buffer distance around ports (meters)
+
+    # Dutch census (Vierkant) statistics multipliers
     vierkant_stats_multipliers:
-      number_of_occupants_multiplier: 1.05
-      mean_household_size_multiplier: 1.05
-      mean_houseprice_multiplier: 1.5
+      number_of_occupants_multiplier: 1.05 # Multiplier for number of occupants
+      mean_household_size_multiplier: 1.05 # Multiplier for mean household size
+      mean_houseprice_multiplier: 1.5 # Multiplier for mean house price
+  # =================================================================
+  # ECONOMIC RELEVANCE ASSESSMENT
+  # =================================================================
+  # Configuration for economic relevance factors in risk assessment
   relevance:
-    min_economic_value: 0.05
+    min_economic_value: 0.05 # Minimum economic value threshold for relevance
+
+    # Economic datasets and their weights (must sum to 1.0)
     economic_datasets:
+      # GDP (Gross Domestic Product) dataset
       gdp:
-        weight: 0.25
-        nuts_level: "l3"
-        file_key: "gdp"
-        exposition_weights:
-          ghs_built_c_weight: 0.25
-          ghs_built_v_weight: 0.34
-          population_weight: 0.13
-          electricity_consumption_weight: 0.18
-          vierkant_stats_weight: 0.10
+        weight: 0.25 # Weight in overall economic relevance
+        nuts_level: "l3" # NUTS administrative level for aggregation
+        file_key: "gdp" # Key for data file identification
+        exposition_weights: # Exposition weights specific to GDP (must sum to 1.0)
+          ghs_built_c_weight: 0.25 # Built-up area coverage weight
+          ghs_built_v_weight: 0.34 # Built-up volume weight
+          population_weight: 0.13 # Population density weight
+          electricity_consumption_weight: 0.18 # Electricity consumption weight
+          vierkant_stats_weight: 0.10 # Dutch census statistics weight
+
+      # Freight transport dataset
       freight:
-        weight: 0.5
-        nuts_level: "l3"
-        file_key: "freight"
-        exposition_weights:
-          ghs_built_c_weight: 0.32
-          ghs_built_v_weight: 0.34
-          population_weight: 0.06
-          electricity_consumption_weight: 0.18
-          vierkant_stats_weight: 0.10
+        weight: 0.5 # Weight in overall economic relevance
+        nuts_level: "l3" # NUTS administrative level for aggregation
+        file_key: "freight" # Key for data file identification
+        exposition_weights: # Exposition weights specific to freight (must sum to 1.0)
+          ghs_built_c_weight: 0.32 # Built-up area coverage weight
+          ghs_built_v_weight: 0.34 # Built-up volume weight
+          population_weight: 0.06 # Population density weight
+          electricity_consumption_weight: 0.18 # Electricity consumption weight
+          vierkant_stats_weight: 0.10 # Dutch census statistics weight
+
+      # HRST (Human Resources in Science and Technology) dataset
       hrst:
-        weight: 0.25
-        nuts_level: "l2"
-        file_key: "hrst"
-        exposition_weights:
-          ghs_built_c_weight: 0.27
-          ghs_built_v_weight: 0.36
-          population_weight: 0.09
-          electricity_consumption_weight: 0.18
-          vierkant_stats_weight: 0.10
+        weight: 0.25 # Weight in overall economic relevance
+        nuts_level: "l2" # NUTS administrative level for aggregation
+        file_key: "hrst" # Key for data file identification
+        exposition_weights: # Exposition weights specific to HRST (must sum to 1.0)
+          ghs_built_c_weight: 0.27 # Built-up area coverage weight
+          ghs_built_v_weight: 0.36 # Built-up volume weight
+          population_weight: 0.09 # Population density weight
+          electricity_consumption_weight: 0.18 # Electricity consumption weight
+          vierkant_stats_weight: 0.10 # Dutch census statistics weight
+
+    # List of economic variables to include in analysis
     economic_variables:
-      - "gdp"
-      - "freight"
-      - "hrst"
+      - "gdp" # Gross Domestic Product
+      - "freight" # Freight transport activity
+      - "hrst" # Human Resources in Science & Technology
+  # =================================================================
+  # RISK ASSESSMENT CONFIGURATION
+  # =================================================================
+  # Configuration for overall risk calculation and classification
   risk_assessment:
-    n_risk_classes: 5
+    n_risk_classes: 5 # Number of risk categories for classification
+
+    # Main risk component weights (must sum to 1.0)
     weights:
-      hazard: 0.1
-      economic: 0.9
+      hazard: 0.1 # Weight for physical hazard factors
+      economic: 0.9 # Weight for economic exposure factors
+
+    # GHS Built-C class weights for different built environment types
+    # These weights reflect the vulnerability of different building types
     ghs_built_c_class_weights:
-      1: 0.0 # open spaces, low vegetation
-      2: 0.0 # open spaces, medium vegetation
-      3: 0.0 # open spaces, high vegetation
-      4: 0.0 # water surfaces
-      5: 0.5 # road surfaces
-      11: 0.05 # residential, <=3m
-      12: 0.1 # residential, 3-6m
-      13: 0.1 # residential, 6-15m
-      14: 0.15 # residential, 15-30m
-      15: 0.15 # residential, >30m
-      21: 0.25 # non-residential, <=3m
-      22: 0.7 # non-residential, 3-6m
-      23: 0.7 # non-residential, 6-15m
-      24: 0.9 # non-residential, 15-30m
-      25: 1.0 # non-residential, >30m
+      # Open spaces and vegetation (low vulnerability)
+      1: 0.0 # Open spaces, low vegetation
+      2: 0.0 # Open spaces, medium vegetation
+      3: 0.0 # Open spaces, high vegetation
+      4: 0.0 # Water surfaces
+      5: 0.5 # Road surfaces
+
+      # Residential buildings (moderate vulnerability)
+      11: 0.05 # Residential, <=3m height
+      12: 0.1 # Residential, 3-6m height
+      13: 0.1 # Residential, 6-15m height
+      14: 0.15 # Residential, 15-30m height
+      15: 0.15 # Residential, >30m height
+
+      # Non-residential buildings (high vulnerability)
+      21: 0.25 # Non-residential, <=3m height
+      22: 0.7 # Non-residential, 3-6m height
+      23: 0.7 # Non-residential, 6-15m height
+      24: 0.9 # Non-residential, 15-30m height
+      25: 1.0 # Non-residential, >30m height
+  # =================================================================
+  # VISUALIZATION CONFIGURATION
+  # =================================================================
+  # Configuration for plot and figure generation
   visualization:
-    figure_size: [15, 10]
-    dpi: 300
+    figure_size: [15, 10] # Figure dimensions in inches [width, height]
+    dpi: 300 # Resolution for output images (dots per inch)
+
+  # =================================================================
+  # UPLOAD CONFIGURATION
+  # =================================================================
+  # Configuration for data upload functionality
   upload:
-    enabled: true
+    enabled: true # Enable/disable upload functionality
+
+  # =================================================================
+  # WEB EXPORT CONFIGURATION
+  # =================================================================
+  # Configuration for web-ready output formats
   web_exports:
-    enabled: true
-    create_cog: true
-    create_mvt: true
+    enabled: true # Enable/disable web export functionality
+    create_cog: true # Create Cloud Optimized GeoTIFF files
+    create_mvt: true # Create Mapbox Vector Tiles
+
+    # Cloud Optimized GeoTIFF settings
     cog_settings:
-      compress: "LZW"
-      predictor: 2
-      blocksize: 512
-      overview_compress: "LZW"
-      overview_resampling: "average"
-      auto_overviews: true
+      compress: "LZW" # Compression algorithm
+      predictor: 2 # Predictor for compression
+      blocksize: 512 # Internal tile size
+      overview_compress: "LZW" # Compression for overview pyramids
+      overview_resampling: "average" # Resampling method for overviews
+      auto_overviews: true # Automatically generate overview pyramids
+
+    # Mapbox Vector Tiles settings
     mvt_settings:
-      min_zoom: 0
-      max_zoom: 12
-      simplification: "drop-densest-as-needed"
-      generate_ids: true
-      buffer_size: 64
-      preserve_input_order: true
-      detect_shared_borders: true
-      extend_zooms_if_still_dropping: true
+      min_zoom: 0 # Minimum zoom level
+      max_zoom: 12 # Maximum zoom level
+      simplification: "drop-densest-as-needed" # Geometry simplification strategy
+      generate_ids: true # Generate feature IDs
+      buffer_size: 64 # Tile buffer size in pixels
+      preserve_input_order: true # Preserve input feature order
+      detect_shared_borders: true # Detect shared polygon borders
+      extend_zooms_if_still_dropping: true # Extend zoom levels if still dropping features
+
+  # =================================================================
+  # BUILDING PARAMETER CONFIGURATION
+  # =================================================================
+  # Configuration for building height and floor estimation
   building:
-    base_floor_height: 3
-    max_floors: 30
+    base_floor_height: 3 # Base floor height in meters
+    max_floors: 30 # Maximum number of floors to consider
+  # =================================================================
+  # CLUSTERING CONFIGURATION
+  # =================================================================
+  # Configuration for risk cluster detection and polygon generation
   clustering:
-    risk_threshold: 0.35
-    cell_size_meters: 30
-    morphological_closing_disk_size: 12
-    cluster_epsilon_multiplier: 6
-    minimum_samples: 10
-    alpha_parameter_divisor: 0.2
-    hole_area_threshold: 0.10
-    minimum_polygon_area_square_meters: 12_000_000
-    smoothing_buffer_meters: 200
-    polygon_simplification_tolerance: 50
-    natural_smoothing_iterations: 3
-    corner_rounding_radius: 30
-    use_contour_method: true
+    risk_threshold: 0.35 # Minimum risk value for clustering
+    cell_size_meters: 30 # Grid cell size for clustering analysis (meters)
+
+    # Morphological processing parameters
+    morphological_closing_disk_size: 12 # Disk size for morphological closing operation
+
+    # DBSCAN clustering parameters
+    cluster_epsilon_multiplier: 6 # Multiplier for epsilon parameter in DBSCAN
+    minimum_samples: 10 # Minimum samples for core points in DBSCAN
+
+    # Alpha shape parameters
+    alpha_parameter_divisor: 0.2 # Divisor for alpha parameter in alpha shapes
+
+    # Polygon processing parameters
+    hole_area_threshold: 0.10 # Threshold for hole area relative to polygon area
+    minimum_polygon_area_square_meters: 12_000_000 # Minimum area for valid polygons (square meters)
+    smoothing_buffer_meters: 200 # Buffer distance for smoothing operations (meters)
+    polygon_simplification_tolerance: 50 # Tolerance for polygon simplification (meters)
+    natural_smoothing_iterations: 3 # Number of iterations for natural smoothing
+    corner_rounding_radius: 30 # Radius for corner rounding (meters)
+    use_contour_method: true # Use contour method for polygon generation
+
+    # Web optimization settings
     web_optimization:
-      max_vertices_per_polygon: 1000
-      simplify_tolerance_meters: 100
-      preserve_topology: true
+      max_vertices_per_polygon: 1000 # Maximum vertices per polygon for web display
+      simplify_tolerance_meters: 100 # Simplification tolerance for web display (meters)
+      preserve_topology: true # Preserve topology during web optimization
