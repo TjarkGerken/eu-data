@@ -17,7 +17,7 @@ A comprehensive geospatial analysis framework for climate risk assessment in Eur
 ### Technical Architecture
 
 - **Language**: Python 3.11+
-- **Key Libraries**: GeoPandas, Rasterio, Scikit-learn, Matplotlib, Folium
+- **Key Libraries**: GeoPandas, Rasterio, Scikit-learn, Matplotlib
 - **Data Storage**: Cloud-integrated with Hugging Face Hub for dataset management
 - **Output Formats**: GeoTIFF, GeoPackage, COG, MVT, PNG, CSV
 - **Coordinate System**: EPSG:3035 (European standard)
@@ -41,7 +41,7 @@ A comprehensive geospatial analysis framework for climate risk assessment in Eur
 ### Prerequisites
 
 - **Python**: 3.11+ (Python 3.11 recommended for optimal geospatial library compatibility)
-- **Storage**: At least 20 GB of free disk space
+- **Storage**: At least 40 GB of free disk space
 - **Memory**: Minimum 16 GB RAM (32 GB recommended for large-scale analysis)
 - **Platform**: Windows (WSL), Linux, or macOS
 
@@ -579,12 +579,6 @@ The framework implements a four-layer approach following established climate ris
 - Individual layers: ~5-15 minutes each
 - Web conversion: ~10-20 minutes for complete dataset
 - Clustering analysis: ~15-30 minutes per scenario
-
-**Memory Usage**:
-
-- Peak memory: ~16-32 GB RAM for full analysis
-- Streaming I/O for large rasters to minimize memory footprint
-- Automatic garbage collection and memory optimization
 
 ## 🎯 Quick Reference
 
