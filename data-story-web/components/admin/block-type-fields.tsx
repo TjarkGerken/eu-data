@@ -959,9 +959,10 @@ export function BlockTypeFields({
           authors: string[];
           year: number;
           type: string;
+          readable_id?: string;
         }) => ({
           ...ref,
-          readable_id: ref.id, // Use id as readable_id if not present
+          readable_id: ref.readable_id || ref.id, // Only use id as readable_id if not present
         }),
       );
       setAvailableReferences(referencesWithReadableId);

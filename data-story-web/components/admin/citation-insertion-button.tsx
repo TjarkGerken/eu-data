@@ -28,7 +28,7 @@ interface Reference {
   authors: string[];
   year: number;
   type: "journal" | "report" | "dataset" | "book";
-  readable_id: string;
+  readable_id?: string;
 }
 
 interface CitationInsertionButtonProps {
@@ -62,7 +62,19 @@ export function CitationInsertionButton({
 
   const getReadableIdForReference = (refId: string): string => {
     const reference = availableReferences.find((r) => r?.id === refId);
-    return reference?.readable_id || refId;
+    if (!reference) {
+      console.warn(`Reference with ID "${refId}" not found`);
+      return refId;
+    }
+
+    if (!reference.readable_id) {
+      console.warn(
+        `Reference "${reference.title}" (ID: ${refId}) has no readable_id, falling back to ID`,
+      );
+      return refId;
+    }
+
+    return reference.readable_id;
   };
 
   const insertCitation = (referenceId: string) => {
