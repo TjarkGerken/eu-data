@@ -320,6 +320,8 @@ eu_climate/data/output/
 - `SLR-1-Conservative` - 1m sea level rise (2100)
 - `SLR-2-Moderate` - 2m sea level rise (2100)
 - `SLR-3-Severe` - 3m sea level rise (2100)
+- `SLR-10-Very-Severe` - 10m sea level rise (2300)
+- `SLR-15-Extreme` - 15m sea level rise (2300)
 
 **Risk Types**:
 
