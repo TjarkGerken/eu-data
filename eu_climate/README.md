@@ -584,15 +584,14 @@ The framework implements a four-layer approach following established climate ris
 
 **Processing Speed**:
 
-- Full Netherlands analysis: ~45-90 minutes (depending on hardware)
+- Full Netherlands analysis: ~60-120 minutes (depending on hardware)
 - Individual layers: ~5-15 minutes each
 - Web conversion: ~10-20 minutes for complete dataset
 - Clustering analysis: ~15-30 minutes per scenario
 
 **Memory Usage**:
 
-- Peak memory: ~8-12 GB for full analysis
-- Individual layers: ~2-4 GB peak usage
+- Peak memory: ~16-32 GB RAM for full analysis
 - Streaming I/O for large rasters to minimize memory footprint
 - Automatic garbage collection and memory optimization
 
