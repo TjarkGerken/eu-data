@@ -1,16 +1,27 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Header } from "@/components/header";
 import { HeroVideoSection } from "@/components/hero-video-section";
 import { TechnicalSection } from "@/components/technical-section";
 import { ReferencesSidebar } from "@/components/references-sidebar";
 import { DataStoryRenderer } from "@/components/blocks/data-story-renderer";
 import { ClimateLoading } from "@/components/climate-loading";
+import { LoadingWarningDialog, useLoadingWarning } from "@/components/loading-warning-dialog";
 import { useDynamicContent } from "@/hooks/use-dynamic-content";
 import { motion } from "motion/react";
 
 export default function HomePage() {
   const { content, loading, error } = useDynamicContent();
+  const shouldShowWarning = useLoadingWarning();
+  const [showWarningDialog, setShowWarningDialog] = useState(false);
+
+  // Show warning dialog when component mounts if user hasn't dismissed it
+  useEffect(() => {
+    if (shouldShowWarning) {
+      setShowWarningDialog(true);
+    }
+  }, [shouldShowWarning]);
 
   if (loading) {
     return <ClimateLoading />;
@@ -34,6 +45,10 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <LoadingWarningDialog
+        isOpen={showWarningDialog}
+        onClose={() => setShowWarningDialog(false)}
+      />
       <Header enableAnimations={true} />
 
       {/* Hero Video Section - Above the Fold */}

@@ -922,7 +922,7 @@ export default function ContentBlockEditor() {
           >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline">#{pair.orderIndex}</Badge>
                   <Badge>{pair.blockType}</Badge>
                   <Badge variant={pair.english ? "default" : "secondary"}>
@@ -931,6 +931,11 @@ export default function ContentBlockEditor() {
                   <Badge variant={pair.german ? "default" : "secondary"}>
                     DE {pair.german ? "✓" : "✗"}
                   </Badge>
+                  {pair.german?.title && (
+                    <Badge variant="secondary" className="text-xs">
+                      {pair.german.title}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <Button

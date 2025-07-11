@@ -73,6 +73,12 @@ export interface Translation {
   viewSource: string;
   referencedSources: string;
 
+  // Loading Warning Dialog
+  loadingWarningTitle: string;
+  loadingWarningMessage: string;
+  loadingWarningUnderstand: string;
+  loadingWarningDontShowAgain: string;
+
   // Common
   visualizationPlaceholder: string;
   interactiveWillRender: string;
@@ -177,6 +183,12 @@ export const translations: Record<Language, Translation> = {
     referencesDesc: "Bibliography and data sources used in this analysis",
     viewSource: "View Source",
     referencedSources: "Referenced Sources:",
+
+    // Loading Warning Dialog
+    loadingWarningTitle: "Loading Performance Notice",
+    loadingWarningMessage: "Due to the high complexity of climate data visualizations and interactive maps, loading times may be extended, especially with slower network connections. Thank you for your patience.",
+    loadingWarningUnderstand: "I Understand",
+    loadingWarningDontShowAgain: "Don't show again",
 
     // Common
     visualizationPlaceholder: "Visualization Placeholder",
@@ -284,6 +296,12 @@ export const translations: Record<Language, Translation> = {
       "Bibliographie und Datenquellen, die in dieser Analyse verwendet wurden",
     viewSource: "Quelle anzeigen",
     referencedSources: "Referenzierte Quellen:",
+
+    // Loading Warning Dialog
+    loadingWarningTitle: "Ladezeit-Hinweis",
+    loadingWarningMessage: "Aufgrund der hohen Komplexität der Klimadaten-Visualisierungen und interaktiven Karten können die Ladezeiten verlängert sein, insbesondere bei langsameren Internetverbindungen. Vielen Dank für Ihre Geduld.",
+    loadingWarningUnderstand: "Verstanden",
+    loadingWarningDontShowAgain: "Nicht mehr anzeigen",
 
     // Common
     visualizationPlaceholder: "Visualisierungs-Platzhalter",
