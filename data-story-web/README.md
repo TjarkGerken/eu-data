@@ -4,7 +4,7 @@ A sophisticated Next.js application for interactive climate data storytelling wi
 
 ## 🎯 Overview
 
-This application serves as an interactive data story platform that transforms complex climate risk assessment data into compelling, accessible narratives. Built with Next.js 15 and React 19, it features a dynamic block-based content system, advanced mapping capabilities, and a powerful admin interface for content management.
+This application serves as an interactive data story platform that transforms complex climate risk assessment data into compelling, accessible narratives. Built with Next.js 15 and React 19, it features a dynamic block-based content system, mapping capabilities, and a admin interface for content management.
 
 ### Core Capabilities
 
