@@ -35,7 +35,7 @@ Ein umfassendes Python-basiertes geospatiales Analyseframework mit einem viersch
 - **Gefährdungsschicht**: Meeresspiegelanstieg-Szenarien und Küstenhochwasser-Modellierung
 - **Expositionsschicht**: Gebäudedichte und Bevölkerungsexpositionsanalyse
 - **Relevanzschicht**: Bewertung wirtschaftlicher Faktoren (BIP, Fracht, Humankapital)
-- **Risikoschicht**: Integrierte Multi-Szenario-Risikobewertung
+- **Risikoschicht**: Integrierte Multi-Szenario-Risikobewertung anhand ausgewählter Faktoren
 - **Erweiterte Funktionen**: Clusteranalyse, wirtschaftliche Auswirkungsquantifizierung, weboptimierte Ausgaben
 
 **Kernfähigkeiten:**
