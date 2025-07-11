@@ -49,15 +49,13 @@ Ein umfassendes Python-basiertes geospatiales Analyseframework mit einem viersch
 
 Eine interaktive Next.js-Anwendung mit umfassender Data Story Visualisierung und vollständigem Admin-Management:
 
-- **Interaktive Visualisierungen**: Dynamische Karten und Diagramme mit Echtzeitdaten
+- **Interaktive Visualisierungen**: Dynamische Karten und Diagramme
 - **Admin-Panel**: Komplettes Content-Management-System für Geschichten und Referenzen
 - **Cloud-Speicher**: Cloudflare R2 Integration mit Unterstützung großer Geodateien
-- **Echtzeitaktualisierungen**: Änderungen spiegeln sich sofort in der gesamten Anwendung wider
 
 **Technische Features:**
 
 - Supabase Datenbankintegration
-- TypeScript für vollständige Typsicherheit
 - Unterstützung großer Geodateiformate (.tif, .cog, .mbtiles)
 - Erweiterte Bild- und Referenzverwaltung
 
