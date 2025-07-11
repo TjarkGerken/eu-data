@@ -100,7 +100,7 @@ export default function HomePage() {
                 whileInView={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
                 viewport={{ once: true }}
-                className="sticky top-8"
+                className="sticky top-20"
               >
                 <ReferencesSidebar references={content.references || []} />
               </motion.div>

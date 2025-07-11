@@ -16,7 +16,7 @@ export function HeroVideoSection() {
   };
 
   return (
-    <section className="relative h-screen flex flex-col justify-center items-center bg-gradient-to-br from-[#2d5a3d] to-[#c4a747] text-white overflow-hidden">
+    <section className="relative h-screen flex flex-col justify-center items-center bg-gradient-to-br from-[#2d5a3d] to-[#c4a747] text-white overflow-hidden pt-16">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10">
         <motion.div
@@ -93,7 +93,7 @@ export function HeroVideoSection() {
             }}
             whileHover={{ scale: 1.1 }}
           >
-            <span className="text-sm mb-2 font-medium">Explore Data Story</span>
+            <span className="text-sm mb-2 font-medium">Zur Data Story</span>
             <ChevronDown className="h-6 w-6" />
           </motion.button>
         </motion.div>

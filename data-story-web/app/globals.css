@@ -29,6 +29,19 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+
+    /* Z-index scale for consistent layering */
+    --z-base: 1;
+    --z-docked: 10;
+    --z-dropdown: 1000;
+    --z-sticky: 1020;
+    --z-fixed: 1030;
+    --z-modal-backdrop: 1040;
+    --z-modal: 1050;
+    --z-popover: 1060;
+    --z-tooltip: 1070;
+    --z-toast: 1080;
+    --z-header: 9999;
   }
 }
 
@@ -39,6 +52,31 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Enhanced z-index management for consistent layering */
+.z-header {
+  z-index: var(--z-header) !important;
+}
+
+.z-modal {
+  z-index: var(--z-modal) !important;
+}
+
+.z-modal-backdrop {
+  z-index: var(--z-modal-backdrop) !important;
+}
+
+.z-popover {
+  z-index: var(--z-popover) !important;
+}
+
+.z-tooltip {
+  z-index: var(--z-tooltip) !important;
+}
+
+.z-toast {
+  z-index: var(--z-toast) !important;
 }
 
 /* Custom scrollbar for references */
@@ -62,25 +100,49 @@
 
 /* Map z-index management to prevent conflicts with header and UI elements */
 .leaflet-container {
-  z-index: 1 !important;
+  z-index: var(--z-base) !important;
 }
 
 .leaflet-control-container {
-  z-index: 1000 !important;
+  z-index: var(--z-dropdown) !important;
 }
 
 .leaflet-popup-pane {
-  z-index: 1010 !important;
+  z-index: calc(var(--z-dropdown) + 10) !important;
 }
 
 /* Ensure map legends and overlays have proper z-index */
 .leaflet-top,
 .leaflet-bottom {
-  z-index: 1000 !important;
+  z-index: var(--z-dropdown) !important;
 }
 
 /* Interactive map wrapper should have controlled z-index */
 .interactive-map-container {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-base);
+}
+
+/* Enhanced modal and dialog z-index management */
+[data-radix-popper-content-wrapper] {
+  z-index: var(--z-popover) !important;
+}
+
+[data-radix-toast-viewport] {
+  z-index: var(--z-toast) !important;
+}
+
+/* Ensure proper stacking for loading states */
+.loading-overlay {
+  z-index: var(--z-modal-backdrop);
+}
+
+/* Fix for any content that might overlap with header */
+.content-with-header {
+  padding-top: 4rem; /* 64px to account for header height */
+}
+
+/* Sticky elements should account for header */
+.sticky-with-header {
+  top: 5rem; /* 80px - header height + small margin */
 }
