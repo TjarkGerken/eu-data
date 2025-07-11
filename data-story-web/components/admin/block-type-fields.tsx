@@ -1904,7 +1904,6 @@ export function BlockTypeFields({
   const renderLanguageSpecificFieldsForType = () => {
     switch (blockType) {
       case "markdown":
-        console.log(content);
         return (
           <div className="space-y-1">
             <div className="flex items-center justify-between">

@@ -822,53 +822,31 @@ export default function ContentBlockEditor() {
       updateBlock({ ...block, [field]: value });
     };
 
-    const hasDataFields =
-      block.block_type &&
-      Object.keys(getDefaultBlockData(block.block_type)).length > 0;
+    const updateData = (newData: Json) => {
+      updateBlock({ ...block, data: newData });
+    };
 
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h4 className="font-semibold capitalize">
-            {language} Content
-          </h4>
+          <h4 className="font-semibold capitalize">{language} Content</h4>
           <Badge variant={block.id ? "secondary" : "outline"}>
             {block.id ? "Saved" : "New"}
           </Badge>
         </div>
-        <div>
-          <Label htmlFor={`title-${language}`}>Title</Label>
-          <Input
-            id={`title-${language}`}
-            value={block.title || ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField("title", e.target.value)}
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <Label htmlFor={`content-${language}`}>Content (Markdown)</Label>
-          <Textarea
-            id={`content-${language}`}
-            value={block.content || ''}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateField("content", e.target.value)}
-            className="mt-1 min-h-[150px]"
-          />
-        </div>
 
-        {hasDataFields && (
-          <div>
-            <Label>Block Specific Data</Label>
-            <BlockTypeFields
-              blockType={block.block_type}
-              data={block.data}
-              onDataChange={(newData) => {
-                updateSharedField([], newData);
-              }}
-              validationErrors={[]}
-              mode="language-specific"
-            />
-          </div>
-        )}
+        <BlockTypeFields
+          blockType={block.block_type}
+          data={block.data}
+          onDataChange={updateData}
+          validationErrors={[]}
+          title={block.title}
+          content={block.content}
+          onTitleChange={(title) => updateField("title", title)}
+          onContentChange={(content) => updateField("content", content)}
+          language={language}
+          mode="all"
+        />
       </div>
     );
   };
