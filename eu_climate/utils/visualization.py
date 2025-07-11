@@ -5,9 +5,6 @@ import geopandas as gpd
 import rasterio
 from typing import Optional, Tuple, Dict
 from pathlib import Path
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
 
 
 from eu_climate.config.config import ProjectConfig
@@ -599,24 +596,6 @@ class LayerVisualizer:
 
             # Get elevation data within NUTS and land areas only
             nuts_land_mask = (nuts_mask == 1) & (land_mask == 1) & (~np.isnan(dem_data))
-            if np.any(nuts_land_mask):
-                nuts_elevations = dem_data[nuts_land_mask]
-                elevation_min = (
-                    np.percentile(nuts_elevations, 2) - 30
-                )  # Use 2nd percentile to avoid outliers and add 30m buffer to ensure that only water is blue
-                elevation_max = (
-                    np.percentile(nuts_elevations, 98) + 100
-                )  # Use 98th percentile to avoid outliers and add 100m buffer to ensure that the entire landscape is visible (not all white)
-            else:
-                # Fallback to global range if no valid data
-                valid_elevations = dem_data[~np.isnan(dem_data)]
-                elevation_min = np.percentile(valid_elevations, 2) - 30
-                elevation_max = np.percentile(valid_elevations, 98) + 100
-        else:
-            # Fallback to global range if no NUTS data or land mask
-            valid_elevations = dem_data[~np.isnan(dem_data)]
-            elevation_min = np.percentile(valid_elevations, 2) - 30
-            elevation_max = np.percentile(valid_elevations, 98) + 100
 
         # Create zone classification for background
         zones = self.create_zone_classification(
@@ -673,17 +652,6 @@ class LayerVisualizer:
             )  # Note: y is flipped for proper orientation
             X, Y = np.meshgrid(x, y)
 
-            # Create contour lines for dark blue outline
-            contour = ax.contour(
-                X,
-                Y,
-                coastline_zone_mask,
-                levels=[0.5],  # This creates the boundary line
-                colors=["darkblue"],
-                linewidths=0.2,
-                alpha=0.9,
-                zorder=51,  # Higher zorder to ensure outline appears on top of fill
-            )
 
         # Add river polygon network overlay - filled polygons with subtle outline
         if river_polygon_network is not None:

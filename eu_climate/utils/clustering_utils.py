@@ -97,7 +97,7 @@ class RiskClusterExtractor:
         self.base_corner_rounding_radius = corner_rounding_radius
 
         # Log configuration
-        logger.info(f"RiskClusterExtractor initialized with enhanced fuzzy clustering:")
+        logger.info("RiskClusterExtractor initialized with enhanced fuzzy clustering:")
         logger.info(f"  - risk_threshold: {self.risk_threshold}")
         logger.info(f"  - cluster_epsilon: {self.cluster_epsilon} meters")
         logger.info(f"  - minimum_samples: {self.minimum_samples}")
@@ -114,7 +114,7 @@ class RiskClusterExtractor:
             f"  - hole_area_threshold: {self.hole_area_threshold} (scale-adaptive)"
         )
         logger.info(
-            f"  - processing_order: morphology -> individual_smoothing -> merge -> area_filter"
+            "  - processing_order: morphology -> individual_smoothing -> merge -> area_filter"
         )
 
         # Log alpha-shape availability

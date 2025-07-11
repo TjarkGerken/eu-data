@@ -10,7 +10,7 @@ sys.path.insert(0, str(code_dir))
 import logging
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, upload_folder
-from eu_climate.utils.data_loading import get_config, validate_env_vars
+from eu_climate.utils.data_loading import get_config
 
 # Set up logging
 logging.basicConfig(

@@ -1,14 +1,9 @@
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import rasterio
 import rasterio.features
 import rasterio.warp
-import geopandas as gpd
 from pathlib import Path
-from dataclasses import dataclass
-from enum import Enum
-import pandas as pd
-import os
 import re
 
 from eu_climate.config.config import ProjectConfig

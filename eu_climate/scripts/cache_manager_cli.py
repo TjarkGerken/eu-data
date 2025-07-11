@@ -108,9 +108,9 @@ def clear_cache(integrator, cache_type):
     print(f"\nClearing {cache_type} cache...")
 
     if cache_type == "all":
-        removed = integrator.clear_cache()
+        integrator.clear_cache()
     else:
-        removed = integrator.clear_cache(cache_type)
+        integrator.clear_cache(cache_type)
 
     print(f"✓ Cleared {cache_type} cache")
 
@@ -120,14 +120,14 @@ def cleanup_cache(integrator, max_age_days):
     print(f"\nCleaning up cache files older than {max_age_days} days...")
 
     integrator.cleanup_cache(max_age_days)
-    print(f"✓ Cache cleanup completed")
+    print("✓ Cache cleanup completed")
 
 
 def show_size_breakdown(integrator):
     """Show detailed cache size breakdown."""
     cache_info = integrator.get_cache_info()
 
-    print(f"\n" + "=" * 50)
+    print("\n" + "=" * 50)
     print("CACHE SIZE BREAKDOWN")
     print("=" * 50)
     print(f"Total Cache Size: {cache_info['total_size_gb']:.2f} GB")
@@ -149,7 +149,7 @@ def show_cache_info(integrator):
     """Show cache configuration information."""
     cache_info = integrator.get_cache_info()
 
-    print(f"\n" + "=" * 50)
+    print("\n" + "=" * 50)
     print("CACHE CONFIGURATION")
     print("=" * 50)
     print(f"Status: {'Enabled' if cache_info['enabled'] else 'Disabled'}")
@@ -167,11 +167,10 @@ def show_cache_info(integrator):
 
 def toggle_caching(config, enable):
     """Toggle caching on/off (requires config modification)."""
-    status = "enabled" if enable else "disabled"
     print(
         f"\nNote: To {'enable' if enable else 'disable'} caching, modify the 'caching.enabled' "
     )
-    print(f"setting in your configuration file: eu_climate/config/data_config.yaml")
+    print("setting in your configuration file: eu_climate/config/data_config.yaml")
     print(f"Set 'enabled: {'true' if enable else 'false'}' in the caching section.")
 
 

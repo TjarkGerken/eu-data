@@ -11,15 +11,11 @@ from dataclasses import dataclass
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.visualization import (
-    LayerVisualizer,
     ScientificStyle,
     setup_scientific_style,
 )
 from eu_climate.utils.conversion import RasterTransformer
-from eu_climate.risk_layers.cluster_layer import ClusterLayer
 from eu_climate.risk_layers.relevance_layer import RelevanceLayer
-from eu_climate.risk_layers.relevance_absolute_layer import RelevanceAbsoluteLayer
-from eu_climate.risk_layers.hazard_layer import HazardLayer
 
 logger = setup_logging(__name__)
 
@@ -226,7 +222,6 @@ class ZonalStatisticsExtractor:
         """
         try:
             from rasterio.features import rasterize
-            from rasterio.transform import from_bounds
 
             # Get raster parameters
             transform = metadata["transform"]
@@ -432,36 +427,10 @@ class EconomicImpactVisualizer:
             metrics.at_risk_population_persons,
         ]
 
-        # Calculate risk percentages
-        risk_percentages = [
-            (at_risk / total * 100) if total > 0 else 0
-            for at_risk, total in zip(at_risk_values, total_values)
-        ]
-
         # Create figure with scientific styling
         fig, ax = plt.subplots(figsize=(12, 8), dpi=ScientificStyle.DPI)
 
         x_positions = np.arange(len(indicators))
-        bar_width = 0.4
-
-        # Create stacked percentage bars
-        bars_total = ax.bar(
-            x_positions,
-            [100] * len(indicators),
-            bar_width,
-            label="Total Regional",
-            color="lightgrey",
-            alpha=0.8,
-        )
-
-        bars_risk = ax.bar(
-            x_positions,
-            risk_percentages,
-            bar_width,
-            label="At Risk in Clusters",
-            color="red",
-            alpha=0.8,
-        )
 
         # Configure plot appearance
         ax.set_xlabel("Economic Indicators", fontsize=ScientificStyle.LABEL_SIZE)
@@ -1290,36 +1259,16 @@ class EconomicImpactAnalyzer:
                 percentages_at_risk.append(percentage)
 
         if not indicators:
-            logger.warning(f"No valid indicators found for visualization")
+            logger.warning("No valid indicators found for visualization")
             return
 
         # Create vertical stacked bar chart with 0-100% scale
         fig, ax = plt.subplots(figsize=(12, 8), dpi=ScientificStyle.DPI)
 
         x_positions = np.arange(len(indicators))
-        bar_width = 0.6
-
-        # Create stacked bars with red (at-risk) from bottom
-        bars_risk = ax.bar(
-            x_positions,
-            percentages_at_risk,
-            bar_width,
-            label="At Risk",
-            color="red",
-            alpha=0.8,
-        )
-
+        
         # Safe portion (grey) starts from at-risk percentage
         safe_percentages = [100 - pct for pct in percentages_at_risk]
-        bars_safe = ax.bar(
-            x_positions,
-            safe_percentages,
-            bar_width,
-            bottom=percentages_at_risk,
-            label="Safe",
-            color="lightgrey",
-            alpha=0.8,
-        )
 
         # Customize the plot
         ax.set_ylabel("Percentage (%)", fontsize=ScientificStyle.LABEL_SIZE)
@@ -1445,7 +1394,7 @@ class EconomicImpactAnalyzer:
                 return None
 
             # Load economic relevance layers
-            logger.info(f"Loading absolute relevance layers...")
+            logger.info("Loading absolute relevance layers...")
             relevance_layers = self.load_absolute_relevance_layers()
 
             if not relevance_layers:
@@ -1455,7 +1404,7 @@ class EconomicImpactAnalyzer:
                 return None
 
             # Calculate economic impacts
-            logger.info(f"Calculating economic impacts...")
+            logger.info("Calculating economic impacts...")
             impact_results = self.calculate_scenario_impact(
                 hazard_data, relevance_layers, scenario_name
             )

@@ -282,7 +282,6 @@ def check_data_availability() -> bool:
     config = get_config()
 
     data_dir = config.data_dir
-    output_dir = config.output_dir
 
     if not data_dir.exists():
         logger.info(f"Data directory not found: {data_dir}")
@@ -354,7 +353,7 @@ def upload_data() -> bool:
         logger.info(
             f"Starting upload of {config.huggingface_folder} to {config.config['huggingface_repo']}"
         )
-        api = HfApi(token=api_token)
+        HfApi(token=api_token)
 
         for item in config.huggingface_folder.iterdir():
             if (
@@ -592,7 +591,7 @@ def load_population_2025_with_validation(
         logger.info(
             f"Source pixel area: {source_pixel_area:.0f} m², Target: {target_pixel_area:.0f} m²"
         )
-        logger.info(f"Using bilinear resampling to preserve spatial distribution")
+        logger.info("Using bilinear resampling to preserve spatial distribution")
         logger.info(
             f"Area ratio: {area_ratio:.3f} - population values will be scaled by this factor"
         )

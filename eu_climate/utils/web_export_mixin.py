@@ -54,7 +54,7 @@ Usage:
 """
 
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Union
 import numpy as np
 import rasterio
 import geopandas as gpd
@@ -366,9 +366,6 @@ class WebExportMixin:
             - Optimizes for web delivery without losing analytical value
         """
         try:
-            from shapely.geometry import Polygon
-            from shapely.ops import transform
-            import numpy as np
 
             logger.info(f"Applying web optimizations to {len(gdf)} cluster polygons")
 
@@ -555,7 +552,6 @@ class WebExportMixin:
             - Includes performance optimization recommendations
             - Supports both self-hosted and CDN deployment scenarios
         """
-        web_dir = base_output_dir / "web"
         metadata = {
             "formats": {
                 "raster": {

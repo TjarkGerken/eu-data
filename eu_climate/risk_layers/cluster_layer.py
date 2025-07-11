@@ -1,5 +1,4 @@
 from typing import Dict, List, Optional, Tuple, Any
-import numpy as np
 import rasterio
 import geopandas as gpd
 from pathlib import Path
@@ -12,7 +11,6 @@ from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.utils.caching_wrappers import CacheAwareMethod
 from eu_climate.utils.clustering_utils import RiskClusterExtractor, RiskClusterAnalyzer
 from eu_climate.utils.web_export_mixin import WebExportMixin
-from eu_climate.risk_layers.hazard_layer import SeaLevelScenario
 
 logger = setup_logging(__name__)
 
@@ -185,7 +183,7 @@ class ClusterLayer(WebExportMixin):
         )
 
         # Log key parameters for debugging and verification
-        logger.info(f"Applied clustering parameters:")
+        logger.info("Applied clustering parameters:")
         logger.info(f"  - risk_threshold: {config.risk_threshold}")
         logger.info(
             f"  - cluster_epsilon_multiplier: {config.cluster_epsilon_multiplier}"

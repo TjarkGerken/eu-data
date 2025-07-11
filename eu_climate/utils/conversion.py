@@ -4,7 +4,7 @@ import rasterio.enums
 from rasterio.enums import Resampling
 import numpy as np
 import logging
-from typing import Tuple, Dict, Optional, Union
+from typing import Tuple, Optional, Union
 from pathlib import Path
 import geopandas as gpd
 

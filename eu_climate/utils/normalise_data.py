@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Tuple, Dict, Union
+from typing import Optional
 from enum import Enum
 from dataclasses import dataclass
 from eu_climate.utils.utils import setup_logging

@@ -286,7 +286,7 @@ class WebConversionValidator:
                         if max_diff > 0.1:  # More than 0.1° is definitely wrong
                             result["passed"] = False
 
-                except ValueError as e:
+                except ValueError:
                     result["errors"].append(
                         f"Invalid bounds format: {mbtiles_bounds_str}"
                     )
@@ -466,7 +466,7 @@ class WebConversionValidator:
         print("=" * 80)
 
         # Overall results
-        print(f"\n📊 OVERALL RESULTS:")
+        print("\n📊 OVERALL RESULTS:")
         print(f"   Total Tests: {summary['total_tests']}")
         print(f"   Passed: {summary['total_passed']} ✅")
         print(f"   Failed: {summary['total_failed']} ❌")
@@ -474,7 +474,7 @@ class WebConversionValidator:
 
         # Raster results
         if self.results["raster"]["total"] > 0:
-            print(f"\n🗺️  RASTER (TIF → COG):")
+            print("\n🗺️  RASTER (TIF → COG):")
             print(f"   Tests: {self.results['raster']['total']}")
             print(f"   Success Rate: {summary['raster_success_rate']}%")
 
@@ -493,7 +493,7 @@ class WebConversionValidator:
 
         # Vector results
         if self.results["vector"]["total"] > 0:
-            print(f"\n🎯 VECTOR (GPKG → MBTiles):")
+            print("\n🎯 VECTOR (GPKG → MBTiles):")
             print(f"   Tests: {self.results['vector']['total']}")
             print(f"   Success Rate: {summary['vector_success_rate']}%")
 

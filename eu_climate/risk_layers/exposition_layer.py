@@ -3,21 +3,17 @@ import rasterio.features
 import rasterio.warp
 import geopandas as gpd
 from scipy import ndimage
-from typing import Optional, Tuple, Dict
+from typing import Tuple, Dict
 import numpy as np
-from rasterio.enums import Resampling
 from pathlib import Path
-import logging
-import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
 from eu_climate.config.config import ProjectConfig
-from eu_climate.utils.utils import setup_logging, suppress_warnings
+from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.utils.normalise_data import (
-    DataNormalizer,
     AdvancedDataNormalizer,
     NormalizationStrategy,
     ensure_full_range_utilization,
@@ -136,7 +132,7 @@ class ExpositionLayer(WebExportMixin):
         )
 
         logger.info(
-            f"Initialized Exposition Layer with urbanisation and port integration"
+            "Initialized Exposition Layer with urbanisation and port integration"
         )
 
     def load_ghs_built_c(self):
@@ -275,7 +271,7 @@ class ExpositionLayer(WebExportMixin):
         ).sum()
         rural_count = (merged_data["urbanisation_factor"] < semi_urban_threshold).sum()
 
-        logger.info(f"Area classification:")
+        logger.info("Area classification:")
         logger.info(
             f"  Urban areas (>={urban_threshold}): {urban_count} ({urban_count / len(merged_data) * 100:.1f}%) - Multiplier: {urban_multiplier}"
         )
@@ -738,7 +734,6 @@ class ExpositionLayer(WebExportMixin):
 
         # Store reference transform and CRS for alignment
         reference_transform = meta["transform"]
-        reference_crs = meta["crs"]
         reference_shape = ghs_built_c.shape
 
         # Load and preprocess GHS Built-V layer
@@ -1065,7 +1060,7 @@ class ExpositionLayer(WebExportMixin):
         if results.get("geotiff", False):
             logger.info(f"Successfully wrote exposition layer to {out_path}")
         if results.get("cog", False):
-            logger.info(f"Created web-optimized COG for exposition layer")
+            logger.info("Created web-optimized COG for exposition layer")
 
         return results
 
@@ -1463,7 +1458,7 @@ class ExpositionLayer(WebExportMixin):
                     f"Final study area values - Min: {min_val:.4f}, Max: {max_val:.4f}, Mean: {mean_val:.4f}"
                 )
                 logger.info(
-                    f"Urbanisation multipliers preserved - no renormalization applied"
+                    "Urbanisation multipliers preserved - no renormalization applied"
                 )
                 return masked_exposition
             else:

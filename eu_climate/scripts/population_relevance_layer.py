@@ -80,7 +80,7 @@ class PopulationRelevanceLayer:
 
         # Log normalization results
         normalized_valid = normalized_data[valid_mask]
-        logger.info(f"Normalized population data:")
+        logger.info("Normalized population data:")
         logger.info(f"  Min: {np.min(normalized_valid):.6f}")
         logger.info(f"  Max: {np.max(normalized_valid):.6f}")
         logger.info(f"  Mean: {np.mean(normalized_valid):.6f}")
@@ -206,13 +206,13 @@ def main():
         logger.info("=" * 70)
         logger.info("POPULATION RELEVANCE LAYER SUMMARY")
         logger.info("=" * 70)
-        logger.info(f"✓ Population relevance layer generated successfully")
+        logger.info("✓ Population relevance layer generated successfully")
         logger.info(
-            f"✓ Used 2025 GHS population data with corrected resolution handling"
+            "✓ Used 2025 GHS population data with corrected resolution handling"
         )
-        logger.info(f"✓ Applied economic optimization normalization")
-        logger.info(f"✓ Netherlands study area masking applied")
-        logger.info(f"✓ Consistent relevance layer styling and formatting")
+        logger.info("✓ Applied economic optimization normalization")
+        logger.info("✓ Netherlands study area masking applied")
+        logger.info("✓ Consistent relevance layer styling and formatting")
         logger.info(f"Output: {output_path}")
         logger.info("=" * 70)
 

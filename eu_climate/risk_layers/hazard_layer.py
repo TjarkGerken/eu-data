@@ -8,7 +8,6 @@ import geopandas as gpd
 from scipy import ndimage
 from dataclasses import dataclass
 import pandas as pd
-import matplotlib.colors as mcolors
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging
 from eu_climate.utils.conversion import RasterTransformer
@@ -17,7 +16,6 @@ from eu_climate.utils.normalise_data import (
     AdvancedDataNormalizer,
     NormalizationStrategy,
 )
-from pathlib import Path
 
 
 logger = setup_logging(__name__)
@@ -154,7 +152,7 @@ class HazardLayer:
         # Load river polygon data during initialization
         self.load_river_polygon_data()
 
-        logger.info(f"Initialized Hazard Layer with DEM and river polygon data")
+        logger.info("Initialized Hazard Layer with DEM and river polygon data")
 
     def load_and_prepare_dem(
         self,
@@ -220,7 +218,7 @@ class HazardLayer:
 
         # Log DEM statistics for validation
         valid_data = dem_data[~np.isnan(dem_data)]
-        logger.info(f"DEM Statistics:")
+        logger.info("DEM Statistics:")
         logger.info(f"  Shape: {dem_data.shape}")
         logger.info(f"  Resolution: {res_x:.2f} x {res_y:.2f} meters")
         logger.info(f"  Min elevation: {np.min(valid_data):.2f}m")
@@ -810,7 +808,7 @@ class HazardLayer:
         if len(final_valid_risks) == 0:
             return
 
-        logger.info(f"Risk calculation statistics:")
+        logger.info("Risk calculation statistics:")
         logger.info(
             f"  Range: {np.min(final_valid_risks):.4f} to {np.max(final_valid_risks):.4f}"
         )
@@ -826,7 +824,7 @@ class HazardLayer:
         minimal_risk_count = np.sum(final_valid_risks <= 0.1)
 
         total_pixels = len(final_valid_risks)
-        logger.info(f"Risk distribution:")
+        logger.info("Risk distribution:")
         logger.info(
             f"  Very High (>0.8): {very_high_count / total_pixels * 100:.1f}% ({very_high_count} pixels)"
         )
@@ -871,7 +869,7 @@ class HazardLayer:
         # Filter by area
         filtered_rivers = rivers_with_area[(rivers_with_area["area_m2"] >= min_area_m2)]
 
-        logger.info(f"River filtering results:")
+        logger.info("River filtering results:")
         logger.info(f"  Original rivers: {len(rivers_gdf):,}")
         logger.info(f"  After size filtering: {len(filtered_rivers):,}")
         logger.info(f"  Removed: {len(rivers_gdf) - len(filtered_rivers):,} rivers")
@@ -912,7 +910,7 @@ class HazardLayer:
                 return np.ones(shape, dtype=np.float32)
 
             zones = self.config.river_zones
-            logger.info(f"Processing river polygon enhancement with size filtering")
+            logger.info("Processing river polygon enhancement with size filtering")
             logger.info(
                 f"Original river polygon count: {len(self.river_polygon_network)}"
             )
@@ -1008,7 +1006,7 @@ class HazardLayer:
             moderate_risk_pixels = np.sum(enhancement == zones["moderate_risk_weight"])
             low_risk_pixels = np.sum(enhancement == zones["low_risk_weight"])
 
-            logger.info(f"Final filtered river enhancement results:")
+            logger.info("Final filtered river enhancement results:")
             logger.info(
                 f"  High risk pixels: {high_risk_pixels:,} ({high_risk_pixels / total_pixels * 100:.2f}%)"
             )
@@ -1272,7 +1270,6 @@ class HazardLayer:
             first_scenario["transform"].yoff,
         ]
 
-        crs = first_scenario["crs"]
 
         logger.info(f"DEM bounds in visualization: {dem_bounds}")
 
@@ -1684,7 +1681,7 @@ class HazardLayer:
             stats_text += f"Max: {elevation_max:.1f}m\n"
             stats_text += f"Mean: {np.mean(valid_elevations):.1f}m\n"
             if self.river_polygon_network is not None:
-                stats_text += f"\nRiver Polygon Network:\n"
+                stats_text += "\nRiver Polygon Network:\n"
                 stats_text += f"Polygons: {len(self.river_polygon_network)}"
 
             ax6.text(
@@ -1700,7 +1697,7 @@ class HazardLayer:
         ax6.set_xlabel("Elevation (m)")
         ax6.set_ylabel("Frequency")
         ax6.set_title(
-            f"Elevation Distribution with Sea Level Rise Thresholds\n"
+            "Elevation Distribution with Sea Level Rise Thresholds\n"
             + f"(Range: {elevation_min:.1f}m to {elevation_max:.1f}m)",
             fontsize=12,
             fontweight="bold",
@@ -2091,33 +2088,7 @@ class HazardLayer:
         safe_percentages = [100 - risk_pct for risk_pct in risk_percentages]
 
         # Create stacked bar chart
-        bar_width = 0.6
         x_positions = range(len(scenario_names))
-
-        # Bottom bars (safe areas) - use light gray
-        safe_bars = plt.bar(
-            x_positions,
-            safe_percentages,
-            bar_width,
-            label="Safe Areas (Risk ≤ 0.3)",
-            color="lightgray",
-            alpha=0.8,
-            edgecolor="black",
-            linewidth=1,
-        )
-
-        # Top bars (risk areas) - use scenario colors
-        risk_bars = plt.bar(
-            x_positions,
-            risk_percentages,
-            bar_width,
-            bottom=safe_percentages,
-            label="High Risk Areas (Risk > 0.3)",
-            color="#e30613",
-            alpha=0.8,
-            edgecolor="black",
-            linewidth=1,
-        )
 
         plt.title(
             "Relative Flood Risk Distribution by Sea Level Rise Scenario\n(Percentage of Total Study Area)",
@@ -2149,7 +2120,6 @@ class HazardLayer:
         # Add total area information on safe areas
         for i, safe_pct in enumerate(safe_percentages):
             if safe_pct > 10:  # Only show if there's enough space
-                safe_area_km2 = total_area_km2 - flood_areas[i]
                 plt.text(
                     i,
                     safe_pct / 2,
@@ -2294,7 +2264,7 @@ class HazardLayer:
                 "coastline_multiplier"
             ]
 
-            logger.info(f"Calculating coastline risk enhancement:")
+            logger.info("Calculating coastline risk enhancement:")
             logger.info(f"  Distance threshold: {coastline_distance_m}m")
             logger.info(f"  Risk multiplier: {coastline_multiplier}")
             logger.info(f"  Coastline file: {self.config.coastline_path}")
@@ -2303,7 +2273,7 @@ class HazardLayer:
             target_crs = rasterio.crs.CRS.from_string(self.config.target_crs)
             coastline_gdf = gpd.read_file(self.config.coastline_path)
 
-            logger.info(f"Loaded coastline data:")
+            logger.info("Loaded coastline data:")
             logger.info(f"  Features: {len(coastline_gdf)}")
             logger.info(f"  Original CRS: {coastline_gdf.crs}")
             logger.info(f"  Original bounds: {coastline_gdf.total_bounds}")
@@ -2322,7 +2292,7 @@ class HazardLayer:
             # Get NUTS extent (bounding box) to avoid overlap issues
             nuts_bounds = nuts_gdf.total_bounds  # [minx, miny, maxx, maxy]
 
-            logger.info(f"NUTS boundaries:")
+            logger.info("NUTS boundaries:")
             logger.info(f"  Features: {len(nuts_gdf)}")
             logger.info(f"  Bounds: {nuts_bounds}")
 
@@ -2337,13 +2307,13 @@ class HazardLayer:
                 nuts_bounds[3] + buffer_distance,  # maxy
             ]
 
-            logger.info(f"Buffered clipping extent:")
+            logger.info("Buffered clipping extent:")
             logger.info(f"  Buffer distance: {buffer_distance}m")
             logger.info(f"  Buffered bounds: {nuts_extent_buffered}")
 
             # Check if coastline and NUTS bounds overlap at all
             coastline_bounds = coastline_gdf.total_bounds
-            logger.info(f"Bounds overlap check:")
+            logger.info("Bounds overlap check:")
             logger.info(f"  Coastline bounds: {coastline_bounds}")
             logger.info(f"  NUTS bounds: {nuts_bounds}")
             logger.info(f"  Buffered bounds: {nuts_extent_buffered}")
@@ -2356,7 +2326,7 @@ class HazardLayer:
                 coastline_gdf.geometry.intersects(clipping_box)
             ]
 
-            logger.info(f"Clipping results:")
+            logger.info("Clipping results:")
             logger.info(f"  Original coastline features: {len(coastline_gdf)}")
             logger.info(f"  Clipped coastline features: {len(coastline_clipped)}")
 
@@ -2376,14 +2346,14 @@ class HazardLayer:
             coastline_combined = unary_union(coastline_clipped.geometry.tolist())
             coastline_buffer = coastline_combined.buffer(coastline_distance_m)
 
-            logger.info(f"Buffer creation:")
+            logger.info("Buffer creation:")
             logger.info(f"  Original coastline geometries: {len(coastline_clipped)}")
             logger.info(f"  Combined coastline type: {type(coastline_combined)}")
             logger.info(f"  Buffer distance: {coastline_distance_m}m")
             logger.info(f"  Buffer area: {coastline_buffer.area / 1e6:.2f} km²")
 
             # Rasterize the buffer polygon
-            logger.info(f"Rasterizing coastline buffer...")
+            logger.info("Rasterizing coastline buffer...")
             logger.info(f"  Raster shape: {shape}")
             logger.info(f"  Transform: {transform}")
 
@@ -2423,7 +2393,7 @@ class HazardLayer:
                 return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.uint8)
 
             # Create coastline influence zone by intersecting buffer with land mask
-            logger.info(f"Creating coastline influence zone...")
+            logger.info("Creating coastline influence zone...")
 
             # The buffer extends into both land and sea - we only want the land portion
             coastline_zone_mask = (coastline_buffer_raster == 1) & (land_mask == 1)
@@ -2433,7 +2403,7 @@ class HazardLayer:
             buffer_pixels_total = np.sum(coastline_buffer_raster == 1)
             affected_land_pixels = np.sum(coastline_zone_mask)
 
-            logger.info(f"Zone calculation:")
+            logger.info("Zone calculation:")
             logger.info(f"  Total land pixels: {land_pixels}")
             logger.info(f"  Total buffer pixels (land + sea): {buffer_pixels_total}")
             logger.info(
@@ -2458,7 +2428,7 @@ class HazardLayer:
                 else 0
             )
 
-            logger.info(f"Applied coastline risk enhancement:")
+            logger.info("Applied coastline risk enhancement:")
             logger.info(
                 f"  Affected land pixels: {affected_pixels} ({affected_percentage:.1f}% of land)"
             )

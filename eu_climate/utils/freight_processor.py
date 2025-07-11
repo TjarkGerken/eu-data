@@ -53,10 +53,7 @@ Usage:
 """
 
 import pandas as pd
-import geopandas as gpd
-import numpy as np
 from typing import Dict, Tuple, Optional
-from pathlib import Path
 
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging

@@ -55,11 +55,9 @@ Usage:
 
 import pandas as pd
 import geopandas as gpd
-import numpy as np
 import rasterio
 import rasterio.features
-from typing import Dict, Tuple, Optional
-from pathlib import Path
+from typing import Dict
 
 from eu_climate.config.config import ProjectConfig
 from eu_climate.utils.utils import setup_logging

@@ -13,9 +13,7 @@ from eu_climate.utils.conversion import RasterTransformer
 from eu_climate.utils.visualization import LayerVisualizer
 from eu_climate.risk_layers.exposition_layer import ExpositionLayer
 from eu_climate.risk_layers.relevance_layer import (
-    EconomicDataLoader,
     NUTSDataMapper,
-    EconomicDistributor,
 )
 from eu_climate.utils.freight_processor import SharedFreightProcessor
 

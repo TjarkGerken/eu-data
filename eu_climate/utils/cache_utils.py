@@ -1,10 +1,8 @@
-import os
-import sys
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import argparse
 
-from eu_climate.utils.cache_manager import get_cache_manager, CacheManager
+from eu_climate.utils.cache_manager import get_cache_manager
 from eu_climate.utils.caching_wrappers import (
     cache_hazard_layer,
     cache_exposition_layer,
@@ -445,7 +443,7 @@ def manage_cache_cli():
 
     if args.size:
         cache_info = integrator.get_cache_info()
-        print(f"\nCache Size Breakdown:")
+        print("\nCache Size Breakdown:")
         for cache_type, info in cache_info["breakdown"].items():
             print(
                 f"  {cache_type}: {info['file_count']} files, {info['size_mb']:.1f} MB"

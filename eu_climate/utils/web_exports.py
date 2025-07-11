@@ -70,18 +70,15 @@ Usage:
 import os
 import subprocess
 import tempfile
-import shutil
 import sqlite3
 import platform
 from pathlib import Path
 from typing import Dict, Optional, Union, List
-import numpy as np
 
 try:
     import rasterio
-    from rasterio.warp import reproject, Resampling
     from rasterio.crs import CRS
-    from rasterio.profiles import default_gtiff_profile
+    
 
     RASTERIO_AVAILABLE = True
 except ImportError:

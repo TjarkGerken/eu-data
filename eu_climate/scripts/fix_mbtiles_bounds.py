@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-import logging
 import geopandas as gpd
 
 # Add parent directory to path for imports
@@ -36,7 +35,7 @@ def validate_gpkg_data(gpkg_file):
             # Check if WGS84 bounds are reasonable
             west, south, east, north = gdf_wgs84.total_bounds
             if not (-20 <= west <= 45 and 30 <= south <= 75):
-                logger.warning(f"  WGS84 bounds outside expected European range")
+                logger.warning("  WGS84 bounds outside expected European range")
                 return False
 
         return len(gdf) > 0
@@ -169,7 +168,7 @@ def regenerate_mbtiles_optimized(config):
 
     # Summary
     logger.info(f"\n{'=' * 60}")
-    logger.info(f"REGENERATION SUMMARY")
+    logger.info("REGENERATION SUMMARY")
     logger.info(f"{'=' * 60}")
     logger.info(f"Successful: {success_count}")
     logger.info(f"Failed: {error_count}")

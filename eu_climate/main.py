@@ -45,9 +45,6 @@ from eu_climate.utils.cache_utils import (
 )
 from eu_climate.utils.caching_wrappers import cache_relevance_layer
 import numpy as np
-import rasterio.mask
-import rasterio.features
-import rasterio.warp
 from pathlib import Path
 from typing import List, Dict, Any
 from enum import Enum
@@ -464,13 +461,13 @@ class RiskAssessment:
             # Log freight-specific results
             if "freight" in relevance_layers:
                 freight_data = relevance_layers["freight"]
-                logger.info(f"✅ Freight relevance layer completed:")
+                logger.info("✅ Freight relevance layer completed:")
                 logger.info(f"   - Shape: {freight_data.shape}")
                 logger.info(
                     f"   - Value range: {np.nanmin(freight_data):.3f} to {np.nanmax(freight_data):.3f}"
                 )
                 logger.info(f"   - Non-zero pixels: {np.sum(freight_data > 0):,}")
-                logger.info(f"   - Enhanced with Zeevart maritime port data")
+                logger.info("   - Enhanced with Zeevart maritime port data")
             else:
                 logger.warning("!  Freight layer not found in results")
 
@@ -557,7 +554,7 @@ class RiskAssessment:
                 visualize=True, export_results=True
             )
 
-            logger.info(f"Risk layer analysis completed successfully")
+            logger.info("Risk layer analysis completed successfully")
             logger.info(f"Processed {len(risk_scenarios)} sea level scenarios")
 
             return risk_scenarios
@@ -623,7 +620,7 @@ class RiskAssessment:
                 visualize=True, export_results=True
             )
 
-            logger.info(f"Population risk layer analysis completed successfully")
+            logger.info("Population risk layer analysis completed successfully")
             logger.info(
                 f"Processed {len(population_risk_scenarios)} sea level scenarios"
             )
@@ -655,7 +652,7 @@ class RiskAssessment:
                 visualize=True, export_results=True
             )
 
-            logger.info(f"Cluster layer analysis completed successfully")
+            logger.info("Cluster layer analysis completed successfully")
             logger.info(
                 f"Processed {len(cluster_results)} risk scenarios for clustering"
             )
@@ -697,7 +694,7 @@ class RiskAssessment:
                 create_visualizations=True, export_results=True
             )
 
-            logger.info(f"Economic impact analysis completed successfully")
+            logger.info("Economic impact analysis completed successfully")
             logger.info(f"Generated impact metrics for {len(impact_metrics)} scenarios")
 
             if impact_metrics:
@@ -749,7 +746,6 @@ class RiskAssessment:
         """
         from eu_climate.utils.web_exports import WebOptimizedExporter
         from pathlib import Path
-        import glob
 
         logger.info("Starting web conversion of existing files")
 
@@ -978,7 +974,7 @@ class RiskAssessment:
             + summary["failed_shp_mbtiles_conversions"]
         )
         if total_failed > 0:
-            logger.warning(f"Some conversions failed. Check logs for details.")
+            logger.warning("Some conversions failed. Check logs for details.")
         else:
             logger.info("All conversions completed successfully!")
 
@@ -1225,7 +1221,7 @@ def run_web_conversion_standalone(config: ProjectConfig) -> Dict[str, Any]:
         + summary["failed_shp_mbtiles_conversions"]
     )
     if total_failed > 0:
-        logger.warning(f"Some conversions failed. Check logs for details.")
+        logger.warning("Some conversions failed. Check logs for details.")
     else:
         logger.info("All conversions completed successfully!")
 
@@ -1365,7 +1361,7 @@ def main():
                 logger.info(f"Using custom output directory: {config.output_dir}")
 
             # Run web conversion directly without initializing full RiskAssessment
-            conversion_results = run_web_conversion_standalone(config)
+            run_web_conversion_standalone(config)
 
             logger.info(f"\n{'=' * 60}")
             logger.info("WEB CONVERSION COMPLETED SUCCESSFULLY")

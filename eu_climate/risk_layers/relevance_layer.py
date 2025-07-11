@@ -688,7 +688,6 @@ class EconomicDistributor:
         """Rasterize port freight data using high-resolution shapefile areas."""
         try:
             import rasterio.features
-            from shapely.geometry import Polygon
 
             port_raster = np.zeros(target_shape, dtype=np.float32)
 
