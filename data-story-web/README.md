@@ -1,6 +1,6 @@
 # EU Climate Data Story Web Application
 
-A sophisticated Next.js application for interactive climate data storytelling with comprehensive content management capabilities. This platform combines modern web technologies with specialized scientific data visualization for European climate risk assessment communication.
+A Next.js application for interactive climate data storytelling with comprehensive content management capabilities. This platform combines modern web technologies with specialized scientific data visualization for European climate risk assessment communication.
 
 ## 🎯 Overview
 
@@ -28,7 +28,7 @@ This application serves as an interactive data story platform that transforms co
 
 **Data & Storage:**
 
-- **Supabase** for database management and real-time features
+- **Supabase** for database management and real-time feature access
 - **Cloudflare R2** for large file storage (S3-compatible)
 
 **Mapping & Geospatial:**
@@ -75,7 +75,7 @@ data-story-web/
 
 ### Dynamic Block System
 
-The application features a sophisticated block-based content architecture with 15+ specialized block types:
+The application features a block-based content architecture with 15+ specialized block types:
 
 **Core Content Blocks:**
 
@@ -100,14 +100,13 @@ The application features a sophisticated block-based content architecture with 1
 **Content Management (`/admin/content`):**
 
 - Multilingual story editing (English/German)
-- Visual block editor with real-time preview
+- Visual block editor with preview
 - Reference management with citation linking
 - Block ordering and content validation
 
 **Image Management (`/admin/images`):**
 
 - Multi-category support (Hazard, Risk, Exposition, Combined)
-- Automatic scenario detection
 - Thumbnail generation and preview
 - Cloudflare R2 integration for large files
 
@@ -174,15 +173,6 @@ block_references      # Many-to-many block-citation relationships
 climate_images        # Image metadata with blob storage URLs
 layer_styles          # Map layer styling configurations
 ```
-
-### Migration System
-
-Automated database migrations in `database/migrations/`:
-
-- Schema evolution tracking
-- Layer style management
-- Reference system enhancements
-- Content block field additions
 
 ## 🔧 Development
 
