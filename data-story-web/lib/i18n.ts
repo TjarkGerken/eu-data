@@ -198,7 +198,7 @@ export const translations: Record<Language, Translation> = {
 
   de: {
     // Header
-    dataStories: "Datengeschichten",
+    dataStories: "Data Story",
     story: "Geschichte",
     visualizations: "Visualisierungen",
     gallery: "Galerie",

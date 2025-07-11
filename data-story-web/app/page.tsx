@@ -7,7 +7,10 @@ import { TechnicalSection } from "@/components/technical-section";
 import { ReferencesSidebar } from "@/components/references-sidebar";
 import { DataStoryRenderer } from "@/components/blocks/data-story-renderer";
 import { ClimateLoading } from "@/components/climate-loading";
-import { LoadingWarningDialog, useLoadingWarning } from "@/components/loading-warning-dialog";
+import {
+  LoadingWarningDialog,
+  useLoadingWarning,
+} from "@/components/loading-warning-dialog";
 import { useDynamicContent } from "@/hooks/use-dynamic-content";
 import { motion } from "motion/react";
 
@@ -16,7 +19,6 @@ export default function HomePage() {
   const shouldShowWarning = useLoadingWarning();
   const [showWarningDialog, setShowWarningDialog] = useState(false);
 
-  // Show warning dialog when component mounts if user hasn't dismissed it
   useEffect(() => {
     if (shouldShowWarning) {
       setShowWarningDialog(true);
@@ -51,10 +53,8 @@ export default function HomePage() {
       />
       <Header enableAnimations={true} />
 
-      {/* Hero Video Section - Above the Fold */}
       <HeroVideoSection />
 
-      {/* Main Content Section - Below the Fold */}
       <div id="main-content" className="bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <motion.div
@@ -65,25 +65,6 @@ export default function HomePage() {
             className="grid grid-cols-1 lg:grid-cols-4 gap-8"
           >
             <main className="lg:col-span-3">
-              {/* Introduction Section */}
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                viewport={{ once: true }}
-                className="mb-12"
-              >
-                <div className="prose max-w-none">
-                  <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
-                    {content.introText1}
-                  </p>
-                  <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                    {content.introText2}
-                  </p>
-                </div>
-              </motion.section>
-
-              {/* Data Story Section */}
               <motion.section
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -103,7 +84,6 @@ export default function HomePage() {
                 />
               </motion.section>
 
-              {/* Technical Section */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -114,7 +94,6 @@ export default function HomePage() {
               </motion.div>
             </main>
 
-            {/* References Sidebar */}
             <aside className="lg:col-span-1">
               <motion.div
                 initial={{ opacity: 0, x: 20 }}

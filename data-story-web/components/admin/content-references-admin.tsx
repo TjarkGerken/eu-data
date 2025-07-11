@@ -13,10 +13,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Save, X, Edit } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Trash2,
+  Plus,
+  Save,
+  X,
+  Edit,
+  AlertCircle,
+  CheckCircle,
+  RefreshCw,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ContentReference, ContentReferenceInsert } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import {
+  generateUniqueReadableId,
+  validateReadableIdUniqueness,
+  sanitizeReadableId,
+  generateBaseReadableId,
+} from "@/lib/readable-id-utils";
 
 export default function ContentReferencesAdmin() {
   const [references, setReferences] = useState<ContentReference[]>([]);
@@ -32,6 +48,17 @@ export default function ContentReferencesAdmin() {
     journal: "",
     url: "",
     type: "journal" as "journal" | "book" | "website" | "report",
+    readable_id: "",
+  });
+
+  const [readableIdValidation, setReadableIdValidation] = useState<{
+    isValidating: boolean;
+    isValid: boolean | null;
+    suggestedId?: string;
+    message?: string;
+  }>({
+    isValidating: false,
+    isValid: null,
   });
 
   const loadReferences = useCallback(async () => {
@@ -68,7 +95,82 @@ export default function ContentReferencesAdmin() {
       journal: "",
       url: "",
       type: "journal" as "journal" | "book" | "website" | "report",
+      readable_id: "",
     });
+    setReadableIdValidation({
+      isValidating: false,
+      isValid: null,
+    });
+  };
+
+  const validateReadableId = async (readableId: string) => {
+    if (!readableId.trim()) {
+      setReadableIdValidation({
+        isValidating: false,
+        isValid: false,
+        message: "Readable ID is required",
+      });
+      return;
+    }
+
+    setReadableIdValidation({ isValidating: true, isValid: null });
+
+    try {
+      const result = await validateReadableIdUniqueness(
+        readableId,
+        editingId || undefined
+      );
+
+      setReadableIdValidation({
+        isValidating: false,
+        isValid: result.isValid,
+        suggestedId: result.suggestedId,
+        message: result.isValid
+          ? "ID is available"
+          : `ID already exists${
+              result.suggestedId ? `. Suggested: ${result.suggestedId}` : ""
+            }`,
+      });
+    } catch (error) {
+      setReadableIdValidation({
+        isValidating: false,
+        isValid: false,
+        message: "Error validating ID",
+      });
+    }
+  };
+
+  const generateReadableIdFromForm = async () => {
+    if (formData.authors.length === 0 || !formData.authors[0].trim()) {
+      toast({
+        title: "Cannot generate ID",
+        description: "Please add at least one author first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const readableId = await generateUniqueReadableId({
+        authors: formData.authors,
+        year: formData.year,
+        excludeId: editingId || undefined,
+      });
+
+      setFormData((prev) => ({ ...prev, readable_id: readableId }));
+      setReadableIdValidation({
+        isValidating: false,
+        isValid: true,
+        message: "ID generated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error generating ID",
+        description:
+          error instanceof Error ? error.message : "Failed to generate ID",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -81,10 +183,31 @@ export default function ContentReferencesAdmin() {
       return;
     }
 
-    if (formData.authors.length === 0 || formData.authors.every(author => !author.trim())) {
+    if (
+      formData.authors.length === 0 ||
+      formData.authors.every((author) => !author.trim())
+    ) {
       toast({
-        title: "Validation Error", 
+        title: "Validation Error",
         description: "At least one author is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.readable_id.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Readable ID is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (readableIdValidation.isValid === false) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the readable ID before saving",
         variant: "destructive",
       });
       return;
@@ -102,7 +225,7 @@ export default function ContentReferencesAdmin() {
       } else {
         const insertData: ContentReferenceInsert = {
           ...formData,
-          id: crypto.randomUUID()
+          id: crypto.randomUUID(),
         };
         const { error } = await supabase
           .from("content_references")
@@ -136,6 +259,12 @@ export default function ContentReferencesAdmin() {
       journal: reference.journal || "",
       url: reference.url || "",
       type: reference.type as "journal" | "book" | "website" | "report",
+      readable_id: reference.readable_id,
+    });
+    setReadableIdValidation({
+      isValidating: false,
+      isValid: true,
+      message: "Current ID",
     });
     setEditingId(reference.id);
     setShowNewForm(false);
@@ -276,7 +405,10 @@ export default function ContentReferencesAdmin() {
                 <Select
                   value={formData.type}
                   onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, type: value as "journal" | "book" | "website" | "report" }))
+                    setFormData((prev) => ({
+                      ...prev,
+                      type: value as "journal" | "book" | "website" | "report",
+                    }))
                   }
                 >
                   <SelectTrigger>
@@ -290,6 +422,95 @@ export default function ContentReferencesAdmin() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="readable_id">Readable ID</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="readable_id"
+                  value={formData.readable_id}
+                  onChange={(e) => {
+                    const sanitized = sanitizeReadableId(e.target.value);
+                    setFormData((prev) => ({
+                      ...prev,
+                      readable_id: sanitized,
+                    }));
+                    if (sanitized !== e.target.value) {
+                      // Show user that input was sanitized
+                      setTimeout(() => validateReadableId(sanitized), 100);
+                    } else {
+                      validateReadableId(sanitized);
+                    }
+                  }}
+                  placeholder="e.g., Smith2023"
+                  className={
+                    readableIdValidation.isValid === false
+                      ? "border-red-500"
+                      : readableIdValidation.isValid === true
+                      ? "border-green-500"
+                      : ""
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={generateReadableIdFromForm}
+                  disabled={readableIdValidation.isValidating}
+                  title="Generate ID from author and year"
+                >
+                  {readableIdValidation.isValidating ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+
+              {readableIdValidation.message && (
+                <div className="mt-1 flex items-center gap-1 text-sm">
+                  {readableIdValidation.isValid === true ? (
+                    <CheckCircle className="w-3 h-3 text-green-600" />
+                  ) : readableIdValidation.isValid === false ? (
+                    <AlertCircle className="w-3 h-3 text-red-600" />
+                  ) : null}
+                  <span
+                    className={
+                      readableIdValidation.isValid === true
+                        ? "text-green-600"
+                        : readableIdValidation.isValid === false
+                        ? "text-red-600"
+                        : "text-gray-600"
+                    }
+                  >
+                    {readableIdValidation.message}
+                  </span>
+                  {readableIdValidation.suggestedId && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 ml-2 text-xs"
+                      onClick={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          readable_id: readableIdValidation.suggestedId!,
+                        }));
+                        validateReadableId(readableIdValidation.suggestedId!);
+                      }}
+                    >
+                      Use suggested: {readableIdValidation.suggestedId}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground mt-1">
+                This ID will be used in citations like \cite
+                {`{${formData.readable_id || "YourId"}}`}. It should be short,
+                memorable, and unique.
+              </p>
             </div>
 
             <div>
@@ -356,8 +577,11 @@ export default function ContentReferencesAdmin() {
                       View Source
                     </a>
                   )}
-                  <div className="mt-2">
+                  <div className="mt-2 flex gap-2 flex-wrap">
                     <Badge variant="outline">{reference.type}</Badge>
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      {reference.readable_id}
+                    </Badge>
                   </div>
                 </div>
                 <div className="flex gap-2">

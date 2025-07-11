@@ -40,6 +40,16 @@ export function ClimateDashboardBlock({
 }: ClimateDashboardBlockProps) {
   const { language } = useLanguage();
 
+  // Handle references directly - this component expects full reference objects
+  const displayReferences = references || [];
+
+  const handleReferenceClick = (referenceId: string) => {
+    const event = new CustomEvent("highlightReference", {
+      detail: referenceId,
+    });
+    window.dispatchEvent(event);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "success":
@@ -134,7 +144,10 @@ export function ClimateDashboardBlock({
                     </span>
                     <span className="font-medium">{metric.target}</span>
                   </div>
-                  <Progress value={metric.progress} className="h-2" />
+                  <Progress
+                    value={Math.min(Math.max(0, metric.progress || 0), 100)}
+                    className="h-2 bg-slate-200 [&>div]:bg-gradient-to-r [&>div]:from-[#2d5a3d] [&>div]:to-[#c4a747]"
+                  />
                   <div className="text-xs text-right text-muted-foreground">
                     {metric.progress}%
                   </div>
@@ -197,22 +210,17 @@ export function ClimateDashboardBlock({
         </Card>
       </div>
 
-      {references && references.length > 0 && (
+      {displayReferences && displayReferences.length > 0 && (
         <div className="mt-8 pt-6 border-t border-muted">
           <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-            References
+            {language === "de" ? "Referenzen" : "References"}
           </h4>
           <div className="space-y-2">
-            {references.map((ref) => (
+            {displayReferences.map((ref) => (
               <div
                 key={ref.id}
                 className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => {
-                  const event = new CustomEvent("highlightReference", {
-                    detail: ref.id,
-                  });
-                  window.dispatchEvent(event);
-                }}
+                onClick={() => handleReferenceClick(ref.id)}
               >
                 <span className="font-medium">{ref.title}</span>
                 {ref.authors && ref.authors.length > 0 && (

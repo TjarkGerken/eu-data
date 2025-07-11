@@ -104,12 +104,20 @@ export default function ClimateImage({
   }, [category, scenario, id, onMetadataLoaded]);
 
   if (loading) {
-    return <div className={`${className} bg-muted animate-pulse`} />;
+    return (
+      <div
+        className={`${className} bg-muted animate-pulse`}
+        style={!fill && width && height ? { width, height } : undefined}
+      />
+    );
   }
 
   if (error || !targetImage) {
     return (
-      <div className={`${className} bg-muted flex items-center justify-center`}>
+      <div
+        className={`${className} bg-muted flex items-center justify-center min-h-[200px]`}
+        style={!fill && width && height ? { width, height } : undefined}
+      >
         <span className="text-muted-foreground text-sm">
           {error || "Image not found"}
         </span>

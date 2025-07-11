@@ -10,13 +10,10 @@ export interface Reference {
   authors: string[];
   year: number;
   type: string;
+  readable_id: string;
 }
 
-export function generateReadableId(ref: Reference, index: number = 0): string {
-  const firstAuthor = ref.authors[0]?.split(' ').pop() || 'Unknown';
-  const year = ref.year || new Date().getFullYear();
-  return `${firstAuthor}${year}${index > 0 ? `-${index + 1}` : ''}`;
-}
+
 
 export function parseCitationsFromText(text: string): CitationMatch[] {
   if (!text || typeof text !== 'string') {

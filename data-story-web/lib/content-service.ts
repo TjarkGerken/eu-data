@@ -8,6 +8,7 @@ export interface ContentReference {
   journal: string | null;
   url: string | null;
   type: string;
+  readable_id: string;
 }
 
 export interface ContentStory {

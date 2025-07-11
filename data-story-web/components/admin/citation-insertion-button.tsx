@@ -28,6 +28,7 @@ interface Reference {
   authors: string[];
   year: number;
   type: "journal" | "report" | "dataset" | "book";
+  readable_id: string;
 }
 
 interface CitationInsertionButtonProps {
@@ -59,27 +60,9 @@ export function CitationInsertionButton({
     setOpen(newOpen);
   };
 
-  const generateReadableId = (ref: Reference, index: number = 0): string => {
-    if (!ref?.authors?.[0]) return `Unknown${ref?.year || new Date().getFullYear()}`;
-    const firstAuthor = ref.authors[0].split(' ').pop() || 'Unknown';
-    const year = ref.year || new Date().getFullYear();
-    return `${firstAuthor}${year}${index > 0 ? `-${index + 1}` : ''}`;
-  };
-
   const getReadableIdForReference = (refId: string): string => {
-    const reference = availableReferences.find(r => r?.id === refId);
-    if (!reference) return refId;
-
-    // Check for duplicates to generate unique readable ID
-    const duplicates = availableReferences.filter(r => {
-      if (!r?.authors?.[0] || !reference?.authors?.[0]) return false;
-      const rFirstAuthor = r.authors[0].split(' ').pop() || 'Unknown';
-      const refFirstAuthor = reference.authors[0].split(' ').pop() || 'Unknown';
-      return rFirstAuthor === refFirstAuthor && r.year === reference.year;
-    });
-
-    const duplicateIndex = duplicates.findIndex(r => r?.id === refId);
-    return generateReadableId(reference, duplicateIndex >= 0 ? duplicateIndex : 0);
+    const reference = availableReferences.find((r) => r?.id === refId);
+    return reference?.readable_id || refId;
   };
 
   const insertCitation = (referenceId: string) => {
@@ -89,17 +72,17 @@ export function CitationInsertionButton({
     const currentContent = textarea.value;
     const readableId = getReadableIdForReference(referenceId);
     const citationText = `\\cite{${readableId}}`;
-    
-    const newContent = 
-      currentContent.slice(0, cursorPosition) + 
-      citationText + 
+
+    const newContent =
+      currentContent.slice(0, cursorPosition) +
+      citationText +
       currentContent.slice(cursorPosition);
-    
+
     onContentChange(newContent);
-    
+
     setOpen(false);
     setSelectedReference("");
-    
+
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
@@ -132,12 +115,13 @@ export function CitationInsertionButton({
         <DialogHeader>
           <DialogTitle>Insert Citation</DialogTitle>
           <DialogDescription>
-            Select a reference to insert as a citation at the current cursor position.
-            This will insert <code>\cite{`{ReadableId}`}</code> syntax using human-readable identifiers 
-            like <code>Smith2023</code> instead of technical IDs.
+            Select a reference to insert as a citation at the current cursor
+            position. This will insert <code>\cite{`{ReadableId}`}</code> syntax
+            using human-readable identifiers like <code>Smith2023</code> instead
+            of technical IDs.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="flex-1 overflow-hidden">
           <Command className="h-full">
             <CommandInput placeholder="Search references..." />
@@ -147,7 +131,9 @@ export function CitationInsertionButton({
                 {availableReferences.map((reference) => (
                   <CommandItem
                     key={reference.id}
-                    value={`${reference.id} ${reference.title} ${reference.authors.join(" ")}`}
+                    value={`${reference.id} ${
+                      reference.title
+                    } ${reference.authors.join(" ")}`}
                     onSelect={() => handleReferenceSelect(reference.id)}
                     className="flex items-start gap-3 p-3 cursor-pointer"
                   >
@@ -177,7 +163,9 @@ export function CitationInsertionButton({
                         {reference.authors.join(", ")} ({reference.year})
                       </p>
                       <div className="mt-2 p-2 bg-muted rounded text-xs font-mono">
-                        <code>\cite{`{${getReadableIdForReference(reference.id)}}`}</code>
+                        <code>
+                          \cite{`{${getReadableIdForReference(reference.id)}}`}
+                        </code>
                       </div>
                     </div>
                   </CommandItem>
@@ -189,4 +177,4 @@ export function CitationInsertionButton({
       </DialogContent>
     </Dialog>
   );
-} 
+}

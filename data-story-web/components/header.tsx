@@ -3,6 +3,7 @@
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import Link from "next/link";
 import { useLanguage } from "@/contexts/language-context";
 import { motion, useScroll, useTransform } from "motion/react";
 import { useEffect, useState } from "react";
@@ -54,7 +55,7 @@ export function Header({ enableAnimations = true }: HeaderProps) {
             isScrolled ? "border-b border-border/40 backdrop-blur-md" : ""
           }`}
         >
-          <div className="container flex h-16 items-center justify-between">
+          <div className="container grid grid-cols-3 h-16 items-center">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <Image
@@ -85,38 +86,26 @@ export function Header({ enableAnimations = true }: HeaderProps) {
               </div>
             </div>
 
-            <nav className="hidden md:flex items-center space-x-6">
-              <motion.a
-                href="#main-content"
-                className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
-                style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
-              >
-                {t.story}
-              </motion.a>
-              <motion.a
-                href="#visualizations"
-                className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
-                style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
-              >
-                {t.visualizations}
-              </motion.a>
-              <motion.a
-                href="/gallery"
-                className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
-                style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
-              >
-                {t.gallery || "Gallery"}
-              </motion.a>
-              <motion.a
-                href="#bibliography"
-                className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
-                style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
-              >
-                {t.bibliography}
-              </motion.a>
+            <nav className="hidden md:flex items-center justify-center space-x-6">
+              <Link href="/">
+                <motion.span
+                  className="text-sm font-medium transition-colors duration-300 hover:opacity-80 cursor-pointer"
+                  style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
+                >
+                  Data Story
+                </motion.span>
+              </Link>
+              <Link href="/gallery">
+                <motion.span
+                  className="text-sm font-medium transition-colors duration-300 hover:opacity-80 cursor-pointer"
+                  style={{ color: isScrolled ? "#2d5a3d" : "#ffffff" }}
+                >
+                  {t.gallery || "Gallery"}
+                </motion.span>
+              </Link>
             </nav>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-end space-x-2">
               <Button
                 variant={isScrolled ? "outline" : "ghost"}
                 size="icon"
@@ -141,7 +130,7 @@ export function Header({ enableAnimations = true }: HeaderProps) {
       style={{ backgroundColor: staticStyles.backgroundColor }}
     >
       <div className="w-full transition-all duration-300 flex justify-center border-b border-border/40 backdrop-blur-md">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container grid grid-cols-3 h-16 items-center">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <Image
@@ -168,38 +157,25 @@ export function Header({ enableAnimations = true }: HeaderProps) {
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center space-x-6">
-            <a
-              href="#main-content"
+          <nav className="hidden md:flex items-center justify-center space-x-6">
+            <Link
+              href="/"
               className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
               style={{ color: "#2d5a3d" }}
             >
-              {t.story}
-            </a>
-            <a
-              href="#visualizations"
-              className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
-              style={{ color: "#2d5a3d" }}
-            >
-              {t.visualizations}
-            </a>
-            <a
+              Data Story
+            </Link>
+
+            <Link
               href="/gallery"
               className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
               style={{ color: "#2d5a3d" }}
             >
               {t.gallery || "Gallery"}
-            </a>
-            <a
-              href="#bibliography"
-              className="text-sm font-medium transition-colors duration-300 hover:opacity-80"
-              style={{ color: "#2d5a3d" }}
-            >
-              {t.bibliography}
-            </a>
+            </Link>
           </nav>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-end space-x-2">
             <Button
               variant="outline"
               size="icon"

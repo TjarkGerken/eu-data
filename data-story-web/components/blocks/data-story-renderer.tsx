@@ -29,7 +29,12 @@ export function DataStoryRenderer({
 }: DataStoryRendererProps) {
   // Process global citations once for all blocks, using the global references list
   const globalCitationData = useMemo(() => {
-    return processGlobalCitations(blocks || [], globalReferences || []);
+    // Add readable_id to references for compatibility with processGlobalCitations
+    const compatibleReferences = (globalReferences || []).map((ref) => ({
+      ...ref,
+      readable_id: ref.id, // Use id as readable_id if not present
+    }));
+    return processGlobalCitations(blocks || [], compatibleReferences);
   }, [blocks, globalReferences]);
   const renderBlock = (block: DataStoryBlock, index: number) => {
     switch (block.type) {
@@ -62,20 +67,42 @@ export function DataStoryRenderer({
         console.log("Block data.content:", block.data.content);
         console.log("Block data.isOwnSource:", block.data.isOwnSource);
         console.log("Block data.references:", block.data.references);
-        console.log("Final title passed to component:", block.title || block.data.title || "");
-        console.log("Final content passed to component:", block.content || block.data.content || "");
-        console.log("Final isOwnSource passed to component:", block.data.isOwnSource || false);
+        console.log(
+          "Final title passed to component:",
+          block.title || block.data.title || ""
+        );
+        console.log(
+          "Final content passed to component:",
+          block.content || block.data.content || ""
+        );
+        console.log(
+          "Final isOwnSource passed to component:",
+          block.data.isOwnSource || false
+        );
         console.log("===================================");
-        
+
         return (
           <VisualizationCard
             key={index}
-            title={block.title || (typeof block.data.title === 'string' ? block.data.title : '') || ""}
+            title={
+              block.title ||
+              (typeof block.data.title === "string" ? block.data.title : "") ||
+              ""
+            }
             imageCategory={block.data.imageCategory as ImageCategory}
             imageScenario={block.data.imageScenario as ImageScenario}
             imageId={block.data.imageId as string}
-            content={block.content || (typeof block.data.content === 'string' ? block.data.content : '') || ""}
-            type={(block.data.type as "chart" | "map" | "trend" | "gauge") || "chart"}
+            content={
+              block.content ||
+              (typeof block.data.content === "string"
+                ? block.data.content
+                : "") ||
+              ""
+            }
+            type={
+              (block.data.type as "chart" | "map" | "trend" | "gauge") ||
+              "chart"
+            }
             references={(block.data.references as string[]) || []}
             isOwnSource={(block.data.isOwnSource as boolean) || false}
           />
@@ -175,7 +202,9 @@ export function DataStoryRenderer({
             enableRailwayLayer={block.enableRailwayLayer || false}
             railwayOpacity={block.railwayOpacity || 70}
             railwayStyle={block.railwayStyle || "standard"}
-            showInfrastructureFocusControl={block.showPortFocusControl !== false}
+            showInfrastructureFocusControl={
+              block.showPortFocusControl !== false
+            }
             showMapStyleControl={block.showMapStyleControl !== false}
             showSeamarkLayerControl={block.showSeamarkLayerControl !== false}
             showSeamarkOpacityControl={

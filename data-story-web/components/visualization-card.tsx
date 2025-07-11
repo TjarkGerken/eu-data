@@ -52,13 +52,17 @@ export function VisualizationCard({
   const [captionDe, setCaptionDe] = useState<string | undefined>(undefined);
 
   const handleCitationClick = (referenceId: string) => {
-    const event = new CustomEvent('highlightReference', { detail: referenceId });
+    const event = new CustomEvent("highlightReference", {
+      detail: referenceId,
+    });
     window.dispatchEvent(event);
   };
 
   const resolveReferenceTitle = (refId: string) => {
     if (globalCitationData && globalCitationData.orderedReferences) {
-      const ref = globalCitationData.orderedReferences.find(r => r.id === refId);
+      const ref = globalCitationData.orderedReferences.find(
+        (r) => r.id === refId
+      );
       return ref ? ref.title : refId;
     }
     return refId;
@@ -73,59 +77,58 @@ export function VisualizationCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Visualization Area */}
-        <div className="aspect-[16/9] bg-gradient-to-br from-[#2d5a3d]/10 to-[#c4a747]/10 rounded-lg flex items-center justify-center overflow-hidden">
+        <div className="w-full bg-gradient-to-br from-[#2d5a3d]/10 to-[#c4a747]/10 rounded-lg overflow-hidden">
           {imageCategory ? (
-            <div className="relative w-full h-full">
-              <ClimateImage
-                category={imageCategory}
-                scenario={imageScenario}
-                id={imageId}
-                alt={title}
-                className="object-contain"
-                priority={false}
-                fill={true}
-                onMetadataLoaded={(metadata) => {
-                  setCaptionEn(metadata?.caption?.en);
-                  setCaptionDe(metadata?.caption?.de);
-                }}
-              />
-            </div>
+            <ClimateImage
+              category={imageCategory}
+              scenario={imageScenario}
+              id={imageId}
+              alt={title}
+              className="w-full h-auto"
+              priority={false}
+              fill={false}
+              width={800}
+              height={600}
+              onMetadataLoaded={(metadata) => {
+                setCaptionEn(metadata?.caption?.en);
+                setCaptionDe(metadata?.caption?.de);
+              }}
+            />
           ) : imagePath ? (
-            <div className="relative w-full h-full">
-              <ClimateImage
-                category="risk"
-                alt={title}
-                className="object-contain"
-                priority={false}
-                fill={true}
-              />
-            </div>
+            <ClimateImage
+              category="risk"
+              alt={title}
+              className="w-full h-auto"
+              priority={false}
+              fill={false}
+              width={800}
+              height={600}
+            />
           ) : (
-            <div className="text-center text-muted-foreground">
-              <Icon className="h-16 w-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">
-                {t.visualizationPlaceholder}
-              </p>
-              <p className="text-sm">
-                Interactive {type} {t.interactiveWillRender}
-              </p>
+            <div className="aspect-[16/9] flex items-center justify-center text-center text-muted-foreground">
+              <div>
+                <Icon className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">
+                  {t.visualizationPlaceholder}
+                </p>
+                <p className="text-sm">
+                  Interactive {type} {t.interactiveWillRender}
+                </p>
+              </div>
             </div>
           )}
         </div>
 
-        {captionEn && (
+        {captionDe && (
           <CardDescription className="text-base">
-            {language === "de" ? captionDe || captionEn : captionEn}
+            {language === "de" ? captionDe : captionEn}
           </CardDescription>
         )}
 
-        {/* Content Text */}
         <div className="prose prose-lg max-w-none">
           <p className="text-muted-foreground leading-relaxed">{content}</p>
         </div>
 
-        {/* References */}
         <div className="border-t pt-4">
           <h4 className="text-sm font-medium mb-2">{t.referencedSources}</h4>
           <div className="flex flex-wrap gap-2">

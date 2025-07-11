@@ -543,44 +543,55 @@ function MapLayerSelector({ data, onDataChange }: MapLayerSelectorProps) {
                       Economic Indicators Configuration
                     </Label>
                     <div className="text-xs text-muted-foreground mb-3">
-                      Configure layer assignments for each economic indicator. Use the multi-select with search to easily find and group layers by economic indicator.
+                      Configure layer assignments for each economic indicator.
+                      Use the multi-select with search to easily find and group
+                      layers by economic indicator.
                     </div>
-                    
-                    {["Combined", "Freight", "Population", "HRST", "GDP"].map((indicator) => {
-                      const currentIndicatorLayers = group.economicIndicators?.[indicator]?.layers || [];
-                      
-                      return (
-                        <div key={indicator} className="mb-4 p-3 bg-gray-50 rounded">
-                          <Label className="text-xs font-medium mb-2 block">
-                            {indicator} Indicator
-                          </Label>
-                          
-                          <MultiSelectLayers
-                            layers={availableLayers}
-                            selectedLayerIds={currentIndicatorLayers}
-                            onSelectionChange={(newLayerIds) => {
-                              const newGroups = [...(data?.clusterGroups || [])];
-                              const currentIndicators = newGroups[index].economicIndicators || {};
-                              
-                              newGroups[index] = {
-                                ...newGroups[index],
-                                economicIndicators: {
-                                  ...currentIndicators,
-                                  [indicator]: {
-                                    layers: newLayerIds,
+
+                    {["Combined", "Freight", "Population", "HRST", "GDP"].map(
+                      (indicator) => {
+                        const currentIndicatorLayers =
+                          group.economicIndicators?.[indicator]?.layers || [];
+
+                        return (
+                          <div
+                            key={indicator}
+                            className="mb-4 p-3 bg-gray-50 rounded"
+                          >
+                            <Label className="text-xs font-medium mb-2 block">
+                              {indicator} Indicator
+                            </Label>
+
+                            <MultiSelectLayers
+                              layers={availableLayers}
+                              selectedLayerIds={currentIndicatorLayers}
+                              onSelectionChange={(newLayerIds) => {
+                                const newGroups = [
+                                  ...(data?.clusterGroups || []),
+                                ];
+                                const currentIndicators =
+                                  newGroups[index].economicIndicators || {};
+
+                                newGroups[index] = {
+                                  ...newGroups[index],
+                                  economicIndicators: {
+                                    ...currentIndicators,
+                                    [indicator]: {
+                                      layers: newLayerIds,
+                                    },
                                   },
-                                },
-                              };
-                              
-                              updateDataField("clusterGroups", newGroups);
-                            }}
-                            placeholder={`Select layers for ${indicator} indicator...`}
-                            className="text-xs"
-                            groupByEconomicIndicator={true}
-                          />
-                        </div>
-                      );
-                    })}
+                                };
+
+                                updateDataField("clusterGroups", newGroups);
+                              }}
+                              placeholder={`Select layers for ${indicator} indicator...`}
+                              className="text-xs"
+                              groupByEconomicIndicator={true}
+                            />
+                          </div>
+                        );
+                      }
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -926,6 +937,7 @@ export function BlockTypeFields({
       authors: string[];
       year: number;
       type: "journal" | "report" | "dataset" | "book";
+      readable_id: string;
     }>
   >([]);
 
@@ -939,7 +951,20 @@ export function BlockTypeFields({
     try {
       const response = await fetch("/api/content");
       const data = await response.json();
-      setAvailableReferences(data.references || []);
+      // Add readable_id to references for compatibility
+      const referencesWithReadableId = (data.references || []).map(
+        (ref: {
+          id: string;
+          title: string;
+          authors: string[];
+          year: number;
+          type: string;
+        }) => ({
+          ...ref,
+          readable_id: ref.id, // Use id as readable_id if not present
+        })
+      );
+      setAvailableReferences(referencesWithReadableId);
     } catch (error) {
       console.error("Failed to load references:", error);
     }
@@ -1905,27 +1930,40 @@ export function BlockTypeFields({
     switch (blockType) {
       case "markdown":
         return (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <Label>Content</Label>
-              <CitationInsertionButton
-                textareaRef={markdownTextareaRef}
-                onContentChange={(newContent) => onContentChange?.(newContent)}
-                availableReferences={availableReferences}
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Title</Label>
+              <Input
+                value={title || ""}
+                onChange={(e) => onTitleChange?.(e.target.value)}
+                placeholder="Enter block title..."
               />
+              {renderFieldError("title")}
             </div>
-            <Textarea
-              ref={markdownTextareaRef}
-              value={content || ""}
-              onChange={(e) => onContentChange?.(e.target.value)}
-              placeholder="Enter markdown content... Use \cite{ReadableId} for citations (e.g., \cite{Smith2023})."
-              rows={10}
-            />
-            <div className="text-xs text-muted-foreground">
-              Use <code>\cite{`{ReadableId}`}</code> to insert citations.
-              Example: <code>\cite{`{Smith2023}`}</code>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label>Content</Label>
+                <CitationInsertionButton
+                  textareaRef={markdownTextareaRef}
+                  onContentChange={(newContent) =>
+                    onContentChange?.(newContent)
+                  }
+                  availableReferences={availableReferences}
+                />
+              </div>
+              <Textarea
+                ref={markdownTextareaRef}
+                value={content || ""}
+                onChange={(e) => onContentChange?.(e.target.value)}
+                placeholder="Enter markdown content... Use \cite{ReadableId} for citations (e.g., \cite{Smith2023})."
+                rows={10}
+              />
+              <div className="text-xs text-muted-foreground">
+                Use <code>\cite{`{ReadableId}`}</code> to insert citations.
+                Example: <code>\cite{`{Smith2023}`}</code>
+              </div>
+              {renderFieldError("content")}
             </div>
-            {renderFieldError("content")}
           </div>
         );
 
