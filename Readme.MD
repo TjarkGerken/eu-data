@@ -1,106 +1,106 @@
 # Meer, Märkte, Mobilität: EU Klimarisiko-Bewertung
 
-## Projektübersicht
+## Project Overview
 
-Dieses Repository enthält ein umfassendes Klimarisiko-Bewertungsframework für europäische Regionen mit fortschrittlicher geospatialer Analyse und interaktiver Datenvisualisierung. Das Projekt erforscht Chancen für die EU im Bereich Data Science durch evidenzbasierte Klimarisikoanalyse.
+This repository contains a comprehensive climate-risk assessment framework for European regions with advanced geospatial analysis and interactive data visualization. The project investigates opportunities for the EU in the field of data science through evidence-based climate-risk analysis.
 
-### Zentrale Forschungsfrage
+### Central Research Question
 
-**"Wo liegen Chancen für die EU im Bereich Data Science?"**
+**“Where are the opportunities for the EU in the field of data science?”**
 
-Diese Frage wird durch die Entwicklung eines Klimarisiko-Bewertungssystems beantwortet, das folgende Komponenten kombiniert:
+This question is addressed by developing a climate-risk assessment system that combines the following components:
 
-- Multi-Szenario-Modellierung des Meeresspiegelanstiegs
-- Quantifizierung wirtschaftlicher Auswirkungen
-- Interaktives webbasiertes Data Storytelling
-- Fortschrittliche geospatiale Datenverarbeitung
+- Multi-scenario modeling of sea-level rise  
+- Quantification of economic impacts  
+- Interactive web-based data storytelling  
+- Advanced geospatial data processing  
 
-## Projektergebnisse
+## Project Outcomes
 
-- **Data Story**: Eine interaktive Webanwendung zur Visualisierung der Klimarisiko-Analyse
+- **Data Story**: An interactive web application for visualizing the climate-risk analysis  
   https://eu-data.vercel.app/
 
-- **Multimedia-Präsentation**: Eine umfassende Vorstellung des Projekts und seiner Ergebnisse
+- **Multimedia Presentation**: A comprehensive introduction to the project and its results  
   https://www.youtube.com/watch?v=HwzwvXECIFY
 
-- **Daten & Analysen**: Vollständiger Zugriff auf die verwendeten Datensätze und Analyseergebnisse
+- **Data & Analyses**: Full access to the datasets used and the analysis results  
   https://huggingface.co/datasets/TjarkGerken/eu-data
 
-## Systemkomponenten
+## System Components
 
-### 🔬 [EU Klimarisiko-Bewertungsframework](./eu_climate/README.md)
+### 🔬 [EU Climate Risk Assessment Framework](./eu_climate/README.md)
 
-Ein umfassendes Python-basiertes geospatiales Analyseframework mit einem vierschichtigen Klimarisiko-Bewertungsansatz:
+A comprehensive Python-based geospatial analysis framework with a four-layer climate-risk assessment approach:
 
-- **Gefährdungsschicht**: Meeresspiegelanstieg-Szenarien und Küstenhochwasser-Modellierung
-- **Expositionsschicht**: Gebäudedichte und Bevölkerungsexpositionsanalyse
-- **Relevanzschicht**: Bewertung wirtschaftlicher Faktoren (BIP, Fracht, Humankapital)
-- **Risikoschicht**: Integrierte Multi-Szenario-Risikobewertung anhand ausgewählter Faktoren
-- **Erweiterte Funktionen**: Clusteranalyse, wirtschaftliche Auswirkungsquantifizierung, weboptimierte Ausgaben
+- **Hazard Layer**: Sea-level-rise scenarios and coastal flood modeling  
+- **Exposure Layer**: Building-density and population-exposure analysis  
+- **Relevance Layer**: Assessment of economic factors (GDP, freight, human capital)  
+- **Risk Layer**: Integrated multi-scenario risk evaluation based on selected factors  
+- **Advanced Features**: Cluster analysis, economic-impact quantification, web-optimized outputs  
 
-**Kernfähigkeiten:**
+**Core Capabilities:**
 
-- Multi-Szenario-Analyse (aktuell bis 15m Meeresspiegelanstieg)
-- Cloud-Optimized GeoTIFF (COG) und Mapbox Vector Tiles (MVT) Generierung
-- Automatisierte Datenverarbeitungspipelines mit Hugging Face Integration
-- Wirtschaftliche Auswirkungsanalyse für BIP, Fracht und Humanressourcen
+- Multi-scenario analysis (currently up to 15 m sea-level rise)  
+- Cloud-Optimized GeoTIFF (COG) and Mapbox Vector Tiles (MVT) generation  
+- Automated data-processing pipelines with Hugging Face integration  
+- Economic-impact analysis for GDP, freight, and human resources  
 
-### 🌐 [Data Story Webanwendung](./data-story-web/README.md)
+### 🌐 [Data Story Web Application](./data-story-web/README.md)
 
-Eine interaktive Next.js-Anwendung mit umfassender Data Story Visualisierung und vollständigem Admin-Management:
+An interactive Next.js application with comprehensive data-story visualization and full admin management:
 
-- **Interaktive Visualisierungen**: Dynamische Karten und Diagramme
-- **Admin-Panel**: Komplettes Content-Management-System für Geschichten und Referenzen
-- **Cloud-Speicher**: Cloudflare R2 Integration mit Unterstützung großer Geodateien
+- **Interactive Visualizations**: Dynamic maps and charts  
+- **Admin Panel**: Complete content-management system for stories and references  
+- **Cloud Storage**: Cloudflare R2 integration with support for large geospatial files  
 
-**Technische Features:**
+**Technical Features:**
 
-- Supabase Datenbankintegration
-- Unterstützung großer Geodateiformate (.tif, .cog, .mbtiles)
-- Erweiterte Bild- und Referenzverwaltung
+- Supabase database integration  
+- Support for large geospatial file formats (.tif, .cog, .mbtiles)  
+- Advanced image and reference management  
 
-## Projektziele
+## Project Goals
 
-Basierend auf dem Projektbriefing wurden folgende Kernanforderungen definiert:
+Based on the project briefing, the following core requirements were defined:
 
-- **Evidenzbasierte Erzählung**: Entwicklung einer robusten, datengestützten Geschichte über EU-Klimarisiken
-- **Data Science Methodik**: Anwendung fortschrittlicher geospatialer Analyse- und Machine Learning-Techniken
-- **Überzeugende Präsentation**: Technisch fundierte und visuell ansprechende Ergebnisdarstellung
-- **Skalierbare Architektur**: Weboptimierte Ausgaben für Politik- und Forschungsanwendungen
+- **Evidence-Based Storytelling**: Developing a robust, data-driven narrative on EU climate risks  
+- **Data-Science Methodology**: Applying advanced geospatial analysis and machine-learning techniques  
+- **Compelling Presentation**: Technically sound and visually appealing result presentation  
+- **Scalable Architecture**: Web-optimized outputs for policy and research applications  
 
-## Projektteam
+## Project Team
 
-- Leon Randzio (6065618)
-- Ingo Weber (1254816)
-- Tjark Gerken (8692717)
-- Yannick Königstein (9502377)
-- Sophie Blum (4362025)
+- Leon Randzio (6065618)  
+- Ingo Weber (1254816)  
+- Tjark Gerken (8692717)  
+- Yannick Königstein (9502377)  
+- Sophie Blum (4362025)  
 
-## Schnellstart
+## Quick Start
 
-### Klimaanalyse
+### Climate Analysis
 
 ```bash
 cd eu_climate
 python -m eu_climate.main
 ```
 
-### Webanwendung
+### Web Application
 
 ```bash
 cd data-story-web
 pnpm install && pnpm dev
 ```
 
-Für detaillierte Installationsanweisungen siehe die verlinkten README-Dateien der einzelnen Komponenten.
+For detailed installation instructions, see the linked README files of the individual components.
 
-## Repository-Struktur
+## Repository Structure
 
 ```
-├── eu_climate/                                    # Klimarisiko-Bewertungsframework
-├── data-story-web/                                # Interaktive Webanwendung
-├── Meilenstein - Projektinitialisierung/          # Projektinitialisierungs-Deliverables
-├── Meilenstein - Zwischenstand/                   # Zwischenmeilenstein-Abgaben
-├── Meilenstein - Finale Abgabe/                   # Finale Projektabgaben
-└── requirements.txt                               # Python-Abhängigkeiten
+├── eu_climate/                                    # Climate-risk assessment framework
+├── data-story-web/                                # Interactive web application
+├── Milestone – Project Initiation/                # Project-initiation deliverables
+├── Milestone – Interim Report/                    # Interim-milestone submissions
+├── Milestone – Final Submission/                  # Final project submissions
+└── requirements.txt                               # Python dependencies
 ```
