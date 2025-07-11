@@ -15,6 +15,17 @@ Diese Frage wird durch die Entwicklung eines Klimarisiko-Bewertungssystems beant
 - Interaktives webbasiertes Data Storytelling
 - Fortschrittliche geospatiale Datenverarbeitung
 
+## Projektergebnisse
+
+- **Data Story**: Eine interaktive Webanwendung zur Visualisierung der Klimarisiko-Analyse
+  https://eu-data.vercel.app/
+
+- **Multimedia-Präsentation**: Eine umfassende Vorstellung des Projekts und seiner Ergebnisse
+  https://www.youtube.com/watch?v=HwzwvXECIFY
+
+- **Daten & Analysen**: Vollständiger Zugriff auf die verwendeten Datensätze und Analyseergebnisse
+  https://huggingface.co/datasets/TjarkGerken/eu-data
+
 ## Systemkomponenten
 
 ### 🔬 [EU Klimarisiko-Bewertungsframework](./eu_climate/README.md)
