@@ -366,7 +366,6 @@ class WebExportMixin:
             - Optimizes for web delivery without losing analytical value
         """
         try:
-
             logger.info(f"Applying web optimizations to {len(gdf)} cluster polygons")
 
             # Get optimization settings

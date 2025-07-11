@@ -1266,7 +1266,7 @@ class EconomicImpactAnalyzer:
         fig, ax = plt.subplots(figsize=(12, 8), dpi=ScientificStyle.DPI)
 
         x_positions = np.arange(len(indicators))
-        
+
         # Safe portion (grey) starts from at-risk percentage
         safe_percentages = [100 - pct for pct in percentages_at_risk]
 

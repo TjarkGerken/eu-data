@@ -78,7 +78,6 @@ from typing import Dict, Optional, Union, List
 try:
     import rasterio
     from rasterio.crs import CRS
-    
 
     RASTERIO_AVAILABLE = True
 except ImportError:

@@ -652,7 +652,6 @@ class LayerVisualizer:
             )  # Note: y is flipped for proper orientation
             X, Y = np.meshgrid(x, y)
 
-
         # Add river polygon network overlay - filled polygons with subtle outline
         if river_polygon_network is not None:
             river_polygon_network.plot(

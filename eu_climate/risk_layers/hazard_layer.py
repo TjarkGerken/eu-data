@@ -1270,7 +1270,6 @@ class HazardLayer:
             first_scenario["transform"].yoff,
         ]
 
-
         logger.info(f"DEM bounds in visualization: {dem_bounds}")
 
         # Try to load NUTS for extent calculation
