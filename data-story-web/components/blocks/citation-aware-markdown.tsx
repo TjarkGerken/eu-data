@@ -13,6 +13,7 @@ interface CitationAwareMarkdownProps {
     authors: string[];
     type: string;
     year?: number;
+    readable_id?: string;
   }>;
 }
 

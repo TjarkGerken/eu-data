@@ -32,7 +32,7 @@ export function DataStoryRenderer({
     // Add readable_id to references for compatibility with processGlobalCitations
     const compatibleReferences = (globalReferences || []).map((ref) => ({
       ...ref,
-      readable_id: ref.id, // Use id as readable_id if not present
+      readable_id: ref.readable_id || ref.id, // Only use id as readable_id if not present
     }));
     return processGlobalCitations(blocks || [], compatibleReferences);
   }, [blocks, globalReferences]);

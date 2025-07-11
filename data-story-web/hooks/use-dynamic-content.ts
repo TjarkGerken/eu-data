@@ -40,12 +40,14 @@ export function useDynamicContent() {
 
       // Resolve all collected IDs to full reference objects
       if (referenceIds.length > 0) {
-        return referenceIds
+        const resolvedReferences = referenceIds
           .map((id: string) => {
             const fullRef = data.references?.find((ref: any) => ref.id === id);
             return fullRef || null;
           })
           .filter(Boolean); // Remove any null values
+
+        return resolvedReferences;
       }
 
       return [];
@@ -55,7 +57,6 @@ export function useDynamicContent() {
       // Handle specific block type transformations
       switch (block.blockType) {
         case "visualization":
-          console.log("Transforming visualization block:", block);
           return {
             type: "visualization",
             title: block.title,
@@ -115,6 +116,15 @@ export function useDynamicContent() {
             author: block.data.author || "",
             role: block.data.role || "",
             references: resolveReferences(block),
+          };
+
+        case "climate-dashboard":
+          const resolvedRefs = resolveReferences(block);
+          return {
+            type: "climate-dashboard",
+            title: block.title || block.data.title,
+            metrics: block.data.metrics || [],
+            references: resolvedRefs,
           };
 
         default:

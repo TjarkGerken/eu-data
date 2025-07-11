@@ -6,6 +6,7 @@ export interface Reference {
   journal?: string;
   url?: string;
   type: "journal" | "report" | "dataset" | "book";
+  readable_id?: string;
 }
 
 export interface Visualization {
