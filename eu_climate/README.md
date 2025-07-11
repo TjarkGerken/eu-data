@@ -49,8 +49,8 @@ A comprehensive geospatial analysis framework for climate risk assessment in Eur
 
 ```bash
 # Clone the repository
-git clone
-cd eu_climate
+git clone https://github.com/TjarkGerken/eu-data
+cd eu-data/eu_climate
 
 # Create virtual environment
 python3 -m venv ./.venv
