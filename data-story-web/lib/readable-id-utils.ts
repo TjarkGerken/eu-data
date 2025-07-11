@@ -32,7 +32,7 @@ export async function generateUniqueReadableId(
 ): Promise<string> {
   const baseId = generateBaseReadableId(options.authors, options.year);
 
-  let { data: existingRefs, error } = await supabase
+  const { data, error } = await supabase
     .from("content_references")
     .select("readable_id, id")
     .ilike("readable_id", `${baseId}%`);
@@ -42,7 +42,7 @@ export async function generateUniqueReadableId(
     throw error;
   }
 
-  existingRefs = existingRefs || [];
+  let existingRefs = data || [];
 
   // Filter out the current reference if we're updating
   if (options.excludeId) {

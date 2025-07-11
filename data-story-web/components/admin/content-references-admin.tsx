@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Trash2,
   Plus,
@@ -31,7 +30,6 @@ import {
   generateUniqueReadableId,
   validateReadableIdUniqueness,
   sanitizeReadableId,
-  generateBaseReadableId,
 } from "@/lib/readable-id-utils";
 
 export default function ContentReferencesAdmin() {
@@ -131,7 +129,7 @@ export default function ContentReferencesAdmin() {
               result.suggestedId ? `. Suggested: ${result.suggestedId}` : ""
             }`,
       });
-    } catch (error) {
+    } catch {
       setReadableIdValidation({
         isValidating: false,
         isValid: false,

@@ -8,8 +8,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Code2, Database, BarChart3, ExternalLink } from "lucide-react";
+
+import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/language-context";
 
 // GitHub and Hugging Face SVG icons
@@ -25,6 +25,7 @@ const HuggingFaceIcon = ({ className }: { className?: string }) => (
     height="256"
     viewBox="0 0 256 256"
     fill="none"
+    className={className}
     xmlns="http://www.w3.org/2000/svg"
   >
     <path
